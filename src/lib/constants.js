@@ -1,0 +1,83 @@
+export const EJECUTIVOS = [
+  "Diana Monsalve", "Jessica Jorquera", "Camila Finschi", "Isabel Ormazabal",
+  "Soledad Gómez", "Jorge Díaz", "Claudio Leiva", "Monica Cid", "Pamela Lineros",
+  "Sandra Soto", "Macarena Bustamante", "Mónica Herrera", "Karen Castillo", "Miguel Trincado",
+];
+
+export const ESTADOS = ["Activo", "En espera", "Promesado", "Perdido"];
+export const NIVELES_INTERES = ["Alto", "Medio", "Bajo"];
+export const ETAPAS = [
+  "Cotizado", "Envío de documentos", "Evaluación financiera", "Preaprobación bancaria",
+  "Visita agendada", "Visita realizada", "Negociación", "Pre-reserva", "Pre-reservado",
+  "Reservado", "Promesado",
+];
+export const EVAL_BANCARIA = [
+  "No iniciada", "Enviado a evaluar", "En evaluación", "Pendiente de antecedentes",
+  "Preaprobado", "Rechazado", "Contado",
+];
+export const ACCIONES = [
+  "Llamada", "WhatsApp", "Correo", "Videollamada", "Reunión presencial", "Visita a proyecto",
+  "Envío de cotización/propuesta", "Envío de simulación", "Solicitud de documentos",
+  "Recepción/revisión de documentos",
+];
+export const RESPUESTAS = [
+  "No contesta", "Pendiente de respuesta", "Solicita información", "Solicita tiempo para evaluar",
+  "Contactar más adelante", "Acepta avanzar", "No interesado", "Solicita nueva cotización",
+  "Solicita simulación", "Quiere agendar visita/reunión", "Interesado en avanzar",
+  "Datos de contacto incorrectos",
+];
+export const OBJECIONES = [
+  "Precio", "Pie", "Monto de la cuota", "Financiamiento / crédito hipotecario",
+  "Renta insuficiente", "Sobrecarga financiera", "Plazo de entrega", "Ubicación",
+  "Distribución / tipología", "Orientación / vista", "Disponibilidad de unidad",
+  "Necesita vender otra propiedad", "Decisión familiar / tercero",
+  "Está comparando otros proyectos", "No tiene urgencia de compra", "Sin objeción actual", "Otra",
+];
+export const PROXIMAS_ACCIONES = [
+  "Llamar", "Enviar WhatsApp", "Enviar correo", "Enviar información", "Enviar nueva cotización",
+  "Enviar simulación", "Solicitar documentos", "Revisar documentos", "Enviar a evaluación bancaria",
+  "Hacer seguimiento evaluación bancaria", "Agendar videollamada", "Agendar reunión",
+  "Agendar visita", "Hacer seguimiento", "Contactar en fecha acordada", "Gestionar pre-reserva",
+  "Gestionar reserva",
+];
+export const MOTIVOS_PERDIDA = [
+  "No califica para crédito", "Renta insuficiente", "Sobrecarga financiera", "No cuenta con pie",
+  "Precio", "Cuota mensual", "Desistió de comprar", "Compró en otro proyecto",
+  "Prefiere otra ubicación", "No le gustó el proyecto", "No encontró unidad/tipología adecuada",
+  "Plazo de entrega", "No responde después de múltiples intentos", "Datos de contacto incorrectos",
+  "Postergó decisión de compra", "Otro",
+];
+
+export const ALERT_PRIORITY = {
+  "CAMBIO DE EJECUTIVO": 1,
+  "NUEVO - COMPLETAR GESTIÓN": 2,
+  "NUEVA COTIZACIÓN": 3,
+  "ACCIÓN VENCIDA": 4,
+  "COMPLETAR MOTIVO DE PÉRDIDA": 5,
+  "REVISAR ETAPA": 6,
+  "COMPLETAR PRÓXIMA ACCIÓN": 7,
+  "SIN REVISAR HOY": 8,
+  "": 9,
+};
+
+export const ALERT_STYLE = {
+  "CAMBIO DE EJECUTIVO": "bg-violet-100 text-violet-900 border-violet-300",
+  "COMPLETAR MOTIVO DE PÉRDIDA": "bg-rose-100 text-rose-900 border-rose-300",
+  "REVISAR ETAPA": "bg-rose-100 text-rose-900 border-rose-300",
+  "ACCIÓN VENCIDA": "bg-rose-100 text-rose-900 border-rose-300",
+  "NUEVO - COMPLETAR GESTIÓN": "bg-amber-100 text-amber-900 border-amber-300",
+  "NUEVA COTIZACIÓN": "bg-amber-100 text-amber-900 border-amber-300",
+  "COMPLETAR PRÓXIMA ACCIÓN": "bg-sky-100 text-sky-900 border-sky-300",
+  "SIN REVISAR HOY": "bg-stone-200 text-stone-700 border-stone-300",
+  "": "bg-emerald-50 text-emerald-800 border-emerald-200",
+};
+
+export const PROYECTO_OBJETIVO = "PILPILEN";
+
+export const MESES_ES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+export const MESES_ES_LARGO = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+  "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+export const DONUT_COLORS = ["#1E5AA8", "#0F3D66", "#4C8DD9", "#8CB6E8", "#2E7D6B", "#C77D2E", "#8B5FBF", "#C94F6D"];
