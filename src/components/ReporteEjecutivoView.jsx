@@ -3,13 +3,15 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveCo
 import { DONUT_COLORS, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
 import { KpiCard } from "./Shared";
+import UploadMaestroPanel from "./UploadMaestroPanel";
 
 function labelPeriodo(key, modo) {
   return labelPeriodoBase(key, modo, MESES_ES);
 }
 
-export default function ReporteEjecutivoView({ db, onNavigate }) {
+export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
+  const [showUpload, setShowUpload] = useState(false);
 
   const filas = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
 
@@ -46,17 +48,23 @@ export default function ReporteEjecutivoView({ db, onNavigate }) {
 
   if (data.total === 0) {
     return (
-      <div className="max-w-md mx-auto px-5 py-24 text-center">
-        <div className="font-display text-xl text-teal-950 mb-2">Sin cotizaciones cargadas todavía</div>
-        <p className="text-stone-500 text-sm mb-6">
-          El dashboard se arma solo apenas el Coordinador Comercial actualice el Maestro Aval.
-        </p>
-        <button
-          onClick={() => onNavigate && onNavigate("coordinador")}
-          className="bg-teal-900 hover:bg-teal-800 text-white text-sm px-5 py-2.5"
-        >
-          Ir a Coordinador
-        </button>
+      <div className="max-w-2xl mx-auto px-5 py-16">
+        {!showUpload ? (
+          <div className="text-center py-8">
+            <div className="font-display text-xl text-teal-950 mb-2">Sin cotizaciones cargadas todavía</div>
+            <p className="text-stone-500 text-sm mb-6">
+              El dashboard se arma solo apenas subas la plantilla del Maestro Aval.
+            </p>
+            <button
+              onClick={() => setShowUpload(true)}
+              className="bg-teal-900 hover:bg-teal-800 text-white text-sm px-5 py-2.5"
+            >
+              Subir plantilla
+            </button>
+          </div>
+        ) : (
+          <UploadMaestroPanel onUpload={onUpload} open={showUpload} onClose={() => setShowUpload(false)} />
+        )}
       </div>
     );
   }
@@ -123,11 +131,21 @@ export default function ReporteEjecutivoView({ db, onNavigate }) {
             <div className="text-xs tracking-widest text-stone-500 font-medium">PROYECTO PILPILÉN</div>
           </div>
         </div>
-        <div className="border border-stone-200 px-4 py-2 text-right shrink-0">
-          <div className="text-[11px] text-stone-400">Fecha de extracción</div>
-          <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => setShowUpload((v) => !v)}
+            className="bg-teal-900 hover:bg-teal-800 text-white text-sm px-4 py-2.5"
+          >
+            Subir plantilla
+          </button>
+          <div className="border border-stone-200 px-4 py-2 text-right">
+            <div className="text-[11px] text-stone-400">Fecha de extracción</div>
+            <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
+          </div>
         </div>
       </div>
+
+      <UploadMaestroPanel onUpload={onUpload} open={showUpload} onClose={() => setShowUpload(false)} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <KpiCard label="Total cotizaciones" value={data.total} sub="Histórico completo" />

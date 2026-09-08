@@ -1,7 +1,6 @@
 export default function TopNav({ active, onChange }) {
   const tabs = [
     { key: "dashboard", label: "Dashboard" },
-    { key: "coordinador", label: "Coordinador" },
     { key: "ejecutivo", label: "Ejecutivo" },
     { key: "jefa", label: "Jefa de Ventas" },
   ];
