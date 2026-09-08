@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import TopNav from "./components/TopNav";
-import CoordinadorView from "./components/CoordinadorView";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
@@ -106,8 +105,7 @@ export default function App() {
       ) : (
         <div>
           <TopNav active={view} onChange={setView} />
-          {view === "dashboard" && <ReporteEjecutivoView db={db} onNavigate={setView} />}
-          {view === "coordinador" && <CoordinadorView onUpload={uploadMaestro} totalClientes={Object.keys(db.gestion).length} />}
+          {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
           {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} />}
         </div>
