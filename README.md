@@ -18,7 +18,7 @@ pilpilen-crm/
 │   │   ├── helpers.js      ← Fechas, alertas, normalización
 │   │   ├── parseMaestro.js ← Parser del Maestro Aval pegado desde Excel
 │   │   └── db.js           ← Toda la comunicación con Supabase
-│   ├── components/         ← Las 4 vistas (Dashboard, Coordinador, Ejecutivo, Jefa)
+│   ├── components/         ← Las 3 vistas (Dashboard, Ejecutivo, Jefa) + panel de subida de plantilla
 │   ├── supabaseClient.js
 │   ├── App.jsx
 │   └── main.jsx
@@ -89,10 +89,10 @@ git push -u origin main
 
 ## 6. Cómo funciona el flujo de datos
 
-- **Coordinador**: pega el Maestro Aval (con encabezado) copiado desde Excel. El sistema filtra solo las filas del proyecto Pilpilén, compara por RUT contra lo que ya existe en Supabase (tabla `control_interno`) y sube los cambios: clientes nuevos, nuevas cotizaciones, y cambios de ejecutivo detectados.
+- **Dashboard → "Subir plantilla"**: sube el archivo Excel (.xlsx/.csv) del Maestro Aval directamente desde el botón del Dashboard (no requiere copiar/pegar). El navegador lee el archivo con la librería `xlsx` (SheetJS), el sistema filtra solo las filas del proyecto Pilpilén, compara por RUT contra lo que ya existe en Supabase (tabla `control_interno`) y sube los cambios: clientes nuevos, nuevas cotizaciones, y cambios de ejecutivo detectados.
 - **Ejecutivo**: cada ejecutivo elige su nombre y ve su cartera (tabla `gestion`), con alertas automáticas calculadas en el cliente según reglas de negocio (acción vencida, sin revisar hoy, nuevo, etc.). Cada guardado también deja una línea en `historial`.
 - **Jefa de Ventas**: ve KPIs agregados, resuelve los `cambios_ejecutivo` pendientes, define la meta mensual (tabla `config`) y puede buscar cualquier cliente.
-- **Dashboard**: arma gráficos (tipología, región, evolución mensual/anual) a partir del detalle de `cotizaciones`.
+- **Dashboard**: además de subir la plantilla, arma gráficos (tipología, región, evolución mensual/anual) a partir del detalle de `cotizaciones`.
 
 ---
 
