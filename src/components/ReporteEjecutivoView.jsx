@@ -1,21 +1,79 @@
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { DONUT_COLORS, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
+import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
 import { KpiCard } from "./Shared";
 import UploadMaestroPanel from "./UploadMaestroPanel";
 import RutAnalysisSection from "./RutAnalysisSection";
+import FilterBar from "./FilterBar";
+
+const TODO = "Todo";
+const EN_BLANCO = "(en blanco)";
 
 function labelPeriodo(key, modo) {
   return labelPeriodoBase(key, modo, MESES_ES);
 }
 
+function valorOBlanco(v) {
+  return v && v.trim() ? v.trim() : EN_BLANCO;
+}
+
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [showUpload, setShowUpload] = useState(false);
-  const [tipologiaFiltroChart, setTipologiaFiltroChart] = useState("Todas");
+  const [filtros, setFiltros] = useState({ periodo: TODO, proyecto: TODO, region: TODO, tipologia: TODO, estado: TODO });
 
-  const filas = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
+  const filasTotales = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
+
+  // Opciones de los filtros: se calculan siempre sobre el universo completo,
+  // para que no se achiquen a medida que el usuario va filtrando.
+  const opciones = useMemo(() => {
+    const periodosSet = new Map(); // key "YYYY-MM" -> label
+    const proyectosSet = new Set();
+    const regionesSet = new Set();
+    const tipologiasSet = new Set();
+    const estadosSet = new Set();
+
+    filasTotales.forEach((r) => {
+      const fm = parseFechaAMes(r.fecha);
+      if (fm) {
+        const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
+        periodosSet.set(key, labelPeriodo(key, "mes"));
+      }
+      proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO);
+      regionesSet.add(valorOBlanco(r.region));
+      tipologiasSet.add(valorOBlanco(r.tipologia));
+      estadosSet.add(valorOBlanco(r.estado));
+    });
+
+    const periodos = [{ value: TODO, label: "Todo" }, ...[...periodosSet.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([value, label]) => ({ value, label }))];
+    const toOptions = (set) => [{ value: TODO, label: "Todo" }, ...[...set].sort().map((v) => ({ value: v, label: v }))];
+
+    return {
+      periodos,
+      proyectos: toOptions(proyectosSet),
+      regiones: toOptions(regionesSet),
+      tipologias: toOptions(tipologiasSet),
+      estados: toOptions(estadosSet),
+    };
+  }, [filasTotales]);
+
+  const filas = useMemo(() => {
+    return filasTotales.filter((r) => {
+      if (filtros.periodo !== TODO) {
+        const fm = parseFechaAMes(r.fecha);
+        const key = fm ? `${fm.year}-${String(fm.month).padStart(2, "0")}` : null;
+        if (key !== filtros.periodo) return false;
+      }
+      if (filtros.proyecto !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== filtros.proyecto) return false;
+      if (filtros.region !== TODO && valorOBlanco(r.region) !== filtros.region) return false;
+      if (filtros.tipologia !== TODO && valorOBlanco(r.tipologia) !== filtros.tipologia) return false;
+      if (filtros.estado !== TODO && valorOBlanco(r.estado) !== filtros.estado) return false;
+      return true;
+    });
+  }, [filasTotales, filtros]);
+
+  const hayFiltrosActivos = Object.values(filtros).some((v) => v !== TODO);
 
   const data = useMemo(() => {
     const total = filas.length;
@@ -26,10 +84,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     let sinFecha = 0;
 
     filas.forEach((r) => {
-      const tip = r.tipologia && r.tipologia.trim() ? r.tipologia.trim() : "(en blanco)";
-      tipologiaCounts[tip] = (tipologiaCounts[tip] || 0) + 1;
-      const reg = r.region && r.region.trim() ? r.region.trim() : "(en blanco)";
-      regionCounts[reg] = (regionCounts[reg] || 0) + 1;
+      tipologiaCounts[valorOBlanco(r.tipologia)] = (tipologiaCounts[valorOBlanco(r.tipologia)] || 0) + 1;
+      regionCounts[valorOBlanco(r.region)] = (regionCounts[valorOBlanco(r.region)] || 0) + 1;
       const fm = parseFechaAMes(r.fecha);
       if (fm) {
         const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
@@ -48,26 +104,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     return { total, tipologiaOrdenada, regionOrdenada, mesesOrdenados, aniosOrdenados, sinFecha };
   }, [filas]);
 
-  const serieFiltrada = useMemo(() => {
-    const mesCounts = {};
-    const anioCounts = {};
-    filas.forEach((r) => {
-      if (tipologiaFiltroChart !== "Todas") {
-        const tip = r.tipologia && r.tipologia.trim() ? r.tipologia.trim() : "(en blanco)";
-        if (tip !== tipologiaFiltroChart) return;
-      }
-      const fm = parseFechaAMes(r.fecha);
-      if (!fm) return;
-      const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
-      mesCounts[key] = (mesCounts[key] || 0) + 1;
-      anioCounts[fm.year] = (anioCounts[fm.year] || 0) + 1;
-    });
-    const mesesOrdenados = Object.entries(mesCounts).sort((a, b) => (a[0] < b[0] ? -1 : 1));
-    const aniosOrdenados = Object.entries(anioCounts).sort((a, b) => a[0] - b[0]);
-    return { mesesOrdenados, aniosOrdenados };
-  }, [filas, tipologiaFiltroChart]);
-
-  if (data.total === 0) {
+  // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
+  if (filasTotales.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-5 py-16">
         {!showUpload ? (
@@ -90,55 +128,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     );
   }
 
-  const topTipologia = data.tipologiaOrdenada[0];
-  const topRegion = data.regionOrdenada[0];
-  const serieTiempo = (modo === "mes" ? serieFiltrada.mesesOrdenados : serieFiltrada.aniosOrdenados).slice(-18);
-  const mesPico = data.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
-  const mesPicoLabel = mesPico ? labelPeriodo(mesPico[0], "mes") : "—";
-
-  const donutData = data.tipologiaOrdenada.map(([name, value]) => ({ name, value }));
-  const lineData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
-
-  let tendenciaTexto = null;
-  if (data.mesesOrdenados.length >= 2) {
-    const [, actual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
-    const [, anterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
-    const [claveActual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
-    const [claveAnterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
-    if (anterior > 0) {
-      const pct = Math.round(((actual - anterior) / anterior) * 100);
-      tendenciaTexto = `Las cotizaciones de ${labelPeriodo(claveActual, "mes")} ${pct >= 0 ? "subieron" : "bajaron"} un ${Math.abs(pct)}% respecto a ${labelPeriodo(claveAnterior, "mes")}.`;
-    }
-  }
-
-  const pctSinRegion = Math.round(((data.regionOrdenada.find((t) => t[0] === "(en blanco)")?.[1] || 0) / data.total) * 100);
-  const pctSinFecha = Math.round((data.sinFecha / data.total) * 100);
-
-  const hallazgos = [
-    `La tipología ${topTipologia[0]} concentra el ${Math.round((topTipologia[1] / data.total) * 100)}% del total de cotizaciones.`,
-    topRegion ? `La región de ${topRegion[0]} representa el ${Math.round((topRegion[1] / data.total) * 100)}% de las cotizaciones.` : null,
-    mesPico ? `El mes de ${mesPicoLabel} registró el mayor número de cotizaciones (${mesPico[1]}).` : null,
-    tendenciaTexto,
-    pctSinFecha > 0 ? `El ${pctSinFecha}% de las cotizaciones no tiene una fecha de cotización interpretable.` : null,
-    pctSinRegion > 0 ? `El ${pctSinRegion}% de las cotizaciones no cuenta con información de región.` : null,
-  ].filter(Boolean);
-
-  const recomendaciones = [
-    `Reforzar la oferta y comunicación de la tipología ${topTipologia[0]}, la más demandada.`,
-    topRegion ? `Concentrar esfuerzos comerciales en ${topRegion[0]}, de donde proviene la mayor parte de la demanda.` : null,
-    tendenciaTexto && tendenciaTexto.includes("bajaron")
-      ? "Investigar las causas de la baja de cotizaciones del último mes y reforzar la captación."
-      : "Mantener el ritmo de captación observado en los últimos meses.",
-    pctSinRegion > 0 || pctSinFecha > 0
-      ? "Mejorar el registro de región y fecha de cotización en el Maestro Aval para elevar la calidad del análisis."
-      : null,
-  ].filter(Boolean);
-
   const hoy = new Date();
   const fechaExtraccion = `${hoy.getDate()} de ${MESES_ES_LARGO[hoy.getMonth()]} de ${hoy.getFullYear()}`;
 
-  return (
-    <div className="max-w-6xl mx-auto px-5 py-6">
+  const header = (
+    <>
       <div className="bg-white border border-stone-200 p-5 flex items-center justify-between flex-wrap gap-4 mb-4">
         <div className="flex items-center gap-4">
           <div className="bg-[#0F3D66] text-white w-16 h-16 flex flex-col items-center justify-center leading-none shrink-0">
@@ -168,8 +162,78 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
       <UploadMaestroPanel onUpload={onUpload} open={showUpload} onClose={() => setShowUpload(false)} />
 
+      <FilterBar filtros={filtros} onChange={setFiltros} opciones={opciones} />
+    </>
+  );
+
+  // Hay datos en el sistema, pero el filtro elegido no deja ninguna fila.
+  if (data.total === 0) {
+    return (
+      <div className="max-w-6xl mx-auto px-5 py-6">
+        {header}
+        <div className="bg-white border border-stone-200 p-10 text-center">
+          <div className="text-stone-500 text-sm mb-3">No hay cotizaciones para esta combinación de filtros.</div>
+          <button
+            onClick={() => setFiltros({ periodo: TODO, proyecto: TODO, region: TODO, tipologia: TODO, estado: TODO })}
+            className="text-xs text-[#0F3D66] underline"
+          >
+            Quitar filtros
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const topTipologia = data.tipologiaOrdenada[0];
+  const topRegion = data.regionOrdenada[0];
+  const serieTiempo = (modo === "mes" ? data.mesesOrdenados : data.aniosOrdenados).slice(-18);
+  const mesPico = data.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
+  const mesPicoLabel = mesPico ? labelPeriodo(mesPico[0], "mes") : "—";
+
+  const donutData = data.tipologiaOrdenada.map(([name, value]) => ({ name, value }));
+  const lineData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
+
+  let tendenciaTexto = null;
+  if (data.mesesOrdenados.length >= 2) {
+    const [, actual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
+    const [, anterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
+    const [claveActual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
+    const [claveAnterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
+    if (anterior > 0) {
+      const pct = Math.round(((actual - anterior) / anterior) * 100);
+      tendenciaTexto = `Las cotizaciones de ${labelPeriodo(claveActual, "mes")} ${pct >= 0 ? "subieron" : "bajaron"} un ${Math.abs(pct)}% respecto a ${labelPeriodo(claveAnterior, "mes")}.`;
+    }
+  }
+
+  const pctSinRegion = Math.round(((data.regionOrdenada.find((t) => t[0] === EN_BLANCO)?.[1] || 0) / data.total) * 100);
+  const pctSinFecha = Math.round((data.sinFecha / data.total) * 100);
+
+  const hallazgos = [
+    `La tipología ${topTipologia[0]} concentra el ${Math.round((topTipologia[1] / data.total) * 100)}% del total de cotizaciones.`,
+    topRegion ? `La región de ${topRegion[0]} representa el ${Math.round((topRegion[1] / data.total) * 100)}% de las cotizaciones.` : null,
+    mesPico ? `El mes de ${mesPicoLabel} registró el mayor número de cotizaciones (${mesPico[1]}).` : null,
+    tendenciaTexto,
+    pctSinFecha > 0 ? `El ${pctSinFecha}% de las cotizaciones no tiene una fecha de cotización interpretable.` : null,
+    pctSinRegion > 0 ? `El ${pctSinRegion}% de las cotizaciones no cuenta con información de región.` : null,
+  ].filter(Boolean);
+
+  const recomendaciones = [
+    `Reforzar la oferta y comunicación de la tipología ${topTipologia[0]}, la más demandada.`,
+    topRegion ? `Concentrar esfuerzos comerciales en ${topRegion[0]}, de donde proviene la mayor parte de la demanda.` : null,
+    tendenciaTexto && tendenciaTexto.includes("bajaron")
+      ? "Investigar las causas de la baja de cotizaciones del último mes y reforzar la captación."
+      : "Mantener el ritmo de captación observado en los últimos meses.",
+    pctSinRegion > 0 || pctSinFecha > 0
+      ? "Mejorar el registro de región y fecha de cotización en el Maestro Aval para elevar la calidad del análisis."
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="max-w-6xl mx-auto px-5 py-6">
+      {header}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <KpiCard label="Total cotizaciones" value={data.total} sub="Histórico completo" />
+        <KpiCard label="Total cotizaciones" value={data.total} sub={hayFiltrosActivos ? "Con filtros aplicados" : "Histórico completo"} />
         <KpiCard
           label="Cotizaciones último mes"
           value={mesPico ? data.mesesOrdenados[data.mesesOrdenados.length - 1][1] : 0}
@@ -215,31 +279,19 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         <div className="bg-white border border-stone-200 p-5">
           <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4 flex items-center justify-between flex-wrap gap-2">
             <span>COTIZACIONES POR {modo === "mes" ? "MES" : "AÑO"}</span>
-            <span className="flex items-center gap-2">
-              <select
-                value={tipologiaFiltroChart}
-                onChange={(e) => setTipologiaFiltroChart(e.target.value)}
-                className="text-[10px] bg-white text-[#0F3D66] px-1.5 py-0.5 border-none focus:outline-none"
-              >
-                <option value="Todas">Todas las tipologías</option>
-                {data.tipologiaOrdenada.map(([name]) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-              <span className="flex gap-1">
-                <button onClick={() => setModo("mes")} className={`text-[10px] px-2 py-0.5 ${modo === "mes" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
-                  Mes
-                </button>
-                <button onClick={() => setModo("año")} className={`text-[10px] px-2 py-0.5 ${modo === "año" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
-                  Año
-                </button>
-              </span>
+            <span className="flex gap-1">
+              <button onClick={() => setModo("mes")} className={`text-[10px] px-2 py-0.5 ${modo === "mes" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
+                Mes
+              </button>
+              <button onClick={() => setModo("año")} className={`text-[10px] px-2 py-0.5 ${modo === "año" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
+                Año
+              </button>
             </span>
           </div>
           <div className="h-64">
             {lineData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-sm text-stone-400">
-                Sin datos para esta tipología.
+                Sin datos para este filtro.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -255,7 +307,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
                   />
                   <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="value" stroke="#1E5AA8" strokeWidth={2} dot={{ r: 3, fill: "#1E5AA8" }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="value" stroke={LINE_COLOR} strokeWidth={2.5} dot={{ r: 3, fill: LINE_COLOR }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             )}
