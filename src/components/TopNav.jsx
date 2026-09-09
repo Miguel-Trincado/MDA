@@ -5,7 +5,7 @@ export default function TopNav({ active, onChange }) {
     { key: "jefa", label: "Jefa de Ventas" },
   ];
   return (
-    <div className="bg-teal-950 text-teal-50 px-5 flex items-center justify-between flex-wrap">
+    <div className="bg-[#0F3D66] text-white px-5 flex items-center justify-between flex-wrap">
       <span className="font-display text-lg py-3 pr-4">Pilpilén</span>
       <div className="flex">
         {tabs.map((t) => (
@@ -13,7 +13,7 @@ export default function TopNav({ active, onChange }) {
             key={t.key}
             onClick={() => onChange(t.key)}
             className={`text-sm px-4 py-3 border-b-2 transition-colors ${
-              active === t.key ? "border-amber-400 text-white" : "border-transparent text-teal-300 hover:text-white"
+              active === t.key ? "border-[#4C8DD9] text-white" : "border-transparent text-sky-300 hover:text-white"
             }`}
           >
             {t.label}

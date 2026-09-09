@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ALERT_STYLE } from "../lib/constants";
 
-export function Stat({ label, value, accent = "text-teal-900" }) {
+export function Stat({ label, value, accent = "text-[#0F3D66]" }) {
   return (
     <div>
       <div className={`font-display text-2xl ${accent}`}>{value}</div>

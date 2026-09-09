@@ -52,7 +52,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 py-6">
-      <h2 className="font-display text-2xl text-teal-950 mb-5">Panel Jefa de Ventas</h2>
+      <h2 className="font-display text-2xl text-[#0F3D66] mb-5">Panel Jefa de Ventas</h2>
 
       <div className="border border-stone-300 bg-white p-5 mb-5">
         <div className="flex items-center gap-3 mb-4">
@@ -61,13 +61,13 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
             type="number"
             value={meta}
             onChange={(e) => onSetMeta(Number(e.target.value) || 0)}
-            className="border border-stone-300 px-2 py-1 w-20 text-sm focus:outline-none focus:border-teal-700"
+            className="border border-stone-300 px-2 py-1 w-20 text-sm focus:outline-none focus:border-[#1E5AA8]"
           />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat label="Promesados del mes" value={promesados} />
           <Stat label="Faltan para meta" value={faltan} accent="text-amber-700" />
-          <Stat label="Cumplimiento" value={`${cumplimiento}%`} accent={cumplimiento >= 100 ? "text-emerald-700" : "text-teal-900"} />
+          <Stat label="Cumplimiento" value={`${cumplimiento}%`} accent={cumplimiento >= 100 ? "text-emerald-700" : "text-[#0F3D66]"} />
           <Stat label="Pipeline avanzado" value={pipeline} />
           <Stat label="Interés alto (activos)" value={interesAlto} />
           <Stat label="Activos" value={activos.length} />
@@ -94,7 +94,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => onResolveCambio(c, "aprobar")} className="text-xs bg-teal-900 text-white px-3 py-1.5">
+                  <button onClick={() => onResolveCambio(c, "aprobar")} className="text-xs bg-[#0F3D66] text-white px-3 py-1.5">
                     Aprobar cambio
                   </button>
                   <button onClick={() => onResolveCambio(c, "mantener")} className="text-xs border border-stone-300 px-3 py-1.5">
@@ -108,7 +108,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
       )}
 
       <div className="border border-stone-300 bg-white p-5 mb-5">
-        <div className="font-display text-lg text-teal-950 mb-3">Panel de alertas</div>
+        <div className="font-display text-lg text-[#0F3D66] mb-3">Panel de alertas</div>
         {Object.keys(alertasPorTipo).length === 0 ? (
           <div className="text-sm text-stone-400">No hay alertas activas.</div>
         ) : (
@@ -123,7 +123,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
       </div>
 
       <div className="border border-stone-300 bg-white p-5 mb-5 overflow-x-auto">
-        <div className="font-display text-lg text-teal-950 mb-3">Resumen por ejecutivo</div>
+        <div className="font-display text-lg text-[#0F3D66] mb-3">Resumen por ejecutivo</div>
         <table className="w-full text-sm min-w-[560px]">
           <thead>
             <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
@@ -153,12 +153,12 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
       </div>
 
       <div className="border border-stone-300 bg-white p-5">
-        <div className="font-display text-lg text-teal-950 mb-3">Buscar cliente</div>
+        <div className="font-display text-lg text-[#0F3D66] mb-3">Buscar cliente</div>
         <input
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
           placeholder="Nombre o RUT…"
-          className="border border-stone-300 px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-teal-700"
+          className="border border-stone-300 px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-[#1E5AA8]"
         />
         {resultadoBusqueda.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">

@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DONUT_COLORS, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
 import { KpiCard } from "./Shared";
 import UploadMaestroPanel from "./UploadMaestroPanel";
+import RutAnalysisSection from "./RutAnalysisSection";
 
 function labelPeriodo(key, modo) {
   return labelPeriodoBase(key, modo, MESES_ES);
@@ -12,6 +13,7 @@ function labelPeriodo(key, modo) {
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [showUpload, setShowUpload] = useState(false);
+  const [tipologiaFiltroChart, setTipologiaFiltroChart] = useState("Todas");
 
   const filas = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
 
@@ -46,18 +48,37 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     return { total, tipologiaOrdenada, regionOrdenada, mesesOrdenados, aniosOrdenados, sinFecha };
   }, [filas]);
 
+  const serieFiltrada = useMemo(() => {
+    const mesCounts = {};
+    const anioCounts = {};
+    filas.forEach((r) => {
+      if (tipologiaFiltroChart !== "Todas") {
+        const tip = r.tipologia && r.tipologia.trim() ? r.tipologia.trim() : "(en blanco)";
+        if (tip !== tipologiaFiltroChart) return;
+      }
+      const fm = parseFechaAMes(r.fecha);
+      if (!fm) return;
+      const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
+      mesCounts[key] = (mesCounts[key] || 0) + 1;
+      anioCounts[fm.year] = (anioCounts[fm.year] || 0) + 1;
+    });
+    const mesesOrdenados = Object.entries(mesCounts).sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const aniosOrdenados = Object.entries(anioCounts).sort((a, b) => a[0] - b[0]);
+    return { mesesOrdenados, aniosOrdenados };
+  }, [filas, tipologiaFiltroChart]);
+
   if (data.total === 0) {
     return (
       <div className="max-w-2xl mx-auto px-5 py-16">
         {!showUpload ? (
           <div className="text-center py-8">
-            <div className="font-display text-xl text-teal-950 mb-2">Sin cotizaciones cargadas todavía</div>
+            <div className="font-display text-xl text-[#0F3D66] mb-2">Sin cotizaciones cargadas todavía</div>
             <p className="text-stone-500 text-sm mb-6">
               El dashboard se arma solo apenas subas la plantilla del Maestro Aval.
             </p>
             <button
               onClick={() => setShowUpload(true)}
-              className="bg-teal-900 hover:bg-teal-800 text-white text-sm px-5 py-2.5"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] text-white text-sm px-5 py-2.5"
             >
               Subir plantilla
             </button>
@@ -71,12 +92,12 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const topTipologia = data.tipologiaOrdenada[0];
   const topRegion = data.regionOrdenada[0];
-  const serieTiempo = (modo === "mes" ? data.mesesOrdenados : data.aniosOrdenados).slice(-18);
+  const serieTiempo = (modo === "mes" ? serieFiltrada.mesesOrdenados : serieFiltrada.aniosOrdenados).slice(-18);
   const mesPico = data.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
   const mesPicoLabel = mesPico ? labelPeriodo(mesPico[0], "mes") : "—";
 
   const donutData = data.tipologiaOrdenada.map(([name, value]) => ({ name, value }));
-  const barData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
+  const lineData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
 
   let tendenciaTexto = null;
   if (data.mesesOrdenados.length >= 2) {
@@ -134,7 +155,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         <div className="flex items-center gap-3 shrink-0">
           <button
             onClick={() => setShowUpload((v) => !v)}
-            className="bg-teal-900 hover:bg-teal-800 text-white text-sm px-4 py-2.5"
+            className="bg-[#0F3D66] hover:bg-[#1E5AA8] text-white text-sm px-4 py-2.5"
           >
             Subir plantilla
           </button>
@@ -192,37 +213,57 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         </div>
 
         <div className="bg-white border border-stone-200 p-5">
-          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4 flex items-center justify-between">
+          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4 flex items-center justify-between flex-wrap gap-2">
             <span>COTIZACIONES POR {modo === "mes" ? "MES" : "AÑO"}</span>
-            <span className="flex gap-1">
-              <button onClick={() => setModo("mes")} className={`text-[10px] px-2 py-0.5 ${modo === "mes" ? "bg-white text-[#0F3D66]" : "text-teal-100 border border-teal-100/40"}`}>
-                Mes
-              </button>
-              <button onClick={() => setModo("año")} className={`text-[10px] px-2 py-0.5 ${modo === "año" ? "bg-white text-[#0F3D66]" : "text-teal-100 border border-teal-100/40"}`}>
-                Año
-              </button>
+            <span className="flex items-center gap-2">
+              <select
+                value={tipologiaFiltroChart}
+                onChange={(e) => setTipologiaFiltroChart(e.target.value)}
+                className="text-[10px] bg-white text-[#0F3D66] px-1.5 py-0.5 border-none focus:outline-none"
+              >
+                <option value="Todas">Todas las tipologías</option>
+                {data.tipologiaOrdenada.map(([name]) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <span className="flex gap-1">
+                <button onClick={() => setModo("mes")} className={`text-[10px] px-2 py-0.5 ${modo === "mes" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
+                  Mes
+                </button>
+                <button onClick={() => setModo("año")} className={`text-[10px] px-2 py-0.5 ${modo === "año" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
+                  Año
+                </button>
+              </span>
             </span>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
-                <XAxis
-                  dataKey="periodo"
-                  tick={{ fontSize: 10 }}
-                  interval={0}
-                  angle={barData.length > 8 ? -35 : 0}
-                  textAnchor={barData.length > 8 ? "end" : "middle"}
-                  height={barData.length > 8 ? 50 : 25}
-                />
-                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                <Tooltip />
-                <Bar dataKey="value" fill="#1E5AA8" radius={[2, 2, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {lineData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-sm text-stone-400">
+                Sin datos para esta tipología.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={lineData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                  <XAxis
+                    dataKey="periodo"
+                    tick={{ fontSize: 10 }}
+                    interval={0}
+                    angle={lineData.length > 8 ? -35 : 0}
+                    textAnchor={lineData.length > 8 ? "end" : "middle"}
+                    height={lineData.length > 8 ? 50 : 25}
+                  />
+                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="value" stroke="#1E5AA8" strokeWidth={2} dot={{ r: 3, fill: "#1E5AA8" }} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
+
+      <RutAnalysisSection filas={filas} gestion={db.gestion} tipologiaOrdenada={data.tipologiaOrdenada} />
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
         <div className="bg-white border border-stone-200 p-5">

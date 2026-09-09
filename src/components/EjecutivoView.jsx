@@ -15,13 +15,13 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
   if (!nombre) {
     return (
       <div className="max-w-md mx-auto px-5 py-16">
-        <h2 className="font-display text-2xl text-teal-950 mb-4">¿Quién eres?</h2>
+        <h2 className="font-display text-2xl text-[#0F3D66] mb-4">¿Quién eres?</h2>
         <div className="flex flex-col gap-2">
           {EJECUTIVOS.map((e) => (
             <button
               key={e}
               onClick={() => setNombre(e)}
-              className="text-left border border-stone-300 bg-white hover:border-teal-800 px-4 py-2.5 text-sm"
+              className="text-left border border-stone-300 bg-white hover:border-[#1E5AA8] px-4 py-2.5 text-sm"
             >
               {e}
             </button>
@@ -42,10 +42,10 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
     <div className="max-w-4xl mx-auto px-5 py-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-2xl text-teal-950">Cartera de {nombre}</h2>
+          <h2 className="font-display text-2xl text-[#0F3D66]">Cartera de {nombre}</h2>
           <p className="text-stone-500 text-sm">{clientes.length} clientes en total</p>
         </div>
-        <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-teal-900 underline">
+        <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
           No soy {nombre}
         </button>
       </div>
@@ -56,7 +56,7 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
             key={f}
             onClick={() => setFiltro(f)}
             className={`text-xs px-3 py-1.5 border ${
-              filtro === f ? "bg-teal-900 text-white border-teal-900" : "border-stone-300 text-stone-600 hover:border-teal-700"
+              filtro === f ? "bg-[#0F3D66] text-white border-[#0F3D66]" : "border-stone-300 text-stone-600 hover:border-[#1E5AA8]"
             }`}
           >
             {f}
@@ -66,7 +66,7 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o RUT…"
-          className="ml-auto text-xs border border-stone-300 px-3 py-1.5 focus:outline-none focus:border-teal-700 w-52"
+          className="ml-auto text-xs border border-stone-300 px-3 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
         />
       </div>
 
@@ -202,11 +202,11 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-teal-900 hover:bg-teal-800 disabled:opacity-50 text-white text-sm px-4 py-2"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm px-4 py-2"
             >
               {saving ? "Guardando…" : "Guardar cambios"}
             </button>
-            <button onClick={onRevisado} className="border border-stone-300 hover:border-teal-700 text-sm px-4 py-2 text-stone-700">
+            <button onClick={onRevisado} className="border border-stone-300 hover:border-[#1E5AA8] text-sm px-4 py-2 text-stone-700">
               Marcar revisado hoy (sin gestión)
             </button>
             {g.ultimaRevisionFecha === todayISO() && <span className="text-xs text-emerald-700">Revisado hoy</span>}
