@@ -268,18 +268,18 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         />
         <KpiCard label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" />
         <KpiCard
+          label="Región con mayor cotización"
+          value={topRegion ? topRegion[0] : "—"}
+          sub={topRegion ? `${topRegion[1]} cotizaciones` : "—"}
+          small
+        />
+        <KpiCard
           label="Tipología con más clientes únicos"
           value={analisisRut.tipTop ? analisisRut.tipTop[0] : "—"}
           sub={analisisRut.tipTop ? `${analisisRut.tipTop[1]} clientes distintos` : "—"}
           small
         />
         <KpiCard label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo (sin filtro de período)" />
-        <KpiCard
-          label="Región con mayor cotización"
-          value={topRegion ? topRegion[0] : "—"}
-          sub={topRegion ? `${topRegion[1]} cotizaciones` : "—"}
-          small
-        />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
