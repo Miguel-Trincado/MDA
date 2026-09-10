@@ -86,8 +86,6 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     });
   }, [filasTendencia, filtros.periodoDesde, filtros.periodoHasta]);
 
-  const hayFiltrosActivos = Object.values(filtros).some((v) => v !== TODO);
-
   function agregarPorTipoYFecha(lista) {
     const tipologiaCounts = {};
     const regionCounts = {};
@@ -263,7 +261,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       {header}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-        <KpiCard label="Total cotizaciones" value={data.total} sub={hayFiltrosActivos ? "Con filtros aplicados" : "Histórico completo"} />
+        <KpiCard label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo (sin filtro de período)" />
         <KpiCard label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" />
         <KpiCard
           label="Tipología con más clientes únicos"
