@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { KpiCard } from "./Shared";
 
 export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }) {
   const [busqueda, setBusqueda] = useState("");
@@ -20,7 +19,6 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
   }, [filas, gestion]);
 
   const clientesUnicos = porRut.length;
-  const filaConMasCotizaciones = porRut[0];
 
   const rutPorTipologia = useMemo(() => {
     const map = {};
@@ -45,27 +43,6 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
 
   return (
     <div className="mb-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <KpiCard label="Clientes únicos (RUT)" value={clientesUnicos} sub="Distintos RUT que han cotizado" />
-        <KpiCard
-          label="Tipología con más clientes únicos"
-          value={rutPorTipologia[0] ? rutPorTipologia[0][0] : "—"}
-          sub={rutPorTipologia[0] ? `${rutPorTipologia[0][1]} clientes distintos` : "—"}
-          small
-        />
-        <KpiCard
-          label="Cliente con más cotizaciones"
-          value={filaConMasCotizaciones?.cliente || filaConMasCotizaciones?.rut || "—"}
-          sub={filaConMasCotizaciones ? `${filaConMasCotizaciones.total} cotizaciones · RUT ${filaConMasCotizaciones.rut}` : "—"}
-          small
-        />
-        <KpiCard
-          label="Promedio de cotizaciones por cliente"
-          value={clientesUnicos ? (filas.length / clientesUnicos).toFixed(1) : "0"}
-          sub={`${filas.length} cotizaciones totales`}
-        />
-      </div>
-
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
         <div className="bg-white border border-stone-200 p-5">
           <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4">

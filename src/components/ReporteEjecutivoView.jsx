@@ -112,6 +112,19 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const data = useMemo(() => agregarPorTipoYFecha(filas), [filas]);
   const dataTendencia = useMemo(() => agregarPorTipoYFecha(filasTendencia), [filasTendencia]);
 
+  const analisisRut = useMemo(() => {
+    const rutSet = new Set();
+    const tipPorRut = {}; // tipologia -> Set(rut)
+    filas.forEach((r) => {
+      rutSet.add(r.rut);
+      const tip = valorOBlanco(r.tipologia);
+      if (!tipPorRut[tip]) tipPorRut[tip] = new Set();
+      tipPorRut[tip].add(r.rut);
+    });
+    const tipOrdenada = Object.entries(tipPorRut).map(([tip, set]) => [tip, set.size]).sort((a, b) => b[1] - a[1]);
+    return { clientesUnicos: rutSet.size, tipTop: tipOrdenada[0] || null };
+  }, [filas]);
+
   // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
   if (filasTotales.length === 0) {
     return (
@@ -240,14 +253,20 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     <div className="max-w-6xl mx-auto px-5 py-6">
       {header}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         <KpiCard label="Total cotizaciones" value={data.total} sub={hayFiltrosActivos ? "Con filtros aplicados" : "Histórico completo"} />
+        <KpiCard label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" />
         <KpiCard
-          label="Cotizaciones último mes"
+          label="Tipología con más clientes únicos"
+          value={analisisRut.tipTop ? analisisRut.tipTop[0] : "—"}
+          sub={analisisRut.tipTop ? `${analisisRut.tipTop[1]} clientes distintos` : "—"}
+          small
+        />
+        <KpiCard
+          label="Cotizaciones mes actual"
           value={mesPico ? data.mesesOrdenados[data.mesesOrdenados.length - 1][1] : 0}
           sub={data.mesesOrdenados.length ? labelPeriodo(data.mesesOrdenados[data.mesesOrdenados.length - 1][0], "mes") : "—"}
         />
-        <KpiCard label="Tipología más cotizada" value={topTipologia[0]} sub={`${Math.round((topTipologia[1] / data.total) * 100)}% del total`} small />
         <KpiCard label="Mes con mayor cotización" value={mesPicoLabel} sub={mesPico ? `${mesPico[1]} cotizaciones` : "—"} small />
       </div>
 
