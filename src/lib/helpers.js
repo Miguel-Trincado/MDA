@@ -41,6 +41,13 @@ export function parseFechaCompleta(str) {
     m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
     if (m) {
       day = +m[1]; month = +m[2]; year = +m[3];
+    } else if (/^\d+(\.\d+)?$/.test(raw)) {
+      const serial = parseFloat(raw);
+      if (serial > 20000 && serial < 60000) {
+        const epoch = Date.UTC(1899, 11, 30);
+        const d = new Date(epoch + serial * 86400000);
+        return isNaN(d.getTime()) ? null : d;
+      }
     }
   }
   if (!year || !month || !day || month < 1 || month > 12) return null;

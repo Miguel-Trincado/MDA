@@ -16,6 +16,7 @@ export function parseMaestro(text) {
   const iRenta = idx("Renta Cliente");
   const iEjec = idx("Ejecutivo");
   const iFechaCot = idx("Fecha Cotización");
+  const iFechaOpp = idx("Fecha Opp");
   const iFechaRes = idx("Fecha Reserva");
   const iFechaProm = idx("Fecha Promesa");
   const iProyecto = idx("Proyecto");
@@ -79,6 +80,7 @@ export function parseMaestro(text) {
       opp: key,
       rut,
       fecha: iFechaCot !== -1 ? (cols[iFechaCot] || "").trim() : "",
+      fechaOpp: iFechaOpp !== -1 ? (cols[iFechaOpp] || "").trim() : "",
       tipologia: iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "",
       region: iRegion !== -1 ? (cols[iRegion] || "").trim() : "",
       proyecto: iProyecto !== -1 ? (cols[iProyecto] || "").trim() : "",
