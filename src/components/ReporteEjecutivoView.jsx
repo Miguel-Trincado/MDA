@@ -21,7 +21,7 @@ function valorOBlanco(v) {
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [showUpload, setShowUpload] = useState(false);
-  const [filtros, setFiltros] = useState({ periodo: TODO, proyecto: TODO, region: TODO, tipologia: TODO, estado: TODO });
+  const [filtros, setFiltros] = useState({ periodoDesde: TODO, periodoHasta: TODO, proyecto: TODO, tipologia: TODO });
 
   const filasTotales = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
 
@@ -30,9 +30,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const opciones = useMemo(() => {
     const periodosSet = new Map(); // key "YYYY-MM" -> label
     const proyectosSet = new Set();
-    const regionesSet = new Set();
     const tipologiasSet = new Set();
-    const estadosSet = new Set();
 
     filasTotales.forEach((r) => {
       const fm = parseFechaAMes(r.fecha);
@@ -41,49 +39,54 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         periodosSet.set(key, labelPeriodo(key, "mes"));
       }
       proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO);
-      regionesSet.add(valorOBlanco(r.region));
       tipologiasSet.add(valorOBlanco(r.tipologia));
-      estadosSet.add(valorOBlanco(r.estado));
     });
 
-    const periodos = [{ value: TODO, label: "Todo" }, ...[...periodosSet.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([value, label]) => ({ value, label }))];
+    const periodos = [
+      { value: TODO, label: "Todo" },
+      ...[...periodosSet.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([value, label]) => ({ value, label })),
+    ];
     const toOptions = (set) => [{ value: TODO, label: "Todo" }, ...[...set].sort().map((v) => ({ value: v, label: v }))];
 
-    return {
-      periodos,
-      proyectos: toOptions(proyectosSet),
-      regiones: toOptions(regionesSet),
-      tipologias: toOptions(tipologiasSet),
-      estados: toOptions(estadosSet),
-    };
+    return { periodos, proyectos: toOptions(proyectosSet), tipologias: toOptions(tipologiasSet) };
   }, [filasTotales]);
 
-  const filas = useMemo(() => {
+  // Filtro de proyecto + tipología, sin el rango de período: esto alimenta
+  // exclusivamente el gráfico de tendencia, que debe verse completo aunque
+  // el usuario haya acotado el período arriba (si no, filtrar a un solo mes
+  // dejaría el gráfico con un solo punto, que no sirve de nada).
+  const filasTendencia = useMemo(() => {
     return filasTotales.filter((r) => {
-      if (filtros.periodo !== TODO) {
-        const fm = parseFechaAMes(r.fecha);
-        const key = fm ? `${fm.year}-${String(fm.month).padStart(2, "0")}` : null;
-        if (key !== filtros.periodo) return false;
-      }
       if (filtros.proyecto !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== filtros.proyecto) return false;
-      if (filtros.region !== TODO && valorOBlanco(r.region) !== filtros.region) return false;
       if (filtros.tipologia !== TODO && valorOBlanco(r.tipologia) !== filtros.tipologia) return false;
-      if (filtros.estado !== TODO && valorOBlanco(r.estado) !== filtros.estado) return false;
       return true;
     });
-  }, [filasTotales, filtros]);
+  }, [filasTotales, filtros.proyecto, filtros.tipologia]);
+
+  // Filtro completo (incluye rango de período): alimenta las tarjetas,
+  // la dona de tipología, el análisis por RUT y los hallazgos.
+  const filas = useMemo(() => {
+    return filasTendencia.filter((r) => {
+      if (filtros.periodoDesde === TODO && filtros.periodoHasta === TODO) return true;
+      const fm = parseFechaAMes(r.fecha);
+      if (!fm) return false;
+      const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
+      if (filtros.periodoDesde !== TODO && key < filtros.periodoDesde) return false;
+      if (filtros.periodoHasta !== TODO && key > filtros.periodoHasta) return false;
+      return true;
+    });
+  }, [filasTendencia, filtros.periodoDesde, filtros.periodoHasta]);
 
   const hayFiltrosActivos = Object.values(filtros).some((v) => v !== TODO);
 
-  const data = useMemo(() => {
-    const total = filas.length;
+  function agregarPorTipoYFecha(lista) {
     const tipologiaCounts = {};
     const regionCounts = {};
     const mesCounts = {};
     const anioCounts = {};
     let sinFecha = 0;
 
-    filas.forEach((r) => {
+    lista.forEach((r) => {
       tipologiaCounts[valorOBlanco(r.tipologia)] = (tipologiaCounts[valorOBlanco(r.tipologia)] || 0) + 1;
       regionCounts[valorOBlanco(r.region)] = (regionCounts[valorOBlanco(r.region)] || 0) + 1;
       const fm = parseFechaAMes(r.fecha);
@@ -96,13 +99,18 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       }
     });
 
-    const tipologiaOrdenada = Object.entries(tipologiaCounts).sort((a, b) => b[1] - a[1]);
-    const regionOrdenada = Object.entries(regionCounts).sort((a, b) => b[1] - a[1]);
-    const mesesOrdenados = Object.entries(mesCounts).sort((a, b) => (a[0] < b[0] ? -1 : 1));
-    const aniosOrdenados = Object.entries(anioCounts).sort((a, b) => a[0] - b[0]);
+    return {
+      total: lista.length,
+      tipologiaOrdenada: Object.entries(tipologiaCounts).sort((a, b) => b[1] - a[1]),
+      regionOrdenada: Object.entries(regionCounts).sort((a, b) => b[1] - a[1]),
+      mesesOrdenados: Object.entries(mesCounts).sort((a, b) => (a[0] < b[0] ? -1 : 1)),
+      aniosOrdenados: Object.entries(anioCounts).sort((a, b) => a[0] - b[0]),
+      sinFecha,
+    };
+  }
 
-    return { total, tipologiaOrdenada, regionOrdenada, mesesOrdenados, aniosOrdenados, sinFecha };
-  }, [filas]);
+  const data = useMemo(() => agregarPorTipoYFecha(filas), [filas]);
+  const dataTendencia = useMemo(() => agregarPorTipoYFecha(filasTendencia), [filasTendencia]);
 
   // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
   if (filasTotales.length === 0) {
@@ -174,7 +182,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         <div className="bg-white border border-stone-200 p-10 text-center">
           <div className="text-stone-500 text-sm mb-3">No hay cotizaciones para esta combinación de filtros.</div>
           <button
-            onClick={() => setFiltros({ periodo: TODO, proyecto: TODO, region: TODO, tipologia: TODO, estado: TODO })}
+            onClick={() => setFiltros({ periodoDesde: TODO, periodoHasta: TODO, proyecto: TODO, tipologia: TODO })}
             className="text-xs text-[#0F3D66] underline"
           >
             Quitar filtros
@@ -186,7 +194,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const topTipologia = data.tipologiaOrdenada[0];
   const topRegion = data.regionOrdenada[0];
-  const serieTiempo = (modo === "mes" ? data.mesesOrdenados : data.aniosOrdenados).slice(-18);
+  const serieTiempo = (modo === "mes" ? dataTendencia.mesesOrdenados : dataTendencia.aniosOrdenados).slice(-18);
   const mesPico = data.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
   const mesPicoLabel = mesPico ? labelPeriodo(mesPico[0], "mes") : "—";
 
@@ -194,11 +202,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const lineData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
 
   let tendenciaTexto = null;
-  if (data.mesesOrdenados.length >= 2) {
-    const [, actual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
-    const [, anterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
-    const [claveActual] = data.mesesOrdenados[data.mesesOrdenados.length - 1];
-    const [claveAnterior] = data.mesesOrdenados[data.mesesOrdenados.length - 2];
+  if (dataTendencia.mesesOrdenados.length >= 2) {
+    const [, actual] = dataTendencia.mesesOrdenados[dataTendencia.mesesOrdenados.length - 1];
+    const [, anterior] = dataTendencia.mesesOrdenados[dataTendencia.mesesOrdenados.length - 2];
+    const [claveActual] = dataTendencia.mesesOrdenados[dataTendencia.mesesOrdenados.length - 1];
+    const [claveAnterior] = dataTendencia.mesesOrdenados[dataTendencia.mesesOrdenados.length - 2];
     if (anterior > 0) {
       const pct = Math.round(((actual - anterior) / anterior) * 100);
       tendenciaTexto = `Las cotizaciones de ${labelPeriodo(claveActual, "mes")} ${pct >= 0 ? "subieron" : "bajaron"} un ${Math.abs(pct)}% respecto a ${labelPeriodo(claveAnterior, "mes")}.`;
