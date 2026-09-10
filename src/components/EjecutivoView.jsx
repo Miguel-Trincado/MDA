@@ -16,17 +16,16 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
     return (
       <div className="max-w-md mx-auto px-5 py-16">
         <h2 className="font-display text-2xl text-[#0F3D66] mb-4">¿Quién eres?</h2>
-        <div className="flex flex-col gap-2">
+        <select
+          defaultValue=""
+          onChange={(e) => e.target.value && setNombre(e.target.value)}
+          className="w-full border border-stone-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:border-[#0F3D66]"
+        >
+          <option value="" disabled>Selecciona tu nombre…</option>
           {EJECUTIVOS.map((e) => (
-            <button
-              key={e}
-              onClick={() => setNombre(e)}
-              className="text-left border border-stone-300 bg-white hover:border-[#1E5AA8] px-4 py-2.5 text-sm"
-            >
-              {e}
-            </button>
+            <option key={e} value={e}>{e}</option>
           ))}
-        </div>
+        </select>
       </div>
     );
   }

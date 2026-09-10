@@ -14,6 +14,11 @@ function labelPeriodo(key, modo) {
   return labelPeriodoBase(key, modo, MESES_ES);
 }
 
+function mesActualKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 function valorOBlanco(v) {
   return v && v.trim() ? v.trim() : EN_BLANCO;
 }
@@ -21,7 +26,7 @@ function valorOBlanco(v) {
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [showUpload, setShowUpload] = useState(false);
-  const [filtros, setFiltros] = useState({ periodoDesde: TODO, periodoHasta: TODO, proyecto: TODO, tipologia: TODO });
+  const [filtros, setFiltros] = useState({ periodoDesde: mesActualKey(), periodoHasta: mesActualKey(), proyecto: TODO, tipologia: TODO });
 
   const filasTotales = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
 
@@ -41,6 +46,10 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO);
       tipologiasSet.add(valorOBlanco(r.tipologia));
     });
+
+    if (!periodosSet.has(mesActualKey())) {
+      periodosSet.set(mesActualKey(), labelPeriodo(mesActualKey(), "mes"));
+    }
 
     const periodos = [
       { value: TODO, label: "Todo" },
