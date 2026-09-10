@@ -261,7 +261,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       {header}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
-        <KpiCard label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo (sin filtro de período)" />
+        <KpiCard
+          label="Cotizaciones mes actual"
+          value={mesPico ? data.mesesOrdenados[data.mesesOrdenados.length - 1][1] : 0}
+          sub={data.mesesOrdenados.length ? labelPeriodo(data.mesesOrdenados[data.mesesOrdenados.length - 1][0], "mes") : "—"}
+        />
         <KpiCard label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" />
         <KpiCard
           label="Tipología con más clientes únicos"
@@ -269,12 +273,13 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           sub={analisisRut.tipTop ? `${analisisRut.tipTop[1]} clientes distintos` : "—"}
           small
         />
+        <KpiCard label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo (sin filtro de período)" />
         <KpiCard
-          label="Cotizaciones mes actual"
-          value={mesPico ? data.mesesOrdenados[data.mesesOrdenados.length - 1][1] : 0}
-          sub={data.mesesOrdenados.length ? labelPeriodo(data.mesesOrdenados[data.mesesOrdenados.length - 1][0], "mes") : "—"}
+          label="Región con mayor cotización"
+          value={topRegion ? topRegion[0] : "—"}
+          sub={topRegion ? `${topRegion[1]} cotizaciones` : "—"}
+          small
         />
-        <KpiCard label="Mes con mayor cotización" value={mesPicoLabel} sub={mesPico ? `${mesPico[1]} cotizaciones` : "—"} small />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mb-4">
