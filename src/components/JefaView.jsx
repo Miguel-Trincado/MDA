@@ -47,7 +47,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
   const cambiosPendientes = db.cambios.filter((c) => c.resolucion === "PENDIENTE REVISIÓN");
 
   const resultadoBusqueda = buscar
-    ? clientes.filter((g) => g.cliente.toLowerCase().includes(buscar.toLowerCase()) || g.rut.includes(buscar)).slice(0, 15)
+    ? clientes.filter((g) => (g.cliente || "").toLowerCase().includes(buscar.toLowerCase()) || (g.rut || "").includes(buscar)).slice(0, 15)
     : [];
 
   return (

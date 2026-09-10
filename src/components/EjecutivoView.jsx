@@ -64,9 +64,9 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
 
   const filtrados = clientes
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
-    .filter((g) => !busqueda || g.cliente.toLowerCase().includes(busqueda.toLowerCase()) || g.rut.includes(busqueda))
+    .filter((g) => !busqueda || (g.cliente || "").toLowerCase().includes(busqueda.toLowerCase()) || (g.rut || "").includes(busqueda))
     .map((g) => ({ ...g, _alerta: computeAlert(g) }))
-    .sort((a, b) => ALERT_PRIORITY[a._alerta] - ALERT_PRIORITY[b._alerta] || a.cliente.localeCompare(b.cliente));
+    .sort((a, b) => ALERT_PRIORITY[a._alerta] - ALERT_PRIORITY[b._alerta] || (a.cliente || "").localeCompare(b.cliente || ""));
 
   return (
     <div className={wrapperClass}>
