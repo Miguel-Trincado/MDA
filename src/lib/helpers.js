@@ -30,28 +30,92 @@ export function esProyectoPilpilen(proyecto) {
   return stripAccents(proyecto || "").toUpperCase().includes(PROYECTO_OBJETIVO);
 }
 
-export function parseFechaCompleta(str) {
+const MESES_TEXTO = {
+  ene: 1, enero: 1, jan: 1, january: 1,
+  feb: 2, febrero: 2, february: 2,
+  mar: 3, marzo: 3, march: 3,
+  abr: 4, abril: 4, apr: 4, april: 4,
+  may: 5, mayo: 5,
+  jun: 6, junio: 6, june: 6,
+  jul: 7, julio: 7, july: 7,
+  ago: 8, agosto: 8, aug: 8, august: 8,
+  sep: 9, sept: 9, septiembre: 9, september: 9,
+  oct: 10, octubre: 10, october: 10,
+  nov: 11, noviembre: 11, november: 11,
+  dic: 12, diciembre: 12, dec: 12, december: 12,
+};
+
+// Parser único y permisivo: reconoce el mayor número de formatos de fecha
+// razonables (ISO, DD-MM-AAAA, MM/DD/AA, número de serie de Excel, "23 Feb
+// 2026", etc.) y siempre entrega el mismo resultado interno {year, month, day}.
+// Cuando el día y el mes son ambiguos (ambos ≤ 12), asume convención chilena
+// (día primero) salvo que eso dé una fecha imposible, en cuyo caso invierte.
+export function parseAnyDate(str) {
   if (!str) return null;
-  const raw = str.trim().split(" ")[0];
-  let day, month, year;
+  const full = String(str).trim();
+  if (!full) return null;
+  const raw = full.split(" ")[0]; // quita una hora pegada ("22-09-2025 10:09" -> "22-09-2025")
+
+  function normalizar(year, month, day) {
+    if (!year || !month || !day || month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { year, month, day };
+  }
+
+  // 1) ISO: AAAA-MM-DD (sin ambigüedad)
   let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return normalizar(+m[1], +m[2], +m[3]);
+
+  // 2) Con separador "/" o "-": dos números de día/mes + año de 2 o 4 dígitos
+  m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
   if (m) {
-    year = +m[1]; month = +m[2]; day = +m[3];
-  } else {
-    m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (m) {
-      day = +m[1]; month = +m[2]; year = +m[3];
-    } else if (/^\d+(\.\d+)?$/.test(raw)) {
-      const serial = parseFloat(raw);
-      if (serial > 20000 && serial < 60000) {
-        const epoch = Date.UTC(1899, 11, 30);
-        const d = new Date(epoch + serial * 86400000);
-        return isNaN(d.getTime()) ? null : d;
-      }
+    let a = +m[1];
+    let b = +m[2];
+    let y = +m[3];
+    if (y < 100) y += 2000;
+    if (a > 12 && b <= 12) return normalizar(y, b, a); // a=día, b=mes
+    if (b > 12 && a <= 12) return normalizar(y, a, b); // a=mes, b=día (formato US)
+    // Ambos ≤ 12: ambiguo. Asumimos convención chilena (día primero).
+    return normalizar(y, b, a);
+  }
+
+  // 3) Texto tipo "23 Feb 2026" / "Feb 23, 2026" / "23-Feb-2026" (usa el
+  // string completo, no el recortado por espacio, porque estos formatos
+  // sí llevan espacios como parte de la fecha misma).
+  const textoSinComa = full.replace(",", "");
+  m = textoSinComa.match(/^(\d{1,2})[\s-]([a-zA-Záéíóúñ]+)[\s-](\d{2,4})$/i);
+  if (m && MESES_TEXTO[m[2].toLowerCase()]) {
+    let y = +m[3];
+    if (y < 100) y += 2000;
+    return normalizar(y, MESES_TEXTO[m[2].toLowerCase()], +m[1]);
+  }
+  m = textoSinComa.match(/^([a-zA-Záéíóúñ]+)[\s-](\d{1,2})[\s-](\d{2,4})$/i);
+  if (m && MESES_TEXTO[m[1].toLowerCase()]) {
+    let y = +m[3];
+    if (y < 100) y += 2000;
+    return normalizar(y, MESES_TEXTO[m[1].toLowerCase()], +m[2]);
+  }
+
+  // 4) Número de serie de fecha de Excel (días desde 1899-12-30)
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const serial = parseFloat(raw);
+    if (serial > 20000 && serial < 60000) {
+      const epoch = Date.UTC(1899, 11, 30);
+      const d = new Date(epoch + serial * 86400000);
+      if (!isNaN(d.getTime())) return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
     }
   }
-  if (!year || !month || !day || month < 1 || month > 12) return null;
-  const d = new Date(Date.UTC(year, month - 1, day));
+
+  // 5) Último recurso: que lo intente el motor de fechas nativo
+  const d = new Date(full);
+  if (!isNaN(d.getTime())) return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+
+  return null;
+}
+
+export function parseFechaCompleta(str) {
+  const r = parseAnyDate(str);
+  if (!r) return null;
+  const d = new Date(Date.UTC(r.year, r.month - 1, r.day));
   return isNaN(d.getTime()) ? null : d;
 }
 
@@ -101,45 +165,16 @@ export function computeAlert(g) {
 }
 
 export function parseFechaAMes(str) {
-  if (!str) return null;
-  const raw = str.trim().split(" ")[0];
-  let year, month;
-  let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (m) {
-    year = +m[1];
-    month = +m[2];
-  } else {
-    m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-    if (m) {
-      year = +m[3];
-      month = +m[2];
-    } else if (/^\d+(\.\d+)?$/.test(raw)) {
-      const serial = parseFloat(raw);
-      if (serial > 20000 && serial < 60000) {
-        const epoch = Date.UTC(1899, 11, 30);
-        const d = new Date(epoch + serial * 86400000);
-        year = d.getUTCFullYear();
-        month = d.getUTCMonth() + 1;
-      }
-    } else {
-      const d = new Date(raw);
-      if (!isNaN(d.getTime())) {
-        year = d.getFullYear();
-        month = d.getMonth() + 1;
-      }
-    }
-  }
-
-  if (!year || !month || month < 1 || month > 12) return null;
+  const r = parseAnyDate(str);
+  if (!r) return null;
 
   // Una fecha de cotización nunca puede ser futura. Si el parseo (o un dato
-  // mal ingresado / en formato MM/DD en vez de DD/MM) arroja un mes por
-  // venir, se descarta como fecha inválida en vez de graficarla.
+  // mal ingresado) arroja un mes por venir, se descarta en vez de graficarla.
   const hoy = new Date();
-  const esFutura = year > hoy.getFullYear() || (year === hoy.getFullYear() && month > hoy.getMonth() + 1);
+  const esFutura = r.year > hoy.getFullYear() || (r.year === hoy.getFullYear() && r.month > hoy.getMonth() + 1);
   if (esFutura) return null;
 
-  return { year, month };
+  return { year: r.year, month: r.month };
 }
 
 export function labelPeriodo(key, modo, MESES_ES) {
