@@ -80,4 +80,5 @@ export const MESES_ES_LARGO = [
   "agosto", "septiembre", "octubre", "noviembre", "diciembre",
 ];
 
-export const DONUT_COLORS = ["#1E5AA8", "#0F3D66", "#4C8DD9", "#8CB6E8", "#2E7D6B", "#C77D2E", "#8B5FBF", "#C94F6D"];
+export const DONUT_COLORS = ["#2563EB", "#7C3AED", "#EC4899", "#14B8A6", "#F59E0B", "#F97316", "#84CC16", "#94A3B8"];
+export const LINE_COLOR = "#2563EB";

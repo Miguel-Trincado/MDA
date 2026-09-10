@@ -22,6 +22,7 @@ export function parseMaestro(text) {
   const iOpp = idx("Opp");
   const iTipologia = idx("Tipología");
   const iRegion = idx("Región Cliente");
+  const iEstado = idx("Estado");
 
   if (iRut === -1 || iEjec === -1) {
     throw new Error(
@@ -81,6 +82,7 @@ export function parseMaestro(text) {
       tipologia: iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "",
       region: iRegion !== -1 ? (cols[iRegion] || "").trim() : "",
       proyecto: iProyecto !== -1 ? (cols[iProyecto] || "").trim() : "",
+      estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
     });
   }
   return { byRut, filas, filasOtrosProyectos, clientes: Object.keys(byRut).length, filasDetalle };
