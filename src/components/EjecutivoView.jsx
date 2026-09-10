@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   EJECUTIVOS, ESTADOS, NIVELES_INTERES, ETAPAS, EVAL_BANCARIA, ACCIONES,
-  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE,
+  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE, MESES_ES,
 } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
 import { Field, Panel } from "./Shared";
@@ -11,6 +11,11 @@ const OTROS = EJECUTIVOS.slice(5);
 
 function mesKey(d) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function mesLabel(key) {
+  const [y, m] = key.split("-");
+  return `${MESES_ES[Number(m) - 1]} ${y}`;
 }
 
 export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
@@ -38,6 +43,12 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
     Object.values(mapOpp).forEach((arr) => arr.sort((a, b) => a - b));
     return { map, mapOpp };
   }, [db.cotizaciones]);
+
+  const opcionesPeriodo = useMemo(() => {
+    const set = new Set();
+    Object.values(fechasPorRut.map).forEach((fechas) => fechas.forEach((d) => set.add(mesKey(d))));
+    return [...set].sort((a, b) => (a < b ? 1 : -1)).map((key) => ({ value: key, label: mesLabel(key) }));
+  }, [fechasPorRut]);
 
   if (!nombre) {
     return (
@@ -101,7 +112,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           <button
             key={f}
             onClick={() => setFiltro(f)}
-            className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
+            className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
               filtro === f ? "bg-[#0F3D66] text-white border-[#0F3D66]" : "border-stone-300 text-stone-600 hover:border-[#1E5AA8]"
             }`}
           >
@@ -109,31 +120,26 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           </button>
         ))}
 
-        <div className="flex items-center gap-1.5 border border-stone-300 rounded-sm px-2 py-1.5">
+        <div className="flex items-center gap-1.5 border border-stone-300 rounded-full px-3 py-1.5">
           <span className="text-[10px] text-stone-400 uppercase">Período</span>
-          <input
-            type="month"
-            value={periodo}
-            onChange={(e) => setPeriodo(e.target.value)}
-            className="text-xs bg-transparent focus:outline-none"
-          />
-          {periodo && (
-            <button onClick={() => setPeriodo("")} className="text-stone-400 hover:text-stone-700 text-xs">
-              ✕
-            </button>
-          )}
+          <select value={periodo} onChange={(e) => setPeriodo(e.target.value)} className="text-xs bg-transparent focus:outline-none">
+            <option value="">Todo</option>
+            {opcionesPeriodo.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
 
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o RUT…"
-          className="ml-auto text-xs border border-stone-300 rounded-sm px-3 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
+          className="ml-auto text-xs border border-stone-300 rounded-full px-4 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
         />
       </div>
 
       {filtrados.length > 0 && (
-        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-4 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
+        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-5 py-3 text-[11px] text-[#0F3D66] uppercase tracking-wide font-semibold bg-stone-100 border border-b-0 border-stone-200 rounded-t-xl">
           <span>Cliente</span>
           <span>RUT</span>
           <span>Estado</span>
@@ -144,11 +150,11 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       )}
 
       {filtrados.length === 0 ? (
-        <div className="border border-stone-200 rounded-sm bg-white p-8 text-center text-stone-400 text-sm">
+        <div className="border border-stone-200 rounded-xl bg-white p-8 text-center text-stone-400 text-sm">
           No hay clientes en este filtro.
         </div>
       ) : (
-        <div className="border border-stone-200 rounded-b-sm divide-y divide-stone-200 overflow-hidden bg-white shadow-sm">
+        <div className="border border-stone-200 rounded-b-xl divide-y divide-stone-200 overflow-hidden bg-white shadow-sm">
           {filtrados.map((g, i) => (
             <ClientRow
               key={g.rut}
@@ -202,7 +208,7 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
           <span className="text-xs text-stone-500">{g.estado}</span>
           <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFecha)}</span>
           <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFechaOpp)}</span>
-          <span className={`text-xs px-2 py-1 rounded-sm border justify-self-start md:justify-self-end ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
+          <span className={`text-xs px-2.5 py-1 rounded-full border justify-self-start md:justify-self-end ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
         </div>
       </button>
 
@@ -218,7 +224,7 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
               ) : (
                 <span className="flex flex-wrap gap-1.5 mt-1.5">
                   {fechas.map((d, i) => (
-                    <span key={i} className="text-xs bg-white border border-stone-200 rounded-sm px-2 py-0.5">
+                    <span key={i} className="text-xs bg-white border border-stone-200 rounded-full px-2.5 py-0.5">
                       {formatFechaCorta(d)}
                     </span>
                   ))}
@@ -294,11 +300,11 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2 transition-colors"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-full px-5 py-2 transition-colors"
             >
               {saving ? "Guardando…" : "Guardar cambios"}
             </button>
-            <button onClick={onRevisado} className="border border-stone-300 hover:border-[#1E5AA8] text-sm rounded-sm px-4 py-2 text-stone-700 transition-colors">
+            <button onClick={onRevisado} className="border border-stone-300 hover:border-[#1E5AA8] text-sm rounded-full px-5 py-2 text-stone-700 transition-colors">
               Marcar revisado hoy (sin gestión)
             </button>
             {g.ultimaRevisionFecha === todayISO() && <span className="text-xs text-emerald-700">Revisado hoy</span>}
