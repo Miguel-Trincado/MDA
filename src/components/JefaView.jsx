@@ -1,10 +1,9 @@
 import { useState, useMemo } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
 import { computeAlert, todayISO } from "../lib/helpers";
-import { Stat, AlertGroup, Panel, SectionDivider } from "./Shared";
-import EjecutivoView from "./EjecutivoView";
+import { Stat, AlertGroup, Panel } from "./Shared";
 
-export default function JefaView({ db, onResolveCambio, onSetMeta, onSave, onRevisado }) {
+export default function JefaView({ db, onResolveCambio, onSetMeta }) {
   const [buscar, setBuscar] = useState("");
 
   const clientes = useMemo(
@@ -122,7 +121,31 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSave, onRev
         )}
       </Panel>
 
-      <Panel title="Resumen por ejecutivo" className="mb-5 overflow-x-auto">
+      <Panel title="Buscar cliente" className="mb-5">
+        <input
+          value={buscar}
+          onChange={(e) => setBuscar(e.target.value)}
+          placeholder="Nombre o RUT…"
+          className="border border-stone-300 rounded-sm px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-[#1E5AA8]"
+        />
+        {resultadoBusqueda.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1">
+            {resultadoBusqueda.map((g) => (
+              <div key={g.rut} className="flex items-center justify-between text-sm border-b border-stone-100 py-2 flex-wrap gap-2">
+                <div>
+                  <span className="font-medium">{g.cliente}</span>
+                  <span className="text-xs text-stone-400 ml-2">
+                    RUT {g.rut} · {g.ejecutivo} · {g.estado}
+                  </span>
+                </div>
+                {g._alerta && <span className={`text-xs px-2 py-0.5 rounded-sm border ${ALERT_STYLE[g._alerta]}`}>{g._alerta}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Resumen por ejecutivo" className="overflow-x-auto">
         <table className="w-full text-sm min-w-[560px]">
           <thead>
             <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
@@ -150,33 +173,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSave, onRev
           </tbody>
         </table>
       </Panel>
-
-      <Panel title="Buscar cliente">
-        <input
-          value={buscar}
-          onChange={(e) => setBuscar(e.target.value)}
-          placeholder="Nombre o RUT…"
-          className="border border-stone-300 rounded-sm px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-[#1E5AA8]"
-        />
-        {resultadoBusqueda.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1">
-            {resultadoBusqueda.map((g) => (
-              <div key={g.rut} className="flex items-center justify-between text-sm border-b border-stone-100 py-2 flex-wrap gap-2">
-                <div>
-                  <span className="font-medium">{g.cliente}</span>
-                  <span className="text-xs text-stone-400 ml-2">
-                    RUT {g.rut} · {g.ejecutivo} · {g.estado}
-                  </span>
-                </div>
-                {g._alerta && <span className={`text-xs px-2 py-0.5 rounded-sm border ${ALERT_STYLE[g._alerta]}`}>{g._alerta}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-
-      <SectionDivider label="Gestión por ejecutivo" />
-      <EjecutivoView db={db} onSave={onSave} onRevisado={onRevisado} embedded />
     </div>
   );
 }
