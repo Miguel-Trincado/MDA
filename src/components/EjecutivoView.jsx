@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   EJECUTIVOS, ESTADOS, NIVELES_INTERES, ETAPAS, EVAL_BANCARIA, ACCIONES,
   RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE,
 } from "../lib/constants";
-import { computeAlert, todayISO } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
 import { Field, Panel } from "./Shared";
 
 const PRIORIDAD = EJECUTIVOS.slice(0, 5);
@@ -50,6 +50,18 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   }
 
   const clientes = Object.values(db.gestion).filter((g) => g.ejecutivo === nombre);
+
+  const fechasPorRut = useMemo(() => {
+    const map = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      if (!map[c.rut]) map[c.rut] = [];
+      const d = parseFechaCompleta(c.fecha);
+      if (d) map[c.rut].push(d);
+    });
+    Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
+    return map;
+  }, [db.cotizaciones]);
+
   const filtrados = clientes
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
     .filter((g) => !busqueda || g.cliente.toLowerCase().includes(busqueda.toLowerCase()) || g.rut.includes(busqueda))
@@ -98,6 +110,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
             <ClientRow
               key={g.rut}
               g={g}
+              fechas={fechasPorRut[g.rut] || []}
               expanded={expandido === g.rut}
               onToggle={() => setExpandido(expandido === g.rut ? null : g.rut)}
               onSave={async (updates) => {
@@ -113,7 +126,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   );
 }
 
-function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
+function ClientRow({ g, fechas, expanded, onToggle, onSave, onRevisado }) {
   const [form, setForm] = useState(g);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -123,6 +136,7 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
 
   const alerta = g._alerta;
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const ultimaFecha = fechas.length ? fechas[fechas.length - 1] : null;
 
   async function handleSave() {
     setSaving(true);
@@ -140,6 +154,7 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
           <span className="font-medium text-stone-900 truncate">{g.cliente || "(sin nombre)"}</span>
           <span className="text-xs text-stone-400 shrink-0">RUT {g.rut}</span>
           <span className="text-xs text-stone-400 shrink-0">{g.estado}</span>
+          <span className="text-xs text-stone-400 shrink-0">Última cotización: {formatFechaCorta(ultimaFecha)}</span>
         </div>
         <span className={`text-xs px-2 py-1 rounded-sm border shrink-0 ml-3 ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
       </button>
@@ -149,8 +164,20 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
           <div className="grid sm:grid-cols-2 gap-3 mb-3 text-sm">
             <div><span className="text-stone-400">Teléfono:</span> {g.telefono || "—"}</div>
             <div><span className="text-stone-400">Renta:</span> {g.renta || "—"}</div>
-            <div><span className="text-stone-400">N° cotizaciones:</span> {g.nCotizaciones}</div>
-            <div><span className="text-stone-400">Última cotización:</span> {g.fechaUltimaCotizacion || "—"}</div>
+            <div className="sm:col-span-2">
+              <span className="text-stone-400">Historial de cotizaciones ({fechas.length}):</span>{" "}
+              {fechas.length === 0 ? (
+                "—"
+              ) : (
+                <span className="flex flex-wrap gap-1.5 mt-1.5">
+                  {fechas.map((d, i) => (
+                    <span key={i} className="text-xs bg-white border border-stone-200 rounded-sm px-2 py-0.5">
+                      {formatFechaCorta(d)}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-3">
