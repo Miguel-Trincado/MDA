@@ -1,18 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   EJECUTIVOS, ESTADOS, NIVELES_INTERES, ETAPAS, EVAL_BANCARIA, ACCIONES,
-  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE, MESES_ES,
+  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE,
 } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, fmtDateTime, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
 import { Field, Panel } from "./Shared";
 
 const PRIORIDAD = EJECUTIVOS.slice(0, 5);
 const OTROS = EJECUTIVOS.slice(5);
-const TODO = "Todo";
-
-function labelPeriodo(key) {
-  return labelPeriodoBase(key, "mes", MESES_ES);
-}
 
 function mesKey(d) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -23,29 +18,26 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const [filtro, setFiltro] = useState("Activo");
   const [busqueda, setBusqueda] = useState("");
   const [expandido, setExpandido] = useState(null);
-  const [periodoDesde, setPeriodoDesde] = useState(TODO);
-  const [periodoHasta, setPeriodoHasta] = useState(TODO);
+  const [periodo, setPeriodo] = useState(""); // "" = Todo, o "YYYY-MM"
 
   const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
 
   const fechasPorRut = useMemo(() => {
     const map = {};
+    const mapOpp = {};
     Object.values(db.cotizaciones || {}).forEach((c) => {
       if (!map[c.rut]) map[c.rut] = [];
       const d = parseFechaCompleta(c.fecha);
       if (d) map[c.rut].push(d);
+
+      if (!mapOpp[c.rut]) mapOpp[c.rut] = [];
+      const dOpp = parseFechaCompleta(c.fechaOpp);
+      if (dOpp) mapOpp[c.rut].push(dOpp);
     });
     Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
-    return map;
+    Object.values(mapOpp).forEach((arr) => arr.sort((a, b) => a - b));
+    return { map, mapOpp };
   }, [db.cotizaciones]);
-
-  const opcionesPeriodo = useMemo(() => {
-    const set = new Map();
-    Object.values(fechasPorRut).forEach((fechas) => {
-      fechas.forEach((d) => set.set(mesKey(d), labelPeriodo(mesKey(d))));
-    });
-    return [{ value: TODO, label: "Todo" }, ...[...set.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([value, label]) => ({ value, label }))];
-  }, [fechasPorRut]);
 
   if (!nombre) {
     return (
@@ -85,14 +77,9 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
     .filter((g) => !busqueda || (g.cliente || "").toLowerCase().includes(busqueda.toLowerCase()) || (g.rut || "").includes(busqueda))
     .filter((g) => {
-      if (periodoDesde === TODO && periodoHasta === TODO) return true;
-      const fechas = fechasPorRut[g.rut] || [];
-      return fechas.some((d) => {
-        const key = mesKey(d);
-        if (periodoDesde !== TODO && key < periodoDesde) return false;
-        if (periodoHasta !== TODO && key > periodoHasta) return false;
-        return true;
-      });
+      if (!periodo) return true;
+      const fechas = fechasPorRut.map[g.rut] || [];
+      return fechas.some((d) => mesKey(d) === periodo);
     })
     .map((g) => ({ ...g, _alerta: computeAlert(g) }))
     .sort((a, b) => ALERT_PRIORITY[a._alerta] - ALERT_PRIORITY[b._alerta] || (a.cliente || "").localeCompare(b.cliente || ""));
@@ -122,15 +109,19 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           </button>
         ))}
 
-        <div className="flex items-center gap-1 border border-stone-300 rounded-sm px-2 py-1.5">
+        <div className="flex items-center gap-1.5 border border-stone-300 rounded-sm px-2 py-1.5">
           <span className="text-[10px] text-stone-400 uppercase">Período</span>
-          <select value={periodoDesde} onChange={(e) => setPeriodoDesde(e.target.value)} className="text-xs bg-transparent focus:outline-none">
-            {opcionesPeriodo.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="text-stone-300">–</span>
-          <select value={periodoHasta} onChange={(e) => setPeriodoHasta(e.target.value)} className="text-xs bg-transparent focus:outline-none">
-            {opcionesPeriodo.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <input
+            type="month"
+            value={periodo}
+            onChange={(e) => setPeriodo(e.target.value)}
+            className="text-xs bg-transparent focus:outline-none"
+          />
+          {periodo && (
+            <button onClick={() => setPeriodo("")} className="text-stone-400 hover:text-stone-700 text-xs">
+              ✕
+            </button>
+          )}
         </div>
 
         <input
@@ -147,7 +138,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           <span>RUT</span>
           <span>Estado</span>
           <span>F. cotización</span>
-          <span>Últ. actualización</span>
+          <span>Fecha Opp</span>
           <span>Alerta</span>
         </div>
       )}
@@ -162,7 +153,8 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
             <ClientRow
               key={g.rut}
               g={g}
-              fechas={fechasPorRut[g.rut] || []}
+              fechas={fechasPorRut.map[g.rut] || []}
+              fechasOpp={fechasPorRut.mapOpp[g.rut] || []}
               expanded={expandido === g.rut}
               onToggle={() => setExpandido(expandido === g.rut ? null : g.rut)}
               onSave={async (updates) => {
@@ -178,7 +170,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   );
 }
 
-function ClientRow({ g, fechas, expanded, onToggle, onSave, onRevisado }) {
+function ClientRow({ g, fechas, fechasOpp, expanded, onToggle, onSave, onRevisado }) {
   const [form, setForm] = useState(g);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -189,6 +181,7 @@ function ClientRow({ g, fechas, expanded, onToggle, onSave, onRevisado }) {
   const alerta = g._alerta;
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const ultimaFecha = fechas.length ? fechas[fechas.length - 1] : null;
+  const ultimaFechaOpp = fechasOpp.length ? fechasOpp[fechasOpp.length - 1] : null;
 
   async function handleSave() {
     setSaving(true);
@@ -207,7 +200,7 @@ function ClientRow({ g, fechas, expanded, onToggle, onSave, onRevisado }) {
           <span className="text-xs text-stone-500">RUT {g.rut}</span>
           <span className="text-xs text-stone-500">{g.estado}</span>
           <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFecha)}</span>
-          <span className="text-xs text-stone-500">{fmtDateTime(g.ultimaActualizacionEjecutivo)}</span>
+          <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFechaOpp)}</span>
           <span className={`text-xs px-2 py-1 rounded-sm border justify-self-start md:justify-self-end ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
         </div>
       </button>

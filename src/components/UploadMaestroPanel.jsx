@@ -26,11 +26,11 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
     setBusy(true);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
-      const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
+      const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false, dateNF: "dd-mm-yyyy" });
       const summary = await onUpload(tsv);
       setResult(summary);
     } catch (err) {
