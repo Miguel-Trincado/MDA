@@ -4,28 +4,47 @@ import {
   RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE,
 } from "../lib/constants";
 import { computeAlert, todayISO } from "../lib/helpers";
-import { Field } from "./Shared";
+import { Field, Panel } from "./Shared";
 
-export default function EjecutivoView({ db, onSave, onRevisado }) {
+const PRIORIDAD = EJECUTIVOS.slice(0, 5);
+const OTROS = EJECUTIVOS.slice(5);
+
+export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const [nombre, setNombre] = useState("");
   const [filtro, setFiltro] = useState("Activo");
   const [busqueda, setBusqueda] = useState("");
   const [expandido, setExpandido] = useState(null);
 
+  const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
+
   if (!nombre) {
     return (
-      <div className="max-w-md mx-auto px-5 py-16">
-        <h2 className="font-display text-2xl text-[#0F3D66] mb-4">¿Quién eres?</h2>
-        <select
-          defaultValue=""
-          onChange={(e) => e.target.value && setNombre(e.target.value)}
-          className="w-full border border-stone-300 bg-white px-4 py-2.5 text-sm focus:outline-none focus:border-[#0F3D66]"
-        >
-          <option value="" disabled>Selecciona tu nombre…</option>
-          {EJECUTIVOS.map((e) => (
-            <option key={e} value={e}>{e}</option>
-          ))}
-        </select>
+      <div className={embedded ? "" : "max-w-2xl mx-auto px-5 py-16"}>
+        <Panel>
+          <div className="text-xs text-stone-400 uppercase tracking-wide mb-1">Gestión de cartera</div>
+          <h2 className="font-display text-xl text-[#0F3D66] mb-4">¿Quién eres?</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {PRIORIDAD.map((e) => (
+              <button
+                key={e}
+                onClick={() => setNombre(e)}
+                className="rounded-full border border-stone-300 bg-white hover:bg-[#0F3D66] hover:border-[#0F3D66] hover:text-white px-4 py-2 text-sm font-medium transition-colors"
+              >
+                {e}
+              </button>
+            ))}
+            <select
+              defaultValue=""
+              onChange={(e) => e.target.value && setNombre(e.target.value)}
+              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm text-stone-600 focus:outline-none focus:border-[#0F3D66]"
+            >
+              <option value="" disabled>Otros ejecutivos…</option>
+              {OTROS.map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+          </div>
+        </Panel>
       </div>
     );
   }
@@ -38,7 +57,7 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
     .sort((a, b) => ALERT_PRIORITY[a._alerta] - ALERT_PRIORITY[b._alerta] || a.cliente.localeCompare(b.cliente));
 
   return (
-    <div className="max-w-4xl mx-auto px-5 py-6">
+    <div className={wrapperClass}>
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">Cartera de {nombre}</h2>
@@ -54,7 +73,7 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
           <button
             key={f}
             onClick={() => setFiltro(f)}
-            className={`text-xs px-3 py-1.5 border ${
+            className={`text-xs px-3 py-1.5 rounded-sm border transition-colors ${
               filtro === f ? "bg-[#0F3D66] text-white border-[#0F3D66]" : "border-stone-300 text-stone-600 hover:border-[#1E5AA8]"
             }`}
           >
@@ -65,12 +84,12 @@ export default function EjecutivoView({ db, onSave, onRevisado }) {
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder="Buscar por nombre o RUT…"
-          className="ml-auto text-xs border border-stone-300 px-3 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
+          className="ml-auto text-xs border border-stone-300 rounded-sm px-3 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
         />
       </div>
 
       {filtrados.length === 0 ? (
-        <div className="border border-stone-200 bg-white p-8 text-center text-stone-400 text-sm">
+        <div className="border border-stone-200 rounded-sm bg-white p-8 text-center text-stone-400 text-sm">
           No hay clientes en este filtro.
         </div>
       ) : (
@@ -115,14 +134,14 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
   }
 
   return (
-    <div className="border border-stone-300 bg-white">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left">
+    <div className="border border-stone-200 rounded-sm bg-white shadow-sm">
+      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-stone-50/60 transition-colors">
         <div className="flex items-center gap-3 min-w-0">
           <span className="font-medium text-stone-900 truncate">{g.cliente || "(sin nombre)"}</span>
           <span className="text-xs text-stone-400 shrink-0">RUT {g.rut}</span>
           <span className="text-xs text-stone-400 shrink-0">{g.estado}</span>
         </div>
-        <span className={`text-xs px-2 py-1 border shrink-0 ml-3 ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
+        <span className={`text-xs px-2 py-1 rounded-sm border shrink-0 ml-3 ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
       </button>
 
       {expanded && (
@@ -201,11 +220,11 @@ function ClientRow({ g, expanded, onToggle, onSave, onRevisado }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm px-4 py-2"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2 transition-colors"
             >
               {saving ? "Guardando…" : "Guardar cambios"}
             </button>
-            <button onClick={onRevisado} className="border border-stone-300 hover:border-[#1E5AA8] text-sm px-4 py-2 text-stone-700">
+            <button onClick={onRevisado} className="border border-stone-300 hover:border-[#1E5AA8] text-sm rounded-sm px-4 py-2 text-stone-700 transition-colors">
               Marcar revisado hoy (sin gestión)
             </button>
             {g.ultimaRevisionFecha === todayISO() && <span className="text-xs text-emerald-700">Revisado hoy</span>}

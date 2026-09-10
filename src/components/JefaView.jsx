@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
 import { computeAlert, todayISO } from "../lib/helpers";
-import { Stat, AlertGroup } from "./Shared";
+import { Stat, AlertGroup, Panel, SectionDivider } from "./Shared";
+import EjecutivoView from "./EjecutivoView";
 
-export default function JefaView({ db, onResolveCambio, onSetMeta }) {
+export default function JefaView({ db, onResolveCambio, onSetMeta, onSave, onRevisado }) {
   const [buscar, setBuscar] = useState("");
 
   const clientes = useMemo(
@@ -54,14 +55,14 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
     <div className="max-w-6xl mx-auto px-5 py-6">
       <h2 className="font-display text-2xl text-[#0F3D66] mb-5">Panel Jefa de Ventas</h2>
 
-      <div className="border border-stone-300 bg-white p-5 mb-5">
+      <Panel className="mb-5">
         <div className="flex items-center gap-3 mb-4">
           <span className="text-xs text-stone-500">Meta comercial del mes</span>
           <input
             type="number"
             value={meta}
             onChange={(e) => onSetMeta(Number(e.target.value) || 0)}
-            className="border border-stone-300 px-2 py-1 w-20 text-sm focus:outline-none focus:border-[#1E5AA8]"
+            className="border border-stone-300 rounded-sm px-2 py-1 w-20 text-sm focus:outline-none focus:border-[#1E5AA8]"
           />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -78,14 +79,14 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
           />
           <Stat label="Cambios de ejecutivo pendientes" value={cambiosPendientes.length} accent="text-violet-700" />
         </div>
-      </div>
+      </Panel>
 
       {cambiosPendientes.length > 0 && (
-        <div className="border border-violet-300 bg-violet-50 p-5 mb-5">
+        <div className="border border-violet-300 bg-violet-50 rounded-sm shadow-sm p-5 mb-5">
           <div className="font-display text-lg text-violet-950 mb-3">Cambios de ejecutivo por resolver</div>
           <div className="flex flex-col gap-2">
             {cambiosPendientes.map((c) => (
-              <div key={c.id} className="bg-white border border-violet-200 px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+              <div key={c.id} className="bg-white border border-violet-200 rounded-sm px-4 py-3 flex items-center justify-between flex-wrap gap-2">
                 <div className="text-sm">
                   <span className="font-medium">{c.cliente}</span>
                   <span className="text-stone-400 text-xs ml-2">RUT {c.rut}</span>
@@ -94,10 +95,10 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => onResolveCambio(c, "aprobar")} className="text-xs bg-[#0F3D66] text-white px-3 py-1.5">
+                  <button onClick={() => onResolveCambio(c, "aprobar")} className="text-xs bg-[#0F3D66] hover:bg-[#1E5AA8] text-white rounded-sm px-3 py-1.5 transition-colors">
                     Aprobar cambio
                   </button>
-                  <button onClick={() => onResolveCambio(c, "mantener")} className="text-xs border border-stone-300 px-3 py-1.5">
+                  <button onClick={() => onResolveCambio(c, "mantener")} className="text-xs border border-stone-300 rounded-sm px-3 py-1.5 hover:border-[#1E5AA8] transition-colors">
                     Mantener anterior
                   </button>
                 </div>
@@ -107,8 +108,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
         </div>
       )}
 
-      <div className="border border-stone-300 bg-white p-5 mb-5">
-        <div className="font-display text-lg text-[#0F3D66] mb-3">Panel de alertas</div>
+      <Panel title="Panel de alertas" className="mb-5">
         {Object.keys(alertasPorTipo).length === 0 ? (
           <div className="text-sm text-stone-400">No hay alertas activas.</div>
         ) : (
@@ -120,10 +120,9 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
               ))}
           </div>
         )}
-      </div>
+      </Panel>
 
-      <div className="border border-stone-300 bg-white p-5 mb-5 overflow-x-auto">
-        <div className="font-display text-lg text-[#0F3D66] mb-3">Resumen por ejecutivo</div>
+      <Panel title="Resumen por ejecutivo" className="mb-5 overflow-x-auto">
         <table className="w-full text-sm min-w-[560px]">
           <thead>
             <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
@@ -139,7 +138,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
             {Object.entries(porEjecutivo)
               .sort((a, b) => b[1].activos - a[1].activos)
               .map(([nombre, e]) => (
-                <tr key={nombre} className="border-b border-stone-100">
+                <tr key={nombre} className="border-b border-stone-100 hover:bg-stone-50/60 transition-colors">
                   <td className="py-2 pr-3 font-medium">{nombre}</td>
                   <td className="py-2 pr-3">{e.cotizantes}</td>
                   <td className="py-2 pr-3">{e.activos}</td>
@@ -150,15 +149,14 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
               ))}
           </tbody>
         </table>
-      </div>
+      </Panel>
 
-      <div className="border border-stone-300 bg-white p-5">
-        <div className="font-display text-lg text-[#0F3D66] mb-3">Buscar cliente</div>
+      <Panel title="Buscar cliente">
         <input
           value={buscar}
           onChange={(e) => setBuscar(e.target.value)}
           placeholder="Nombre o RUT…"
-          className="border border-stone-300 px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-[#1E5AA8]"
+          className="border border-stone-300 rounded-sm px-3 py-2 text-sm w-full sm:w-80 focus:outline-none focus:border-[#1E5AA8]"
         />
         {resultadoBusqueda.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
@@ -170,12 +168,15 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
                     RUT {g.rut} · {g.ejecutivo} · {g.estado}
                   </span>
                 </div>
-                {g._alerta && <span className={`text-xs px-2 py-0.5 border ${ALERT_STYLE[g._alerta]}`}>{g._alerta}</span>}
+                {g._alerta && <span className={`text-xs px-2 py-0.5 rounded-sm border ${ALERT_STYLE[g._alerta]}`}>{g._alerta}</span>}
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Panel>
+
+      <SectionDivider label="Gestión por ejecutivo" />
+      <EjecutivoView db={db} onSave={onSave} onRevisado={onRevisado} embedded />
     </div>
   );
 }
