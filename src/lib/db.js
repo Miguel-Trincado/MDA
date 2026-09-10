@@ -226,6 +226,13 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
 
   await upsertInChunks("gestion", gestionRows, "rut");
   await upsertInChunks("control_interno", controlRows, "rut");
+
+  // La tabla de cotizaciones debe ser siempre un espejo exacto del último
+  // Maestro Aval pegado (que ya viene completo y actualizado). Por eso se
+  // borra entero antes de volver a insertar: así no quedan cotizaciones de
+  // cargas anteriores que ya no existen en el archivo actual.
+  const { error: delError } = await supabase.from("cotizaciones").delete().neq("opp", "");
+  if (delError) throw delError;
   await upsertInChunks("cotizaciones", cotizacionRows, "opp");
 
   let cambiosInsertados = [];
@@ -238,7 +245,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     cambiosInsertados = (data || []).map(rowToObj);
   }
 
-  const cotizacionesOut = { ...currentCotizaciones };
+  const cotizacionesOut = {};
   filasDetalle.forEach((r) => {
     cotizacionesOut[r.opp] = r;
   });
