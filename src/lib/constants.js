@@ -1,6 +1,6 @@
 export const EJECUTIVOS = [
-  "Diana Monsalve", "Jessica Jorquera", "Camila Finschi", "Isabel Ormazabal",
-  "Soledad Gómez", "Jorge Díaz", "Claudio Leiva", "Monica Cid", "Pamela Lineros",
+  "Diana Monsalve", "Isabel Ormazabal", "Jessica Jorquera", "Claudio Leiva", "Soledad Gómez",
+  "Camila Finschi", "Jorge Díaz", "Monica Cid", "Pamela Lineros",
   "Sandra Soto", "Macarena Bustamante", "Mónica Herrera", "Karen Castillo", "Miguel Trincado",
 ];
 
