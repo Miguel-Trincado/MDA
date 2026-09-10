@@ -1,19 +1,30 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   EJECUTIVOS, ESTADOS, NIVELES_INTERES, ETAPAS, EVAL_BANCARIA, ACCIONES,
-  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE,
+  RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE, MESES_ES,
 } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, fmtDateTime, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
 import { Field, Panel } from "./Shared";
 
 const PRIORIDAD = EJECUTIVOS.slice(0, 5);
 const OTROS = EJECUTIVOS.slice(5);
+const TODO = "Todo";
+
+function labelPeriodo(key) {
+  return labelPeriodoBase(key, "mes", MESES_ES);
+}
+
+function mesKey(d) {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const [nombre, setNombre] = useState("");
   const [filtro, setFiltro] = useState("Activo");
   const [busqueda, setBusqueda] = useState("");
   const [expandido, setExpandido] = useState(null);
+  const [periodoDesde, setPeriodoDesde] = useState(TODO);
+  const [periodoHasta, setPeriodoHasta] = useState(TODO);
 
   const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
 
@@ -27,6 +38,14 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
     Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
     return map;
   }, [db.cotizaciones]);
+
+  const opcionesPeriodo = useMemo(() => {
+    const set = new Map();
+    Object.values(fechasPorRut).forEach((fechas) => {
+      fechas.forEach((d) => set.set(mesKey(d), labelPeriodo(mesKey(d))));
+    });
+    return [{ value: TODO, label: "Todo" }, ...[...set.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([value, label]) => ({ value, label }))];
+  }, [fechasPorRut]);
 
   if (!nombre) {
     return (
@@ -65,6 +84,16 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const filtrados = clientes
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
     .filter((g) => !busqueda || (g.cliente || "").toLowerCase().includes(busqueda.toLowerCase()) || (g.rut || "").includes(busqueda))
+    .filter((g) => {
+      if (periodoDesde === TODO && periodoHasta === TODO) return true;
+      const fechas = fechasPorRut[g.rut] || [];
+      return fechas.some((d) => {
+        const key = mesKey(d);
+        if (periodoDesde !== TODO && key < periodoDesde) return false;
+        if (periodoHasta !== TODO && key > periodoHasta) return false;
+        return true;
+      });
+    })
     .map((g) => ({ ...g, _alerta: computeAlert(g) }))
     .sort((a, b) => ALERT_PRIORITY[a._alerta] - ALERT_PRIORITY[b._alerta] || (a.cliente || "").localeCompare(b.cliente || ""));
 
@@ -80,7 +109,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
         {["Activo", "En espera", "Perdido", "Promesado", "Todos"].map((f) => (
           <button
             key={f}
@@ -92,6 +121,18 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
             {f}
           </button>
         ))}
+
+        <div className="flex items-center gap-1 border border-stone-300 rounded-sm px-2 py-1.5">
+          <span className="text-[10px] text-stone-400 uppercase">Período</span>
+          <select value={periodoDesde} onChange={(e) => setPeriodoDesde(e.target.value)} className="text-xs bg-transparent focus:outline-none">
+            {opcionesPeriodo.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <span className="text-stone-300">–</span>
+          <select value={periodoHasta} onChange={(e) => setPeriodoHasta(e.target.value)} className="text-xs bg-transparent focus:outline-none">
+            {opcionesPeriodo.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
         <input
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
@@ -99,6 +140,17 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           className="ml-auto text-xs border border-stone-300 rounded-sm px-3 py-1.5 focus:outline-none focus:border-[#1E5AA8] w-52"
         />
       </div>
+
+      {filtrados.length > 0 && (
+        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-4 pb-1.5 text-[10px] text-stone-400 uppercase tracking-wide">
+          <span>Cliente</span>
+          <span>RUT</span>
+          <span>Estado</span>
+          <span>F. cotización</span>
+          <span>Últ. actualización</span>
+          <span>Alerta</span>
+        </div>
+      )}
 
       {filtrados.length === 0 ? (
         <div className="border border-stone-200 rounded-sm bg-white p-8 text-center text-stone-400 text-sm">
@@ -149,14 +201,15 @@ function ClientRow({ g, fechas, expanded, onToggle, onSave, onRevisado }) {
 
   return (
     <div className="border border-stone-200 rounded-sm bg-white shadow-sm">
-      <button onClick={onToggle} className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-stone-50/60 transition-colors">
-        <div className="flex items-center gap-3 min-w-0">
+      <button onClick={onToggle} className="w-full text-left hover:bg-stone-50/60 transition-colors px-4 py-3">
+        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-x-2 gap-y-1 items-center">
           <span className="font-medium text-stone-900 truncate">{g.cliente || "(sin nombre)"}</span>
-          <span className="text-xs text-stone-400 shrink-0">RUT {g.rut}</span>
-          <span className="text-xs text-stone-400 shrink-0">{g.estado}</span>
-          <span className="text-xs text-stone-400 shrink-0">Última cotización: {formatFechaCorta(ultimaFecha)}</span>
+          <span className="text-xs text-stone-500">RUT {g.rut}</span>
+          <span className="text-xs text-stone-500">{g.estado}</span>
+          <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFecha)}</span>
+          <span className="text-xs text-stone-500">{fmtDateTime(g.ultimaActualizacionEjecutivo)}</span>
+          <span className={`text-xs px-2 py-1 rounded-sm border justify-self-start md:justify-self-end ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
         </div>
-        <span className={`text-xs px-2 py-1 rounded-sm border shrink-0 ml-3 ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
       </button>
 
       {expanded && (
