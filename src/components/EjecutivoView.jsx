@@ -133,7 +133,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       </div>
 
       {filtrados.length > 0 && (
-        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-4 pb-1.5 text-[10px] text-stone-400 uppercase tracking-wide">
+        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-4 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
           <span>Cliente</span>
           <span>RUT</span>
           <span>Estado</span>
@@ -148,11 +148,12 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           No hay clientes en este filtro.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filtrados.map((g) => (
+        <div className="border border-stone-200 rounded-b-sm divide-y divide-stone-200 overflow-hidden bg-white shadow-sm">
+          {filtrados.map((g, i) => (
             <ClientRow
               key={g.rut}
               g={g}
+              i={i}
               fechas={fechasPorRut.map[g.rut] || []}
               fechasOpp={fechasPorRut.mapOpp[g.rut] || []}
               expanded={expandido === g.rut}
@@ -170,7 +171,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   );
 }
 
-function ClientRow({ g, fechas, fechasOpp, expanded, onToggle, onSave, onRevisado }) {
+function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevisado }) {
   const [form, setForm] = useState(g);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -193,8 +194,8 @@ function ClientRow({ g, fechas, fechasOpp, expanded, onToggle, onSave, onRevisad
   }
 
   return (
-    <div className="border border-stone-200 rounded-sm bg-white shadow-sm">
-      <button onClick={onToggle} className="w-full text-left hover:bg-stone-50/60 transition-colors px-4 py-3">
+    <div className={i % 2 === 1 ? "bg-stone-50/50" : "bg-white"}>
+      <button onClick={onToggle} className="w-full text-left hover:bg-sky-50/60 transition-colors px-4 py-2.5">
         <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-x-2 gap-y-1 items-center">
           <span className="font-medium text-stone-900 truncate">{g.cliente || "(sin nombre)"}</span>
           <span className="text-xs text-stone-500">RUT {g.rut}</span>
