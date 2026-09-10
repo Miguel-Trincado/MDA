@@ -17,6 +17,17 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
 
   const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
 
+  const fechasPorRut = useMemo(() => {
+    const map = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      if (!map[c.rut]) map[c.rut] = [];
+      const d = parseFechaCompleta(c.fecha);
+      if (d) map[c.rut].push(d);
+    });
+    Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
+    return map;
+  }, [db.cotizaciones]);
+
   if (!nombre) {
     return (
       <div className={embedded ? "" : "max-w-2xl mx-auto px-5 py-16"}>
@@ -50,17 +61,6 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   }
 
   const clientes = Object.values(db.gestion).filter((g) => g.ejecutivo === nombre);
-
-  const fechasPorRut = useMemo(() => {
-    const map = {};
-    Object.values(db.cotizaciones || {}).forEach((c) => {
-      if (!map[c.rut]) map[c.rut] = [];
-      const d = parseFechaCompleta(c.fecha);
-      if (d) map[c.rut].push(d);
-    });
-    Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
-    return map;
-  }, [db.cotizaciones]);
 
   const filtrados = clientes
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
