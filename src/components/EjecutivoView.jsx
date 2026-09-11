@@ -69,17 +69,25 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   }, [fechasPorRut]);
 
   const [buscarTodos, setBuscarTodos] = useState("");
-  const todosContactos = useMemo(
-    () => Object.values(db.gestion).sort((a, b) => (a.cliente || "").localeCompare(b.cliente || "")),
-    [db.gestion]
-  );
-  const contactosFiltrados = useMemo(() => {
-    if (!buscarTodos) return todosContactos;
+  const todasLasOpp = useMemo(() => {
+    return Object.values(db.cotizaciones || {})
+      .map((c) => {
+        const g = db.gestion[c.rut] || {};
+        return { ...c, cliente: g.cliente || "", ejecutivo: g.ejecutivo || "", estadoCliente: g.estado || "" };
+      })
+      .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+  }, [db.cotizaciones, db.gestion]);
+  const oppFiltradas = useMemo(() => {
+    if (!buscarTodos) return todasLasOpp;
     const q = buscarTodos.toLowerCase();
-    return todosContactos.filter(
-      (g) => (g.cliente || "").toLowerCase().includes(q) || (g.rut || "").includes(q) || (g.ejecutivo || "").toLowerCase().includes(q)
+    return todasLasOpp.filter(
+      (c) =>
+        (c.cliente || "").toLowerCase().includes(q) ||
+        (c.rut || "").includes(q) ||
+        (c.ejecutivo || "").toLowerCase().includes(q) ||
+        (c.opp || "").includes(q)
     );
-  }, [todosContactos, buscarTodos]);
+  }, [todasLasOpp, buscarTodos]);
 
   if (!nombre) {
     return (
@@ -110,38 +118,44 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
         </Panel>
 
         <div className="mt-5">
-          <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">Todos los contactos ({todosContactos.length})</div>
+          <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">Todas las cotizaciones ({todasLasOpp.length})</div>
           <div className="flex items-center gap-2 mb-3">
             <input
               value={buscarTodos}
               onChange={(e) => setBuscarTodos(e.target.value)}
-              placeholder="Buscar por nombre, RUT o ejecutivo…"
+              placeholder="Buscar por nombre, RUT, Opp o ejecutivo…"
               className="text-xs border border-stone-300 rounded-full px-4 py-1.5 w-72 focus:outline-none focus:border-[#1E5AA8]"
             />
           </div>
           <div className="border border-stone-200 rounded-xl bg-white shadow-sm max-h-[420px] overflow-y-auto">
-            <div className="hidden md:grid grid-cols-[1.6fr_1fr_1.2fr_0.8fr] gap-2 px-4 py-2 text-[10px] text-[#0F3D66] uppercase tracking-wide font-semibold bg-stone-100 sticky top-0">
+            <div className="hidden md:grid grid-cols-[0.8fr_1.4fr_1fr_1.1fr_0.9fr_0.9fr_0.9fr] gap-2 px-4 py-2 text-[10px] text-[#0F3D66] uppercase tracking-wide font-semibold bg-stone-100 sticky top-0">
+              <span>Opp</span>
               <span>Cliente</span>
               <span>RUT</span>
               <span>Ejecutivo</span>
+              <span>Tipología</span>
+              <span>Fecha</span>
               <span>Estado</span>
             </div>
             <div className="divide-y divide-stone-100">
-              {contactosFiltrados.slice(0, 300).map((g) => (
-                <div key={g.rut} className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_1.2fr_0.8fr] gap-1 md:gap-2 px-4 py-2 text-sm">
-                  <span className="font-medium truncate">{g.cliente || "(sin nombre)"}</span>
-                  <span className="text-xs text-stone-500">RUT {g.rut}</span>
-                  <span className="text-xs text-stone-500">{g.ejecutivo || "—"}</span>
-                  <span className="text-xs text-stone-500">{g.estado}</span>
+              {oppFiltradas.slice(0, 300).map((c) => (
+                <div key={c.opp} className="grid grid-cols-1 md:grid-cols-[0.8fr_1.4fr_1fr_1.1fr_0.9fr_0.9fr_0.9fr] gap-1 md:gap-2 px-4 py-2 text-sm">
+                  <span className="text-xs text-stone-400">{c.opp}</span>
+                  <span className="font-medium truncate">{c.cliente || "(sin nombre)"}</span>
+                  <span className="text-xs text-stone-500">RUT {c.rut}</span>
+                  <span className="text-xs text-stone-500">{c.ejecutivo || "—"}</span>
+                  <span className="text-xs text-stone-500">{c.tipologia || "—"}</span>
+                  <span className="text-xs text-stone-500">{c.fecha || "—"}</span>
+                  <span className="text-xs text-stone-500">{c.estado || "—"}</span>
                 </div>
               ))}
-              {contactosFiltrados.length === 0 && (
+              {oppFiltradas.length === 0 && (
                 <div className="px-4 py-6 text-center text-stone-400 text-sm">Sin resultados.</div>
               )}
             </div>
           </div>
-          {contactosFiltrados.length > 300 && (
-            <p className="text-xs text-stone-400 mt-2">Mostrando los primeros 300 de {contactosFiltrados.length} resultados. Usa el buscador para acotar.</p>
+          {oppFiltradas.length > 300 && (
+            <p className="text-xs text-stone-400 mt-2">Mostrando las primeras 300 de {oppFiltradas.length} cotizaciones. Usa el buscador para acotar.</p>
           )}
         </div>
       </div>
