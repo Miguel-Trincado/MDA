@@ -112,8 +112,21 @@ export function parseAnyDate(str) {
   return null;
 }
 
+// Una fecha de cotización nunca puede ser futura. Se aplica siempre, aquí
+// mismo, para que ninguna vista (Dashboard, cartera de ejecutivo, etc.)
+// pueda mostrar una fecha por venir, venga de donde venga (parseo ambiguo,
+// dato mal ingresado en el Aval, etc.).
+function esFecha(r) {
+  if (!r) return null;
+  const hoy = new Date();
+  const hoyUTC = Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const valorUTC = Date.UTC(r.year, r.month - 1, r.day);
+  if (valorUTC > hoyUTC) return null;
+  return r;
+}
+
 export function parseFechaCompleta(str) {
-  const r = parseAnyDate(str);
+  const r = esFecha(parseAnyDate(str));
   if (!r) return null;
   const d = new Date(Date.UTC(r.year, r.month - 1, r.day));
   return isNaN(d.getTime()) ? null : d;
@@ -165,15 +178,8 @@ export function computeAlert(g) {
 }
 
 export function parseFechaAMes(str) {
-  const r = parseAnyDate(str);
+  const r = esFecha(parseAnyDate(str));
   if (!r) return null;
-
-  // Una fecha de cotización nunca puede ser futura. Si el parseo (o un dato
-  // mal ingresado) arroja un mes por venir, se descarta en vez de graficarla.
-  const hoy = new Date();
-  const esFutura = r.year > hoy.getFullYear() || (r.year === hoy.getFullYear() && r.month > hoy.getMonth() + 1);
-  if (esFutura) return null;
-
   return { year: r.year, month: r.month };
 }
 
