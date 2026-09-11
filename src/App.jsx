@@ -87,7 +87,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 font-body text-stone-900">
+    <div className="min-h-screen bg-white font-body text-stone-900">
       {loading ? (
         <div className="flex items-center justify-center h-screen">
           <div className="text-stone-500 font-body">Cargando datos del sistema…</div>
