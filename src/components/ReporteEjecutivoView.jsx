@@ -136,7 +136,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       <div className="max-w-2xl mx-auto px-5 py-16 text-center">
         <div className="font-display text-xl text-[#0F3D66] mb-2">Sin cotizaciones cargadas todavía</div>
         <p className="text-stone-500 text-sm">
-          El dashboard se arma solo apenas subas la plantilla del Maestro Aval, en la pestaña "Ingreso".
+          El dashboard se arma solo apenas subas la plantilla del Maestro Aval, en la pestaña "Carga".
         </p>
       </div>
     );
