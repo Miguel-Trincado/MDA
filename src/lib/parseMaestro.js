@@ -33,6 +33,8 @@ export function parseMaestro(text) {
 
   const byRut = {};
   const filasDetalle = [];
+  const oppVistosEnCarga = new Map(); // opp real -> primera fila que lo usó
+  const oppsDuplicadosEnCarga = [];
   let filas = 0;
   let filasOtrosProyectos = 0;
 
@@ -75,7 +77,22 @@ export function parseMaestro(text) {
     if (iFechaProm !== -1 && cols[iFechaProm] && cols[iFechaProm].trim()) rec.fechaPromesa = cols[iFechaProm].trim();
 
     const opp = iOpp !== -1 ? (cols[iOpp] || "").trim() : "";
-    const key = opp || `${rut}__${i}`;
+    if (opp) {
+      if (oppVistosEnCarga.has(opp)) {
+        oppsDuplicadosEnCarga.push({ opp, rut, filaAnterior: oppVistosEnCarga.get(opp) });
+      } else {
+        oppVistosEnCarga.set(opp, rut);
+      }
+    }
+    // Si el Aval no trae número de Opp para esta fila, se arma un ID estable
+    // a partir de contenido que no cambia entre cargas (RUT + fecha +
+    // tipología + región). Nunca se usa la posición de la fila (i), porque
+    // esa cambia de una carga a otra y generaría una fila nueva (duplicada)
+    // para la misma cotización real cada vez que se sube el Aval.
+    const fechaParaKey = iFechaCot !== -1 ? (cols[iFechaCot] || "").trim() : "";
+    const tipParaKey = iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "";
+    const regParaKey = iRegion !== -1 ? (cols[iRegion] || "").trim() : "";
+    const key = opp || `SIN_OPP__${rut}__${fechaParaKey}__${tipParaKey}__${regParaKey}`;
     filasDetalle.push({
       opp: key,
       rut,
@@ -87,5 +104,5 @@ export function parseMaestro(text) {
       estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
     });
   }
-  return { byRut, filas, filasOtrosProyectos, clientes: Object.keys(byRut).length, filasDetalle };
+  return { byRut, filas, filasOtrosProyectos, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
 }

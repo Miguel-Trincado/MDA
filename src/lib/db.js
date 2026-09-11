@@ -238,7 +238,7 @@ function diffMaestro(byRut, gestionDict, controlDict, estadoCambiosPorRut) {
 }
 
 export async function uploadMaestroRemote(text, currentGestion, currentControl, currentCotizaciones) {
-  const { byRut, filas, clientes, filasDetalle, filasOtrosProyectos } = parseMaestro(text);
+  const { byRut, filas, clientes, filasDetalle, filasOtrosProyectos, oppsDuplicadosEnCarga } = parseMaestro(text);
   const estadoCambiosPorRut = detectarCambiosDeEstadoOpp(filasDetalle, currentCotizaciones || {});
   const { gestionOut, controlOut, cambiosNuevos, summary } = diffMaestro(byRut, currentGestion, currentControl, estadoCambiosPorRut);
 
@@ -277,7 +277,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     control: controlOut,
     cotizaciones: cotizacionesOut,
     cambiosNuevos: cambiosInsertados,
-    summary: { ...summary, filas, clientes, filasOtrosProyectos },
+    summary: { ...summary, filas, clientes, filasOtrosProyectos, oppsDuplicadosEnCarga },
   };
 }
 
