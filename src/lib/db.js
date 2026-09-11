@@ -89,7 +89,7 @@ export async function saveGestionRemote(prevGestion, rut, updates) {
   merged.fechaUltimaAccionEfectiva = today;
   merged.flagSistema = "";
 
-  const row = objToRow(merged, ["createdAt", "updatedAt"]);
+  const row = objToRow(merged, ["createdAt", "updatedAt", "_alerta"]);
   const { error } = await supabase.from("gestion").update(row).eq("rut", rut);
   if (error) throw error;
 
