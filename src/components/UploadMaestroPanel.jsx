@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { supabase } from "../supabaseClient";
 import { Stat } from "./Shared";
 
-export default function UploadMaestroPanel({ onUpload, open, onClose }) {
+export default function UploadMaestroPanel({ onUpload }) {
   const fileInputRef = useRef(null);
   const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,8 +21,6 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => listener.subscription.unsubscribe();
   }, []);
-
-  if (!open) return null;
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -91,15 +89,10 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
   }
 
   return (
-    <div className="border border-stone-300 bg-white p-5 mb-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-display text-lg text-[#0F3D66]">Subir plantilla del Maestro Aval</h3>
-        <button onClick={onClose} className="text-xs text-stone-400 hover:text-stone-700">
-          Cerrar
-        </button>
-      </div>
-
-      {session === undefined ? (
+    <div className="max-w-2xl mx-auto px-5 py-8">
+      <h2 className="font-display text-2xl text-[#0F3D66] mb-5">Ingreso</h2>
+      <div className="border border-stone-300 bg-white p-5">
+        {session === undefined ? (
         <p className="text-stone-400 text-sm">Verificando sesión…</p>
       ) : !session ? (
         <div>
@@ -189,6 +182,7 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

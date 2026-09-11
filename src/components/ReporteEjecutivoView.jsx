@@ -3,7 +3,6 @@ import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, Responsive
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
 import { KpiCard } from "./Shared";
-import UploadMaestroPanel from "./UploadMaestroPanel";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
 
@@ -25,7 +24,6 @@ function valorOBlanco(v) {
 
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
-  const [showUpload, setShowUpload] = useState(false);
   const [filtros, setFiltros] = useState({ periodoDesde: mesActualKey(), periodoHasta: mesActualKey(), proyecto: TODO, tipologia: TODO });
 
   const filasTotales = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
@@ -135,23 +133,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
   if (filasTotales.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-5 py-16">
-        {!showUpload ? (
-          <div className="text-center py-8">
-            <div className="font-display text-xl text-[#0F3D66] mb-2">Sin cotizaciones cargadas todavía</div>
-            <p className="text-stone-500 text-sm mb-6">
-              El dashboard se arma solo apenas subas la plantilla del Maestro Aval.
-            </p>
-            <button
-              onClick={() => setShowUpload(true)}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] text-white text-sm px-5 py-2.5"
-            >
-              Subir plantilla
-            </button>
-          </div>
-        ) : (
-          <UploadMaestroPanel onUpload={onUpload} open={showUpload} onClose={() => setShowUpload(false)} />
-        )}
+      <div className="max-w-2xl mx-auto px-5 py-16 text-center">
+        <div className="font-display text-xl text-[#0F3D66] mb-2">Sin cotizaciones cargadas todavía</div>
+        <p className="text-stone-500 text-sm">
+          El dashboard se arma solo apenas subas la plantilla del Maestro Aval, en la pestaña "Ingreso".
+        </p>
       </div>
     );
   }
@@ -175,20 +161,12 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={() => setShowUpload((v) => !v)}
-            className="bg-[#0F3D66] hover:bg-[#1E5AA8] text-white text-sm px-4 py-2.5"
-          >
-            Subir plantilla
-          </button>
           <div className="border border-stone-200 px-4 py-2 text-right">
             <div className="text-[11px] text-stone-400">Fecha de extracción</div>
             <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
           </div>
         </div>
       </div>
-
-      <UploadMaestroPanel onUpload={onUpload} open={showUpload} onClose={() => setShowUpload(false)} />
 
       <FilterBar filtros={filtros} onChange={setFiltros} opciones={opciones} />
     </>
