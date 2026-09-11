@@ -172,6 +172,18 @@ export default function UploadMaestroPanel({ onUpload }) {
                   Se ignoraron {result.filasOtrosProyectos} filas de otros proyectos del Maestro Aval.
                 </p>
               )}
+              {result.oppsDuplicadosEnCarga && result.oppsDuplicadosEnCarga.length > 0 && (
+                <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+                  <div className="font-medium mb-1">
+                    ⚠ {result.oppsDuplicadosEnCarga.length} número(s) de Opp aparecen repetidos en este archivo (no debería pasar, es un error de origen en el Aval):
+                  </div>
+                  <ul className="list-disc list-inside">
+                    {result.oppsDuplicadosEnCarga.slice(0, 10).map((d, i) => (
+                      <li key={i}>Opp {d.opp} (RUT {d.rut})</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {result.cambiosEjecutivo > 0 && (
                 <p className="text-xs text-stone-500 mt-3">
                   La Jefa de Ventas tiene {result.cambiosEjecutivo} cambio(s) de ejecutivo pendiente(s) de resolver en

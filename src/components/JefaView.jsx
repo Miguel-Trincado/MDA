@@ -17,6 +17,16 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
   );
   const tareas = useMemo(() => getTareas(clientes), [clientes]);
 
+  const auditoria = useMemo(() => {
+    const cotizacionesPorRut = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      cotizacionesPorRut[c.rut] = (cotizacionesPorRut[c.rut] || 0) + 1;
+    });
+    const clientesFantasma = clientes.filter((g) => !cotizacionesPorRut[g.rut]);
+    const sinOppReal = Object.values(db.cotizaciones || {}).filter((c) => c.opp.startsWith("SIN_OPP__"));
+    return { clientesFantasma, sinOppReal };
+  }, [clientes, db.cotizaciones]);
+
   const activos = clientes.filter((g) => g.estado === "Activo");
   const promesados = clientes.filter((g) => g.estado === "Promesado").length;
   const pipeline = clientes.filter((g) =>
@@ -167,6 +177,52 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
               </div>
             ))}
           </div>
+        )}
+      </Panel>
+
+      <Panel title="Calidad de datos" className="mb-5">
+        <div className="grid sm:grid-cols-2 gap-4 mb-3">
+          <Stat
+            label="Clientes fantasma (sin cotización real)"
+            value={auditoria.clientesFantasma.length}
+            accent={auditoria.clientesFantasma.length > 0 ? "text-rose-700" : "text-emerald-700"}
+          />
+          <Stat
+            label="Cotizaciones sin número de Opp"
+            value={auditoria.sinOppReal.length}
+            accent={auditoria.sinOppReal.length > 0 ? "text-amber-700" : "text-emerald-700"}
+          />
+        </div>
+        {auditoria.clientesFantasma.length === 0 && auditoria.sinOppReal.length === 0 ? (
+          <p className="text-xs text-emerald-700">Sin problemas detectados: cada cliente tiene al menos una cotización real, y todas las cotizaciones tienen su número de Opp.</p>
+        ) : (
+          <details className="text-sm">
+            <summary className="cursor-pointer text-xs text-stone-500 underline">Ver detalle</summary>
+            {auditoria.clientesFantasma.length > 0 && (
+              <div className="mt-3">
+                <div className="text-xs text-stone-400 uppercase mb-1">Clientes sin ninguna cotización asociada</div>
+                <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+                  {auditoria.clientesFantasma.map((g) => (
+                    <div key={g.rut} className="text-xs text-stone-600 border-b border-stone-50 py-1">
+                      {g.cliente || "(sin nombre)"} · RUT {g.rut} · {g.ejecutivo || "sin ejecutivo"}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {auditoria.sinOppReal.length > 0 && (
+              <div className="mt-3">
+                <div className="text-xs text-stone-400 uppercase mb-1">Cotizaciones sin número de Opp en el Aval</div>
+                <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+                  {auditoria.sinOppReal.map((c) => (
+                    <div key={c.opp} className="text-xs text-stone-600 border-b border-stone-50 py-1">
+                      RUT {c.rut} · {c.fecha || "sin fecha"} · {c.tipologia || "sin tipología"}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </details>
         )}
       </Panel>
 
