@@ -104,7 +104,11 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const tareas = getTareas(clientes);
 
   const filtrados = clientes
-    .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
+    .filter((g) => {
+      if (filtro === "Todos") return true;
+      if (filtro === "Pendientes") return !!g.fechaProximaAccion && g.fechaProximaAccion < todayISO();
+      return g.estado === filtro;
+    })
     .filter((g) => !busqueda || (g.cliente || "").toLowerCase().includes(busqueda.toLowerCase()) || (g.rut || "").includes(busqueda))
     .filter((g) => {
       if (!periodo) return true;
@@ -144,7 +148,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {["Activo", "En espera", "Perdido", "Promesado", "Todos"].map((f) => (
+        {["Activo", "En espera", "Perdido", "Promesado", "Pendientes", "Todos"].map((f) => (
           <button
             key={f}
             onClick={() => setFiltro(f)}

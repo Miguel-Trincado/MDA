@@ -8,7 +8,7 @@ const ESTILO_TAREA = {
   hoy: "bg-amber-100 text-amber-900 border-amber-300",
   proxima: "bg-sky-100 text-sky-900 border-sky-300",
 };
-const LABEL_TAREA = { vencida: "Vencida", hoy: "Hoy", proxima: "Próxima" };
+const LABEL_TAREA = { vencida: "Pendiente", hoy: "Hoy", proxima: "Próxima" };
 
 export default function NotificationBell({ tareas, mostrarEjecutivo }) {
   const [open, setOpen] = useState(false);
