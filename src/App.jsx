@@ -3,6 +3,7 @@ import TopNav from "./components/TopNav";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
+import UploadMaestroPanel from "./components/UploadMaestroPanel";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaRemote,
@@ -107,6 +108,7 @@ export default function App() {
           <TopNav active={view} onChange={setView} />
           {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
+          {view === "carga" && <UploadMaestroPanel onUpload={uploadMaestro} />}
           {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} />}
         </div>
       )}
