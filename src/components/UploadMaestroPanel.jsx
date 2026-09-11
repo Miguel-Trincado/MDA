@@ -30,7 +30,26 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
-      const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false, dateNF: "dd-mm-yyyy" });
+
+      // Algunas columnas de fecha traen su propio formato numérico de Excel
+      // (ej. "M/D/YY"), que gana por sobre cualquier dateNF que le pidamos
+      // a la librería al convertir a texto. Para no depender de eso, cada
+      // celda de tipo fecha se reescribe acá mismo como texto ISO sin
+      // ambigüedad (AAAA-MM-DD), antes de convertir la hoja a texto.
+      Object.keys(sheet).forEach((addr) => {
+        if (addr[0] === "!") return;
+        const cell = sheet[addr];
+        if (cell && cell.t === "d" && cell.v instanceof Date) {
+          const d = cell.v;
+          const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+          cell.t = "s";
+          cell.v = iso;
+          cell.w = iso;
+          delete cell.z;
+        }
+      });
+
+      const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
       const summary = await onUpload(tsv);
       setResult(summary);
     } catch (err) {
