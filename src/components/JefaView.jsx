@@ -1,15 +1,21 @@
 import { useState, useMemo } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
 import { computeAlert, todayISO } from "../lib/helpers";
+import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
+import NotificationBell from "./NotificationBell";
+import CalendarioTareas from "./CalendarioTareas";
+import { CalendarDays } from "lucide-react";
 
 export default function JefaView({ db, onResolveCambio, onSetMeta }) {
   const [buscar, setBuscar] = useState("");
+  const [verCalendario, setVerCalendario] = useState(false);
 
   const clientes = useMemo(
     () => Object.values(db.gestion).map((g) => ({ ...g, _alerta: computeAlert(g) })),
     [db.gestion]
   );
+  const tareas = useMemo(() => getTareas(clientes), [clientes]);
 
   const activos = clientes.filter((g) => g.estado === "Activo");
   const promesados = clientes.filter((g) => g.estado === "Promesado").length;
@@ -52,7 +58,26 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 py-6">
-      <h2 className="font-display text-2xl text-[#0F3D66] mb-5">Panel Jefa de Ventas</h2>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <h2 className="font-display text-2xl text-[#0F3D66]">Panel Jefa de Ventas</h2>
+        <div className="flex items-center gap-3">
+          <NotificationBell tareas={tareas} mostrarEjecutivo />
+          <button
+            onClick={() => setVerCalendario((v) => !v)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              verCalendario ? "bg-[#0F3D66] text-white border-[#0F3D66]" : "border-stone-300 text-stone-600 hover:border-[#1E5AA8]"
+            }`}
+          >
+            <CalendarDays size={14} /> Calendario de todos
+          </button>
+        </div>
+      </div>
+
+      {verCalendario && (
+        <div className="mb-5">
+          <CalendarioTareas tareas={tareas} mostrarEjecutivo />
+        </div>
+      )}
 
       <Panel className="mb-5">
         <div className="flex items-center gap-3 mb-4">

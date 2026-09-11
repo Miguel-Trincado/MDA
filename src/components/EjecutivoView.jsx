@@ -4,7 +4,11 @@ import {
   RESPUESTAS, OBJECIONES, MOTIVOS_PERDIDA, PROXIMAS_ACCIONES, ALERT_PRIORITY, ALERT_STYLE, MESES_ES,
 } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
+import { getTareas } from "../lib/reminders";
 import { Field, Panel } from "./Shared";
+import NotificationBell from "./NotificationBell";
+import CalendarioTareas from "./CalendarioTareas";
+import { CalendarDays } from "lucide-react";
 
 const PRIORIDAD = EJECUTIVOS.slice(0, 5);
 const OTROS = EJECUTIVOS.slice(5);
@@ -24,12 +28,14 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const [busqueda, setBusqueda] = useState("");
   const [expandido, setExpandido] = useState(null);
   const [periodo, setPeriodo] = useState(""); // "" = Todo, o "YYYY-MM"
+  const [verCalendario, setVerCalendario] = useState(false);
 
   const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
 
   const fechasPorRut = useMemo(() => {
     const map = {};
     const mapOpp = {};
+    const estadoMasReciente = {}; // rut -> { d, estado }
     Object.values(db.cotizaciones || {}).forEach((c) => {
       if (!map[c.rut]) map[c.rut] = [];
       const d = parseFechaCompleta(c.fecha);
@@ -38,10 +44,22 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       if (!mapOpp[c.rut]) mapOpp[c.rut] = [];
       const dOpp = parseFechaCompleta(c.fechaOpp);
       if (dOpp) mapOpp[c.rut].push(dOpp);
+
+      const dReferencia = dOpp || d;
+      if (c.estado && dReferencia) {
+        const actual = estadoMasReciente[c.rut];
+        if (!actual || dReferencia > actual.d) {
+          estadoMasReciente[c.rut] = { d: dReferencia, estado: c.estado };
+        }
+      }
     });
     Object.values(map).forEach((arr) => arr.sort((a, b) => a - b));
     Object.values(mapOpp).forEach((arr) => arr.sort((a, b) => a - b));
-    return { map, mapOpp };
+    const estado = {};
+    Object.keys(estadoMasReciente).forEach((rut) => {
+      estado[rut] = estadoMasReciente[rut].estado;
+    });
+    return { map, mapOpp, estado };
   }, [db.cotizaciones]);
 
   const opcionesPeriodo = useMemo(() => {
@@ -83,6 +101,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   }
 
   const clientes = Object.values(db.gestion).filter((g) => g.ejecutivo === nombre);
+  const tareas = getTareas(clientes);
 
   const filtrados = clientes
     .filter((g) => (filtro === "Todos" ? true : g.estado === filtro))
@@ -102,10 +121,27 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           <h2 className="font-display text-2xl text-[#0F3D66]">Cartera de {nombre}</h2>
           <p className="text-stone-500 text-sm">{clientes.length} clientes en total</p>
         </div>
-        <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
-          No soy {nombre}
-        </button>
+        <div className="flex items-center gap-3">
+          <NotificationBell tareas={tareas} />
+          <button
+            onClick={() => setVerCalendario((v) => !v)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${
+              verCalendario ? "bg-[#0F3D66] text-white border-[#0F3D66]" : "border-stone-300 text-stone-600 hover:border-[#1E5AA8]"
+            }`}
+          >
+            <CalendarDays size={14} /> Calendario
+          </button>
+          <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
+            No soy {nombre}
+          </button>
+        </div>
       </div>
+
+      {verCalendario && (
+        <div className="mb-5">
+          <CalendarioTareas tareas={tareas} />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 mb-4">
         {["Activo", "En espera", "Perdido", "Promesado", "Todos"].map((f) => (
@@ -139,12 +175,13 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       </div>
 
       {filtrados.length > 0 && (
-        <div className="hidden md:grid grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-2 px-5 py-3 text-[11px] text-[#0F3D66] uppercase tracking-wide font-semibold bg-stone-100 border border-b-0 border-stone-200 rounded-t-xl">
+        <div className="hidden md:grid grid-cols-[1.4fr_0.9fr_0.7fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-2 px-5 py-3 text-[11px] text-[#0F3D66] uppercase tracking-wide font-semibold bg-stone-100 border border-b-0 border-stone-200 rounded-t-xl">
           <span>Cliente</span>
           <span>RUT</span>
           <span>Estado</span>
           <span>F. cotización</span>
           <span>Fecha Opp</span>
+          <span>Estado Opp</span>
           <span>Alerta</span>
         </div>
       )}
@@ -162,6 +199,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
               i={i}
               fechas={fechasPorRut.map[g.rut] || []}
               fechasOpp={fechasPorRut.mapOpp[g.rut] || []}
+              estadoOpp={fechasPorRut.estado[g.rut] || ""}
               expanded={expandido === g.rut}
               onToggle={() => setExpandido(expandido === g.rut ? null : g.rut)}
               onSave={async (updates) => {
@@ -177,7 +215,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   );
 }
 
-function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevisado }) {
+function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onSave, onRevisado }) {
   const [form, setForm] = useState(g);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -189,8 +227,10 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const ultimaFecha = fechas.length ? fechas[fechas.length - 1] : null;
   const ultimaFechaOpp = fechasOpp.length ? fechasOpp[fechasOpp.length - 1] : null;
+  const faltaFechaAccion = !!form.proximaAccion && !form.fechaProximaAccion;
 
   async function handleSave() {
+    if (faltaFechaAccion) return;
     setSaving(true);
     try {
       await onSave(form);
@@ -202,12 +242,13 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
   return (
     <div className={i % 2 === 1 ? "bg-stone-50/50" : "bg-white"}>
       <button onClick={onToggle} className="w-full text-left hover:bg-sky-50/60 transition-colors px-4 py-2.5">
-        <div className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_0.8fr_1fr_1.1fr_1.3fr] gap-x-2 gap-y-1 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[1.4fr_0.9fr_0.7fr_0.9fr_0.9fr_0.9fr_1.3fr] gap-x-2 gap-y-1 items-center">
           <span className="font-medium text-stone-900 truncate">{g.cliente || "(sin nombre)"}</span>
           <span className="text-xs text-stone-500">RUT {g.rut}</span>
           <span className="text-xs text-stone-500">{g.estado}</span>
           <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFecha)}</span>
           <span className="text-xs text-stone-500">{formatFechaCorta(ultimaFechaOpp)}</span>
+          <span className="text-xs text-stone-500">{estadoOpp || "—"}</span>
           <span className={`text-xs px-2.5 py-1 rounded-full border justify-self-start md:justify-self-end ${ALERT_STYLE[alerta]}`}>{alerta || "Sin alertas"}</span>
         </div>
       </button>
@@ -287,8 +328,13 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
                 {PROXIMAS_ACCIONES.map((o) => <option key={o}>{o}</option>)}
               </select>
             </Field>
-            <Field label="Fecha próxima acción">
-              <input type="date" value={form.fechaProximaAccion || ""} onChange={set("fechaProximaAccion")} className="ipt" />
+            <Field label={form.proximaAccion ? "Fecha próxima acción *" : "Fecha próxima acción"}>
+              <input
+                type="date"
+                value={form.fechaProximaAccion || ""}
+                onChange={set("fechaProximaAccion")}
+                className={`ipt ${faltaFechaAccion ? "border-rose-400" : ""}`}
+              />
             </Field>
           </div>
 
@@ -296,10 +342,16 @@ function ClientRow({ g, i, fechas, fechasOpp, expanded, onToggle, onSave, onRevi
             <textarea value={form.observaciones || ""} onChange={set("observaciones")} rows={2} className="ipt" />
           </Field>
 
+          {faltaFechaAccion && (
+            <p className="text-xs text-rose-600 mt-2">
+              Elegiste una próxima acción: indica la fecha antes de guardar.
+            </p>
+          )}
+
           <div className="flex items-center gap-3 mt-4">
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || faltaFechaAccion}
               className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-full px-5 py-2 transition-colors"
             >
               {saving ? "Guardando…" : "Guardar cambios"}

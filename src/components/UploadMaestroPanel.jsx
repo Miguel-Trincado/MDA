@@ -91,10 +91,11 @@ export default function UploadMaestroPanel({ onUpload, open, onClose }) {
       {result && (
         <div className="mt-5 border-t border-stone-200 pt-4">
           <div className="font-display text-base text-[#0F3D66] mb-3">Actualización completa</div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 text-sm">
             <Stat label="Filas de Pilpilén" value={result.filas} />
             <Stat label="Clientes procesados" value={result.clientes} />
             <Stat label="Nuevos" value={result.nuevos} accent="text-emerald-700" />
+            <Stat label="Cambios de Estado (Opp)" value={result.cambiosEstado} accent="text-indigo-700" />
             <Stat label="Cambios de ejecutivo" value={result.cambiosEjecutivo} accent="text-violet-700" />
           </div>
           {result.filasOtrosProyectos > 0 && (
