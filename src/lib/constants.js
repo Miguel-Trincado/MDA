@@ -7,9 +7,7 @@ export const EJECUTIVOS = [
 export const ESTADOS = ["Activo", "En espera", "Promesado", "Perdido"];
 export const NIVELES_INTERES = ["Alto", "Medio", "Bajo"];
 export const ETAPAS = [
-  "Cotizado", "Envío de documentos", "Evaluación financiera", "Preaprobación bancaria",
-  "Visita agendada", "Visita realizada", "Negociación", "Pre-reserva", "Pre-reservado",
-  "Reservado", "Promesado",
+  "Cotizado", "Negociación", "Preaprobación bancaria", "Pre-reservado", "Reservado", "Promesado",
 ];
 export const EVAL_BANCARIA = [
   "No iniciada", "Enviado a evaluar", "En evaluación", "Pendiente de antecedentes",
@@ -50,18 +48,20 @@ export const MOTIVOS_PERDIDA = [
 
 export const ALERT_PRIORITY = {
   "CAMBIO DE EJECUTIVO": 1,
-  "NUEVO - COMPLETAR GESTIÓN": 2,
-  "NUEVA COTIZACIÓN": 3,
-  "ACCIÓN VENCIDA": 4,
-  "COMPLETAR MOTIVO DE PÉRDIDA": 5,
-  "REVISAR ETAPA": 6,
-  "COMPLETAR PRÓXIMA ACCIÓN": 7,
-  "SIN REVISAR HOY": 8,
-  "": 9,
+  "CAMBIO DE ESTADO OPP": 2,
+  "NUEVO - COMPLETAR GESTIÓN": 3,
+  "NUEVA COTIZACIÓN": 4,
+  "ACCIÓN VENCIDA": 5,
+  "COMPLETAR MOTIVO DE PÉRDIDA": 6,
+  "REVISAR ETAPA": 7,
+  "COMPLETAR PRÓXIMA ACCIÓN": 8,
+  "SIN REVISAR HOY": 9,
+  "": 10,
 };
 
 export const ALERT_STYLE = {
   "CAMBIO DE EJECUTIVO": "bg-violet-100 text-violet-900 border-violet-300",
+  "CAMBIO DE ESTADO OPP": "bg-indigo-100 text-indigo-900 border-indigo-300",
   "COMPLETAR MOTIVO DE PÉRDIDA": "bg-rose-100 text-rose-900 border-rose-300",
   "REVISAR ETAPA": "bg-rose-100 text-rose-900 border-rose-300",
   "ACCIÓN VENCIDA": "bg-rose-100 text-rose-900 border-rose-300",

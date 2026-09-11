@@ -165,6 +165,7 @@ export function computeAlert(g) {
   if (!g || !g.cliente) return "";
   const today = todayISO();
   if (g.flagCambioEjecutivo === "CAMBIO") return "CAMBIO DE EJECUTIVO";
+  if (g.flagSistema === "ESTADO" && g.ultimaRevisionFecha !== today) return "CAMBIO DE ESTADO OPP";
   if (g.estado === "Perdido" && !g.motivoPerdida) return "COMPLETAR MOTIVO DE PÉRDIDA";
   if (g.estado === "Promesado" && g.etapaComercial !== "Promesado") return "REVISAR ETAPA";
   if (g.estado === "En espera" && !g.fechaProximaAccion) return "COMPLETAR PRÓXIMA ACCIÓN";

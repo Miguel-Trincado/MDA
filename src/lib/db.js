@@ -145,14 +145,33 @@ export async function markRevisadoRemote(prevGestion, rut) {
 }
 
 /* ---------------------------------------------------------------------
+ * Detecta, por RUT, si alguna de sus Opp ya existentes cambió de Estado
+ * en el Aval (ej. de "Cotización" a "Pre-Reservada", "Reservada",
+ * "Promesada", etc.). La Opp es la identidad única: si ya existía, se
+ * compara su Estado anterior contra el nuevo; si no existía, es una Opp
+ * nueva y no aplica esta comparación.
+ * ------------------------------------------------------------------- */
+function detectarCambiosDeEstadoOpp(filasDetalle, currentCotizaciones) {
+  const porRut = {};
+  filasDetalle.forEach((r) => {
+    const prev = currentCotizaciones[r.opp];
+    if (prev && r.estado && prev.estado && prev.estado !== r.estado) {
+      if (!porRut[r.rut]) porRut[r.rut] = [];
+      porRut[r.rut].push({ opp: r.opp, estadoAnterior: prev.estado, estadoNuevo: r.estado });
+    }
+  });
+  return porRut;
+}
+
+/* ---------------------------------------------------------------------
  * Subida del Maestro Aval: parsear + comparar contra el estado actual
  * + escribir en Supabase (upserts por lote)
  * ------------------------------------------------------------------- */
-function diffMaestro(byRut, gestionDict, controlDict) {
+function diffMaestro(byRut, gestionDict, controlDict, estadoCambiosPorRut) {
   const gestionOut = { ...gestionDict };
   const controlOut = { ...controlDict };
   const cambiosNuevos = [];
-  const summary = { nuevos: 0, nuevasCotizaciones: 0, cambiosEjecutivo: 0, actualizados: 0 };
+  const summary = { nuevos: 0, nuevasCotizaciones: 0, cambiosEjecutivo: 0, cambiosEstado: 0, actualizados: 0 };
   const now = nowISO();
 
   Object.values(byRut).forEach((rec) => {
@@ -188,6 +207,7 @@ function diffMaestro(byRut, gestionDict, controlDict) {
 
     const ejecutivoCambio = prevControl.ejecutivo && rec.ejecutivo && prevControl.ejecutivo !== rec.ejecutivo;
     const cotizacionesSubieron = rec.nCotizaciones > (prevControl.cotizaciones || 0);
+    const cambiosEstadoDeEsteRut = estadoCambiosPorRut[rec.rut];
 
     if (ejecutivoCambio) {
       g.flagCambioEjecutivo = "CAMBIO";
@@ -198,6 +218,9 @@ function diffMaestro(byRut, gestionDict, controlDict) {
         resolucion: "PENDIENTE REVISIÓN", fechaResolucion: null, observacion: "",
       });
       summary.cambiosEjecutivo++;
+    } else if (cambiosEstadoDeEsteRut && cambiosEstadoDeEsteRut.length > 0) {
+      g.flagSistema = "ESTADO";
+      summary.cambiosEstado++;
     } else if (cotizacionesSubieron) {
       g.flagSistema = "SI";
       summary.nuevasCotizaciones++;
@@ -216,7 +239,8 @@ function diffMaestro(byRut, gestionDict, controlDict) {
 
 export async function uploadMaestroRemote(text, currentGestion, currentControl, currentCotizaciones) {
   const { byRut, filas, clientes, filasDetalle, filasOtrosProyectos } = parseMaestro(text);
-  const { gestionOut, controlOut, cambiosNuevos, summary } = diffMaestro(byRut, currentGestion, currentControl);
+  const estadoCambiosPorRut = detectarCambiosDeEstadoOpp(filasDetalle, currentCotizaciones || {});
+  const { gestionOut, controlOut, cambiosNuevos, summary } = diffMaestro(byRut, currentGestion, currentControl, estadoCambiosPorRut);
 
   // Solo se escriben los registros que realmente cambiaron o son nuevos
   const rutsAfectados = Object.keys(byRut);
@@ -227,13 +251,16 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
   await upsertInChunks("gestion", gestionRows, "rut");
   await upsertInChunks("control_interno", controlRows, "rut");
 
-  // La tabla de cotizaciones debe ser siempre un espejo exacto del último
-  // Maestro Aval pegado (que ya viene completo y actualizado). Por eso se
-  // borra entero antes de volver a insertar: así no quedan cotizaciones de
-  // cargas anteriores que ya no existen en el archivo actual.
-  const { error: delError } = await supabase.from("cotizaciones").delete().neq("opp", "");
-  if (delError) throw delError;
+  // La Opp es la identidad única de cada cotización: si ya existía, se
+  // actualiza (por ejemplo su Estado, que puede pasar de Cotización a
+  // Pre-Reserva, Reserva, Promesada, etc.); si no existía, se agrega.
+  // Nunca se borra nada de esta tabla al cargar el Aval.
   await upsertInChunks("cotizaciones", cotizacionRows, "opp");
+
+  const cotizacionesOut = { ...currentCotizaciones };
+  filasDetalle.forEach((r) => {
+    cotizacionesOut[r.opp] = r;
+  });
 
   let cambiosInsertados = [];
   if (cambiosNuevos.length > 0) {
@@ -244,11 +271,6 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     if (error) throw error;
     cambiosInsertados = (data || []).map(rowToObj);
   }
-
-  const cotizacionesOut = {};
-  filasDetalle.forEach((r) => {
-    cotizacionesOut[r.opp] = r;
-  });
 
   return {
     gestion: gestionOut,
