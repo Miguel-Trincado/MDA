@@ -293,7 +293,12 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const ultimaFecha = fechas.length ? fechas[fechas.length - 1] : null;
   const ultimaFechaOpp = fechasOpp.length ? fechasOpp[fechasOpp.length - 1] : null;
-  const faltaFechaAccion = !!form.proximaAccion && !form.fechaProximaAccion;
+  // Si el cliente queda en un estado terminal, o responde que no le interesa,
+  // ya no hay ninguna acción pendiente de verdad: se limpia la próxima acción
+  // al guardar para que no siga apareciendo como recordatorio en la campana
+  // ni en el calendario, aunque el ejecutivo no haya tocado ese campo.
+  const seResuelveAlGuardar = form.estado === "Perdido" || form.estado === "Promesado" || form.respuesta === "No interesado";
+  const faltaFechaAccion = !!form.proximaAccion && !form.fechaProximaAccion && !seResuelveAlGuardar;
   const [saveError, setSaveError] = useState("");
 
   async function handleSave() {
@@ -301,7 +306,8 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
     setSaving(true);
     setSaveError("");
     try {
-      const { _alerta, ...formSinAlerta } = form; // _alerta es solo de la UI, no existe en la base de datos
+      const payload = seResuelveAlGuardar ? { ...form, proximaAccion: "", fechaProximaAccion: "" } : form;
+      const { _alerta, ...formSinAlerta } = payload; // _alerta es solo de la UI, no existe en la base de datos
       await onSave(formSinAlerta);
     } catch (e) {
       console.error(e);
@@ -417,6 +423,12 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
           {faltaFechaAccion && (
             <p className="text-xs text-rose-600 mt-2">
               Elegiste una próxima acción: indica la fecha antes de guardar.
+            </p>
+          )}
+          {seResuelveAlGuardar && form.proximaAccion && (
+            <p className="text-xs text-sky-700 mt-2">
+              Este cliente quedó resuelto (Perdido, Promesado o "No interesado"): al guardar se va a limpiar la
+              próxima acción pendiente, para que ya no salga en la campana ni en el calendario.
             </p>
           )}
           {saveError && (
