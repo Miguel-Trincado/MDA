@@ -228,12 +228,18 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
   const ultimaFecha = fechas.length ? fechas[fechas.length - 1] : null;
   const ultimaFechaOpp = fechasOpp.length ? fechasOpp[fechasOpp.length - 1] : null;
   const faltaFechaAccion = !!form.proximaAccion && !form.fechaProximaAccion;
+  const [saveError, setSaveError] = useState("");
 
   async function handleSave() {
     if (faltaFechaAccion) return;
     setSaving(true);
+    setSaveError("");
     try {
-      await onSave(form);
+      const { _alerta, ...formSinAlerta } = form; // _alerta es solo de la UI, no existe en la base de datos
+      await onSave(formSinAlerta);
+    } catch (e) {
+      console.error(e);
+      setSaveError(e.message || "No se pudo guardar. Intenta de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -346,6 +352,9 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
             <p className="text-xs text-rose-600 mt-2">
               Elegiste una próxima acción: indica la fecha antes de guardar.
             </p>
+          )}
+          {saveError && (
+            <p className="text-xs text-rose-600 mt-2">{saveError}</p>
           )}
 
           <div className="flex items-center gap-3 mt-4">
