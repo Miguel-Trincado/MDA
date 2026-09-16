@@ -41,19 +41,23 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
 export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, configRes] = await Promise.all([
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, configRes, listaPreciosRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
     supabase.from("historial").select("*").order("fecha", { ascending: false }).limit(1500),
     supabase.from("cotizaciones").select("*"),
     supabase.from("config").select("*").eq("key", "meta_mensual").maybeSingle(),
+    supabase.from("lista_precios").select("*").order("unidad"),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
     if (res.error) throw res.error;
   }
   if (configRes.error && configRes.error.code !== "PGRST116") throw configRes.error;
+  // lista_precios es opcional: si la tabla del Cotizador todavía no existe
+  // (migración no corrida), no rompe la carga del resto del sistema.
+  if (listaPreciosRes.error) console.warn("No se pudo cargar lista_precios:", listaPreciosRes.error.message);
 
   const gestion = {};
   (gestionRes.data || []).forEach((row) => {
@@ -70,11 +74,16 @@ export async function fetchAllData() {
     cotizaciones[row.opp] = rowToObj(row);
   });
 
+  const listaPrecios = {};
+  (listaPreciosRes.data || []).forEach((row) => {
+    listaPrecios[row.id] = rowToObj(row);
+  });
+
   const cambios = (cambiosRes.data || []).map(rowToObj);
   const historial = (historialRes.data || []).map(rowToObj);
   const meta = configRes.data?.value || { value: 5 };
 
-  return { gestion, control, cambios, historial, cotizaciones, meta };
+  return { gestion, control, cambios, historial, cotizaciones, meta, listaPrecios };
 }
 
 /* ---------------------------------------------------------------------
@@ -238,7 +247,7 @@ function diffMaestro(byRut, gestionDict, controlDict, estadoCambiosPorRut) {
 }
 
 export async function uploadMaestroRemote(text, currentGestion, currentControl, currentCotizaciones) {
-  const { byRut, filas, clientes, filasDetalle, filasOtrosProyectos, oppsDuplicadosEnCarga } = parseMaestro(text);
+  const { byRut, filas, clientes, filasDetalle, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga } = parseMaestro(text);
   const estadoCambiosPorRut = detectarCambiosDeEstadoOpp(filasDetalle, currentCotizaciones || {});
   const { gestionOut, controlOut, cambiosNuevos, summary } = diffMaestro(byRut, currentGestion, currentControl, estadoCambiosPorRut);
 
@@ -246,20 +255,34 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
   const rutsAfectados = Object.keys(byRut);
   const gestionRows = rutsAfectados.map((rut) => objToRow(gestionOut[rut], ["createdAt", "updatedAt"]));
   const controlRows = rutsAfectados.map((rut) => objToRow(controlOut[rut]));
-  const cotizacionRows = filasDetalle.map((r) => objToRow(r));
 
   await upsertInChunks("gestion", gestionRows, "rut");
   await upsertInChunks("control_interno", controlRows, "rut");
 
-  // La Opp es la identidad única de cada cotización: si ya existía, se
-  // actualiza (por ejemplo su Estado, que puede pasar de Cotización a
-  // Pre-Reserva, Reserva, Promesada, etc.); si no existía, se agrega.
-  // Nunca se borra nada de esta tabla al cargar el Aval.
-  await upsertInChunks("cotizaciones", cotizacionRows, "opp");
+  // Regla de negocio: una Opp, una vez creada, es inmutable salvo su Estado
+  // (que sí puede avanzar de Cotización a Pre-Reserva, Reserva, Promesada,
+  // etc.). Por eso una Opp nueva se inserta completa, pero una Opp que ya
+  // existía SOLO recibe una actualización de su columna estado — nunca se
+  // reescriben su fecha, tipología, región, RUT u otro dato, aunque el
+  // Aval traiga algo distinto para esa fila.
+  const cotizacionesNuevas = [];
+  const cotizacionesEstadoActualizado = [];
+  filasDetalle.forEach((r) => {
+    const prev = (currentCotizaciones || {})[r.opp];
+    if (!prev) {
+      cotizacionesNuevas.push(r);
+    } else if (r.estado && prev.estado !== r.estado) {
+      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado });
+    }
+  });
+
+  await upsertInChunks("cotizaciones", cotizacionesNuevas.map((r) => objToRow(r)), "opp");
+  await upsertInChunks("cotizaciones", cotizacionesEstadoActualizado.map((r) => objToRow(r)), "opp");
 
   const cotizacionesOut = { ...currentCotizaciones };
   filasDetalle.forEach((r) => {
-    cotizacionesOut[r.opp] = r;
+    const prev = cotizacionesOut[r.opp];
+    cotizacionesOut[r.opp] = prev ? { ...prev, estado: r.estado !== prev.estado ? r.estado : prev.estado } : r;
   });
 
   let cambiosInsertados = [];
@@ -277,7 +300,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     control: controlOut,
     cotizaciones: cotizacionesOut,
     cambiosNuevos: cambiosInsertados,
-    summary: { ...summary, filas, clientes, filasOtrosProyectos, oppsDuplicadosEnCarga },
+    summary: { ...summary, filas, clientes, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga },
   };
 }
 
@@ -328,3 +351,74 @@ export async function setMetaRemote(value) {
   if (error) throw error;
   return { value };
 }
+
+/* ---------------------------------------------------------------------
+ * Cotizador: listado de precios y cotizaciones generadas
+ * ------------------------------------------------------------------- */
+
+export async function fetchListaPrecios() {
+  const { data, error } = await supabase.from("lista_precios").select("*").order("unidad");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => {
+    out[row.id] = rowToObj(row);
+  });
+  return out;
+}
+
+// Reemplaza el listado de precios entero por el que se acaba de subir:
+// a diferencia del Aval (que se acumula por Opp), el listado de precios
+// es siempre "la foto actual" de lo disponible, así que si una unidad ya
+// no aparece en el archivo nuevo (se vendió y se sacó de la lista, etc.)
+// no debe quedar dando vueltas.
+export async function uploadListaPreciosRemote(unidades) {
+  const { error: delError } = await supabase.from("lista_precios").delete().neq("unidad", "");
+  if (delError) throw delError;
+
+  const rows = unidades.map((u) =>
+    objToRow({
+      tipo: u.tipo,
+      modelo: u.modelo,
+      unidad: u.unidad,
+      tipologia: u.tipologia,
+      orientacion: u.orientacion,
+      area: u.area,
+      precio: u.precio,
+      descuentoMax: u.descuentoMax,
+      estado: u.estado,
+      rawData: u.raw,
+      updatedAt: nowISO(),
+    })
+  );
+  // No hay ninguna columna que sirva de llave única confiable (el listado
+  // real trae números de unidad repetidos de verdad), así que se inserta
+  // directo en vez de hacer upsert por unidad — la tabla ya quedó vacía
+  // por el delete de arriba.
+  for (const part of chunk(rows, 400)) {
+    if (part.length === 0) continue;
+    const { error } = await supabase.from("lista_precios").insert(part);
+    if (error) throw error;
+  }
+  return fetchListaPrecios();
+}
+
+export async function fetchCotizacionesDeCliente(rut) {
+  const { data, error } = await supabase
+    .from("cotizaciones_generadas")
+    .select("*")
+    .eq("rut_cliente", rut)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToObj);
+}
+
+// Guarda una cotización generada. Se llama una sola vez por sesión del
+// Cotizador (si ya se guardó, se reutiliza la misma fila y su N°, en vez
+// de crear una nueva cada vez que se descarga o previsualiza el PDF).
+export async function guardarCotizacionGenerada(payload) {
+  const row = objToRow(payload, ["displayId", "createdAt"]);
+  const { data, error } = await supabase.from("cotizaciones_generadas").insert(row).select().single();
+  if (error) throw error;
+  return rowToObj(data);
+}
+

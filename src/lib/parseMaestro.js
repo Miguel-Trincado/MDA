@@ -37,6 +37,7 @@ export function parseMaestro(text) {
   const oppsDuplicadosEnCarga = [];
   let filas = 0;
   let filasOtrosProyectos = 0;
+  let filasSinOpp = 0;
 
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split("\t");
@@ -50,6 +51,22 @@ export function parseMaestro(text) {
 
     const rut = normalizeRut(rutRaw);
     if (!rut) continue;
+
+    // El Opp es el identificador único de cada cotización y siempre debe
+    // venir informado por el Aval. Si por algún motivo llega vacío, es un
+    // error de origen: la fila se descarta y se cuenta, en vez de
+    // inventarle un ID de respaldo en silencio.
+    const opp = iOpp !== -1 ? (cols[iOpp] || "").trim() : "";
+    if (!opp) {
+      filasSinOpp++;
+      continue;
+    }
+    if (oppVistosEnCarga.has(opp)) {
+      oppsDuplicadosEnCarga.push({ opp, rut, filaAnterior: oppVistosEnCarga.get(opp) });
+    } else {
+      oppVistosEnCarga.set(opp, rut);
+    }
+
     filas++;
     const nombreCompleto = [cols[iNombre], cols[iSegundo], cols[iApPat], cols[iApMat]]
       .filter(Boolean)
@@ -76,25 +93,8 @@ export function parseMaestro(text) {
     if (iFechaRes !== -1 && cols[iFechaRes] && cols[iFechaRes].trim()) rec.fechaReserva = cols[iFechaRes].trim();
     if (iFechaProm !== -1 && cols[iFechaProm] && cols[iFechaProm].trim()) rec.fechaPromesa = cols[iFechaProm].trim();
 
-    const opp = iOpp !== -1 ? (cols[iOpp] || "").trim() : "";
-    if (opp) {
-      if (oppVistosEnCarga.has(opp)) {
-        oppsDuplicadosEnCarga.push({ opp, rut, filaAnterior: oppVistosEnCarga.get(opp) });
-      } else {
-        oppVistosEnCarga.set(opp, rut);
-      }
-    }
-    // Si el Aval no trae número de Opp para esta fila, se arma un ID estable
-    // a partir de contenido que no cambia entre cargas (RUT + fecha +
-    // tipología + región). Nunca se usa la posición de la fila (i), porque
-    // esa cambia de una carga a otra y generaría una fila nueva (duplicada)
-    // para la misma cotización real cada vez que se sube el Aval.
-    const fechaParaKey = iFechaCot !== -1 ? (cols[iFechaCot] || "").trim() : "";
-    const tipParaKey = iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "";
-    const regParaKey = iRegion !== -1 ? (cols[iRegion] || "").trim() : "";
-    const key = opp || `SIN_OPP__${rut}__${fechaParaKey}__${tipParaKey}__${regParaKey}`;
     filasDetalle.push({
-      opp: key,
+      opp,
       rut,
       fecha: iFechaCot !== -1 ? (cols[iFechaCot] || "").trim() : "",
       fechaOpp: iFechaOpp !== -1 ? (cols[iFechaOpp] || "").trim() : "",
@@ -104,5 +104,5 @@ export function parseMaestro(text) {
       estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
     });
   }
-  return { byRut, filas, filasOtrosProyectos, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
+  return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
 }
