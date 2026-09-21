@@ -15,7 +15,7 @@ export const buildQuotePdfDoc = (data) => {
     clientName, clientRut, clientPhone,
     units, // [{ label, tipologia, area, priceUF }]
     subtotal, discount, descuentoPct, precioFinalUF, valorUF,
-    reservaUF, pieUF, contraEscrituraUF, hipotecarioRowUF, totalDistribuidoUF, distribucionValidada,
+    reservaUF, pieUF, contraEscrituraUF, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
     observaciones,
     agentName,
     displayId,
@@ -220,7 +220,14 @@ export const buildQuotePdfDoc = (data) => {
   doc.text(distribucionValidada ? "✓ Distribución validada al 100%" : "Distribución de referencia", contentX, y);
   doc.setFont(undefined, "normal");
   doc.setTextColor(...MUTED);
-  doc.text(`${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF`, pageWidth - margin, y, { align: "right" });
+  doc.text(
+    distribucionValidada
+      ? `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF`
+      : `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF (faltan ${currency(faltanteUF)} UF)`,
+    pageWidth - margin,
+    y,
+    { align: "right" }
+  );
   y += 10;
 
   // ---- Precio ----
@@ -230,14 +237,14 @@ export const buildQuotePdfDoc = (data) => {
   doc.setFontSize(7);
   doc.setTextColor(...MUTED);
   doc.text("PRECIO LISTA", contentX + 6, y + 6.5);
-  doc.text(`DESCUENTO (${descuentoPct || 0}%)`, contentX + contentW * 0.38, y + 6.5);
-  doc.text("PRECIO FINAL", pageWidth - margin - 6, y + 6.5, { align: "right" });
+  doc.text(`BONO PIE (${descuentoPct || 0}%)`, contentX + contentW * 0.38, y + 6.5);
+  doc.text("TOTAL A DISTRIBUIR", pageWidth - margin - 6, y + 6.5, { align: "right" });
   doc.setFontSize(11);
   doc.setTextColor(...INK);
   doc.setFont(undefined, "bold");
   doc.text(`${currency(subtotal)} UF`, contentX + 6, y + 13.5);
   doc.setTextColor(...GREEN);
-  doc.text(`-${currency(discount)} UF`, contentX + contentW * 0.38, y + 13.5);
+  doc.text(`${currency(discount)} UF`, contentX + contentW * 0.38, y + 13.5);
   doc.setTextColor(...PURPLE);
   doc.text(`${currency(precioFinalUF)} UF`, pageWidth - margin - 6, y + 13.5, { align: "right" });
   doc.setFont(undefined, "normal");
