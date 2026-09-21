@@ -121,9 +121,11 @@ create table if not exists cotizaciones (
   opp         text primary key,
   rut         text references gestion(rut) on delete cascade,
   fecha       text default '',
+  fecha_opp   text default '',
   tipologia   text default '',
   region      text default '',
   proyecto    text default '',
+  estado      text default '',
   created_at  timestamptz not null default now()
 );
 
@@ -173,19 +175,25 @@ create trigger trg_gestion_updated_at
 -- =====================================================================
 -- ROW LEVEL SECURITY (RLS)
 -- =====================================================================
--- Este proyecto no implementa aún un login individual por ejecutivo
--- (el "¿Quién eres?" de la vista Ejecutivo es solo una selección, no
--- una autenticación real). Para que la app funcione de inmediato con
--- la clave anónima (anon key) de Supabase, se habilita RLS con
--- políticas abiertas de lectura/escritura para los roles anon y
--- authenticated.
+-- Este proyecto no implementa un login individual por ejecutivo (el
+-- "¿Quién eres?" de la vista Ejecutivo es solo una selección, no una
+-- autenticación real) — eso se mantiene abierto a propósito.
 --
--- ⚠️ IMPORTANTE PARA PRODUCCIÓN:
--- Estas políticas permiten que cualquiera con la anon key lea y
--- escriba todos los datos. Es razonable para una app interna detrás
--- de un link no público, pero si vas a exponerla más ampliamente,
--- reemplaza estas políticas por reglas basadas en Supabase Auth
--- (por ejemplo, exigiendo auth.uid() y una tabla de usuarios/roles).
+-- La única acción restringida es la SUBIDA del Maestro Aval, que solo
+-- puede hacer un usuario autenticado (Supabase Auth). Por eso:
+--   - gestion / cambios_ejecutivo: crear filas nuevas (insert) requiere
+--     estar autenticado, porque eso solo ocurre al cargar el Aval.
+--     Editar (update) una fila ya existente sigue abierto, porque los
+--     ejecutivos y la Jefa lo necesitan sin login.
+--   - cotizaciones / control_interno: todo el CRUD requiere estar
+--     autenticado, porque son tablas que solo toca la carga del Aval.
+--   - La LECTURA (select) de todo se mantiene abierta para que el
+--     Dashboard, la cartera de ejecutivos y el panel de la Jefa
+--     sigan funcionando para todos sin login.
+--
+-- Antes de usar el sistema: crea tu usuario en Supabase → Authentication
+-- → Users → Add user (tu correo + una contraseña). Con esa cuenta se
+-- inicia sesión en el botón "Subir plantilla" del Dashboard.
 -- =====================================================================
 
 alter table gestion            enable row level security;
@@ -195,6 +203,7 @@ alter table historial          enable row level security;
 alter table cotizaciones       enable row level security;
 alter table config             enable row level security;
 
+-- Lectura abierta para todas las tablas (anon + authenticated)
 do $$
 declare
   t text;
@@ -202,16 +211,139 @@ begin
   foreach t in array array['gestion','control_interno','cambios_ejecutivo','historial','cotizaciones','config']
   loop
     execute format('drop policy if exists "allow_all_select_%1$s" on %1$s', t);
+    execute format('create policy "allow_all_select_%1$s" on %1$s for select using (true)', t);
+  end loop;
+end $$;
+
+-- historial y config: escritura abierta (no forman parte de la carga
+-- del Aval como identidad protegida; historial lo escriben los
+-- ejecutivos al guardar, config lo escribe la Jefa al fijar la meta)
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['historial','config']
+  loop
     execute format('drop policy if exists "allow_all_insert_%1$s" on %1$s', t);
     execute format('drop policy if exists "allow_all_update_%1$s" on %1$s', t);
     execute format('drop policy if exists "allow_all_delete_%1$s" on %1$s', t);
-
-    execute format('create policy "allow_all_select_%1$s" on %1$s for select using (true)', t);
     execute format('create policy "allow_all_insert_%1$s" on %1$s for insert with check (true)', t);
     execute format('create policy "allow_all_update_%1$s" on %1$s for update using (true) with check (true)', t);
     execute format('create policy "allow_all_delete_%1$s" on %1$s for delete using (true)', t);
   end loop;
 end $$;
+
+-- gestion: update abierto (ejecutivos), insert solo autenticado (Aval)
+drop policy if exists "allow_all_insert_gestion" on gestion;
+drop policy if exists "allow_all_update_gestion" on gestion;
+drop policy if exists "allow_all_delete_gestion" on gestion;
+create policy "auth_insert_gestion" on gestion for insert to authenticated with check (true);
+create policy "allow_all_update_gestion" on gestion for update using (true) with check (true);
+create policy "allow_all_delete_gestion" on gestion for delete using (true);
+
+-- cambios_ejecutivo: update abierto (Jefa resuelve), insert solo autenticado (Aval)
+drop policy if exists "allow_all_insert_cambios_ejecutivo" on cambios_ejecutivo;
+drop policy if exists "allow_all_update_cambios_ejecutivo" on cambios_ejecutivo;
+drop policy if exists "allow_all_delete_cambios_ejecutivo" on cambios_ejecutivo;
+create policy "auth_insert_cambios_ejecutivo" on cambios_ejecutivo for insert to authenticated with check (true);
+create policy "allow_all_update_cambios_ejecutivo" on cambios_ejecutivo for update using (true) with check (true);
+create policy "allow_all_delete_cambios_ejecutivo" on cambios_ejecutivo for delete using (true);
+
+-- cotizaciones y control_interno: todo el CRUD requiere estar autenticado
+do $$
+declare
+  t text;
+begin
+  foreach t in array array['cotizaciones','control_interno']
+  loop
+    execute format('drop policy if exists "allow_all_insert_%1$s" on %1$s', t);
+    execute format('drop policy if exists "allow_all_update_%1$s" on %1$s', t);
+    execute format('drop policy if exists "allow_all_delete_%1$s" on %1$s', t);
+    execute format('create policy "auth_insert_%1$s" on %1$s for insert to authenticated with check (true)', t);
+    execute format('create policy "auth_update_%1$s" on %1$s for update to authenticated using (true) with check (true)', t);
+    execute format('create policy "auth_delete_%1$s" on %1$s for delete to authenticated using (true)', t);
+  end loop;
+end $$;
+
+-- Permiso base (GRANT) para el rol authenticated, además de las
+-- políticas de RLS de arriba. Sin esto, Supabase Auth no puede escribir
+-- aunque la política lo permita.
+grant select, insert, update, delete on gestion, control_interno, cambios_ejecutivo, cotizaciones, historial, config
+  to authenticated;
+
+-- =====================================================================
+-- Cotizador: listado de precios y cotizaciones generadas
+-- =====================================================================
+-- lista_precios: el inventario de unidades (Departamento, Estacionamiento,
+-- Local Comercial). No tiene llave única: el listado real de la
+-- inmobiliaria trae números de unidad repetidos de verdad, así que cada
+-- carga reemplaza la tabla completa (borra todo e inserta de nuevo) en
+-- vez de actualizar por número de unidad.
+create table if not exists lista_precios (
+  id             uuid primary key default gen_random_uuid(),
+  tipo           text default 'Departamento',
+  modelo         text default '',
+  unidad         text not null,
+  tipologia      text default '',
+  orientacion    text default '',
+  area           numeric,
+  precio         numeric,
+  descuento_max  numeric,
+  estado         text not null default 'Disponible',
+  raw_data       jsonb,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create index if not exists idx_lista_precios_estado on lista_precios (estado);
+
+create sequence if not exists cotizaciones_generadas_display_id_seq;
+
+create table if not exists cotizaciones_generadas (
+  id             uuid primary key default gen_random_uuid(),
+  display_id     text not null default ('COT-' || lpad((nextval('cotizaciones_generadas_display_id_seq'))::text, 6, '0')),
+  rut_cliente    text references gestion(rut) on delete set null,
+  unidad_id      uuid references lista_precios(id) on delete set null,
+  secondary_ids  uuid[] default '{}',
+  subtotal       numeric,
+  descuento      numeric default 0,
+  precio_final   numeric,
+  reserva        numeric default 0,
+  observaciones  text default '',
+  snapshot       jsonb,
+  created_by     uuid references auth.users(id),
+  created_at     timestamptz not null default now()
+);
+
+create unique index if not exists cotizaciones_generadas_display_id_unique on cotizaciones_generadas (display_id);
+create index if not exists idx_cotizaciones_generadas_rut on cotizaciones_generadas (rut_cliente);
+
+alter table lista_precios            enable row level security;
+alter table cotizaciones_generadas   enable row level security;
+
+drop policy if exists "select_lista_precios" on lista_precios;
+drop policy if exists "auth_insert_lista_precios" on lista_precios;
+drop policy if exists "auth_update_lista_precios" on lista_precios;
+drop policy if exists "auth_delete_lista_precios" on lista_precios;
+
+create policy "select_lista_precios" on lista_precios for select using (true);
+create policy "auth_insert_lista_precios" on lista_precios for insert to authenticated with check (true);
+create policy "auth_update_lista_precios" on lista_precios for update to authenticated using (true) with check (true);
+create policy "auth_delete_lista_precios" on lista_precios for delete to authenticated using (true);
+
+drop policy if exists "allow_all_select_cotizaciones_generadas" on cotizaciones_generadas;
+drop policy if exists "allow_all_insert_cotizaciones_generadas" on cotizaciones_generadas;
+drop policy if exists "allow_all_update_cotizaciones_generadas" on cotizaciones_generadas;
+drop policy if exists "allow_all_delete_cotizaciones_generadas" on cotizaciones_generadas;
+
+create policy "allow_all_select_cotizaciones_generadas" on cotizaciones_generadas for select using (true);
+create policy "allow_all_insert_cotizaciones_generadas" on cotizaciones_generadas for insert with check (true);
+create policy "allow_all_update_cotizaciones_generadas" on cotizaciones_generadas for update using (true) with check (true);
+create policy "allow_all_delete_cotizaciones_generadas" on cotizaciones_generadas for delete using (true);
+
+grant select on lista_precios to anon, authenticated;
+grant insert, update, delete on lista_precios to authenticated;
+grant select, insert, update, delete on cotizaciones_generadas to anon, authenticated;
 
 -- =====================================================================
 -- Fin del esquema

@@ -3,17 +3,20 @@ import TopNav from "./components/TopNav";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
-import UploadMaestroPanel from "./components/UploadMaestroPanel";
+import CargaPage from "./components/CargaPage";
+import Cotizador from "./components/Cotizador";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaRemote,
+  uploadListaPreciosRemote,
 } from "./lib/db";
+import { parseListaPrecios } from "./lib/parseListaPrecios";
 
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], meta: { value: 5 }, cotizaciones: {} });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], meta: { value: 5 }, cotizaciones: {}, listaPrecios: {} });
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -70,6 +73,13 @@ export default function App() {
     return summary;
   }
 
+  async function uploadListaPrecios(text) {
+    const unidades = parseListaPrecios(text);
+    const listaPrecios = await uploadListaPreciosRemote(unidades);
+    setDb((d) => ({ ...d, listaPrecios }));
+    return Object.values(listaPrecios);
+  }
+
   async function resolveCambio(cambio, decision) {
     const prevGestion = db.gestion[cambio.rut];
     const prevControl = db.control[cambio.rut];
@@ -108,7 +118,8 @@ export default function App() {
           <TopNav active={view} onChange={setView} />
           {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
-          {view === "carga" && <UploadMaestroPanel onUpload={uploadMaestro} />}
+          {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
+          {view === "cotizador" && <Cotizador db={db} />}
           {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} />}
         </div>
       )}
