@@ -90,7 +90,7 @@ export default function Cotizador({ db }) {
 
   const estacionamientosFiltrados = useMemo(() => {
     return Object.values(db.listaPrecios)
-      .filter((u) => u.tipo === "Estacionamiento" && u.estado === "Disponible")
+      .filter((u) => u.tipo === "Estacionamiento" && u.estado === "Disponible" && Number(u.precio) > 0)
       .sort((a, b) => (Number(a.precio) || 0) - (Number(b.precio) || 0));
   }, [db.listaPrecios]);
 
