@@ -37,6 +37,8 @@ export default function Cotizador({ db }) {
   const [buscarCliente, setBuscarCliente] = useState("");
   const [unidadId, setUnidadId] = useState("");
   const [buscarUnidad, setBuscarUnidad] = useState("");
+  const [filtroTipologia, setFiltroTipologia] = useState("");
+  const [estacionamientoId, setEstacionamientoId] = useState("");
   const [descuentoPct, setDescuentoPct] = useState("0");
   const [rows, setRows] = useState(FINANCIAMIENTO_ROWS_DEFAULT);
   const [observaciones, setObservaciones] = useState("");
@@ -51,6 +53,7 @@ export default function Cotizador({ db }) {
 
   const cliente = rutCliente ? db.gestion[rutCliente] : null;
   const unidad = unidadId ? db.listaPrecios[unidadId] : null;
+  const estacionamiento = estacionamientoId ? db.listaPrecios[estacionamientoId] : null;
 
   useEffect(() => {
     if (!rutCliente) {
@@ -68,24 +71,47 @@ export default function Cotizador({ db }) {
       .slice(0, 12);
   }, [db.gestion, buscarCliente]);
 
+  const tipologiasDisponibles = useMemo(() => {
+    const set = new Set();
+    Object.values(db.listaPrecios).forEach((u) => {
+      if (u.tipo === "Departamento" && u.tipologia) set.add(u.tipologia);
+    });
+    return [...set].sort();
+  }, [db.listaPrecios]);
+
   const unidadesFiltradas = useMemo(() => {
     const q = buscarUnidad.toLowerCase();
     return Object.values(db.listaPrecios)
-      .filter((u) => u.estado === "Disponible" && u.tipo === "Departamento")
+      .filter((u) => u.tipo === "Departamento")
+      .filter((u) => !filtroTipologia || u.tipologia === filtroTipologia)
       .filter((u) => !q || u.unidad.toLowerCase().includes(q) || (u.tipologia || "").toLowerCase().includes(q))
       .sort((a, b) => (Number(a.precio) || 0) - (Number(b.precio) || 0));
-  }, [db.listaPrecios, buscarUnidad]);
+  }, [db.listaPrecios, buscarUnidad, filtroTipologia]);
+
+  const estacionamientosFiltrados = useMemo(() => {
+    return Object.values(db.listaPrecios)
+      .filter((u) => u.tipo === "Estacionamiento" && u.estado === "Disponible")
+      .sort((a, b) => (Number(a.precio) || 0) - (Number(b.precio) || 0));
+  }, [db.listaPrecios]);
 
   function elegirUnidad(u) {
+    if (u.estado !== "Disponible") return; // no se puede cotizar una unidad no disponible
     setUnidadId(u.id);
+    setEstacionamientoId("");
     setSavedCotizacion(null);
     closePreview();
     setDescuentoPct(u.descuentoMax != null ? String(u.descuentoMax) : "0");
   }
 
+  function elegirEstacionamiento(id) {
+    setEstacionamientoId(id);
+    setSavedCotizacion(null);
+    closePreview();
+  }
+
   const setRow = (key, patch) => setRows((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
-  const precioListaUF = unidad ? Number(unidad.precio) || 0 : 0;
+  const precioListaUF = (unidad ? Number(unidad.precio) || 0 : 0) + (estacionamiento ? Number(estacionamiento.precio) || 0 : 0);
   const descuentoUF = (precioListaUF * (Number(descuentoPct) || 0)) / 100;
   const precioFinalUF = precioListaUF - descuentoUF;
 
@@ -103,7 +129,14 @@ export default function Cotizador({ db }) {
     clientRut: cliente?.rut || null,
     clientPhone: cliente?.telefono || null,
     agentName: cliente?.ejecutivo || null,
-    units: unidad ? [{ label: `Unidad ${unidad.unidad}`, tipologia: unidad.tipologia, area: unidad.area, priceUF: precioListaUF }] : [],
+    units: unidad
+      ? [
+          { label: `Unidad ${unidad.unidad}`, tipologia: unidad.tipologia, area: unidad.area, priceUF: Number(unidad.precio) || 0 },
+          ...(estacionamiento
+            ? [{ label: `Estacionamiento ${estacionamiento.unidad}`, tipologia: "Estacionamiento", area: estacionamiento.area, priceUF: Number(estacionamiento.precio) || 0 }]
+            : []),
+        ]
+      : [],
     subtotal: precioListaUF,
     discount: descuentoUF,
     descuentoPct,
@@ -127,6 +160,7 @@ export default function Cotizador({ db }) {
       const saved = await guardarCotizacionGenerada({
         rutCliente,
         unidadId,
+        secondaryIds: estacionamiento ? [estacionamiento.id] : [],
         subtotal: precioListaUF,
         descuento: descuentoUF,
         precioFinal: precioFinalUF,
@@ -205,7 +239,7 @@ export default function Cotizador({ db }) {
               <span className="text-xs text-stone-400 ml-2">RUT {cliente.rut} · {cliente.ejecutivo || "sin ejecutivo"}</span>
             </div>
             <button
-              onClick={() => { setRutCliente(""); setUnidadId(""); setSavedCotizacion(null); closePreview(); }}
+              onClick={() => { setRutCliente(""); setUnidadId(""); setEstacionamientoId(""); setSavedCotizacion(null); closePreview(); }}
               className="text-xs text-stone-500 hover:text-[#0F3D66] underline"
             >
               Elegir otro cliente
@@ -249,36 +283,97 @@ export default function Cotizador({ db }) {
                   {unidad.tipologia || "—"} · {unidad.area ? `${unidad.area} m²` : "—"} · {currency(unidad.precio)} UF
                 </span>
               </div>
-              <button onClick={() => { setUnidadId(""); setSavedCotizacion(null); closePreview(); }} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
+              <button onClick={() => { setUnidadId(""); setEstacionamientoId(""); setSavedCotizacion(null); closePreview(); }} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
                 Elegir otra unidad
               </button>
             </div>
           ) : (
             <div>
-              <input
-                value={buscarUnidad}
-                onChange={(e) => setBuscarUnidad(e.target.value)}
-                placeholder="Buscar por unidad o tipología…"
-                className="w-full border border-stone-300 rounded-sm px-3 py-2 text-sm mb-3 focus:outline-none focus:border-[#1E5AA8]"
-              />
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <input
+                  value={buscarUnidad}
+                  onChange={(e) => setBuscarUnidad(e.target.value)}
+                  placeholder="Buscar por unidad o tipología…"
+                  className="flex-1 min-w-[180px] border border-stone-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-[#1E5AA8]"
+                />
+                <select
+                  value={filtroTipologia}
+                  onChange={(e) => setFiltroTipologia(e.target.value)}
+                  className="border border-stone-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-[#1E5AA8]"
+                >
+                  <option value="">Todas las tipologías</option>
+                  {tipologiasDisponibles.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
               {unidadesFiltradas.length === 0 ? (
-                <p className="text-sm text-stone-400">No hay unidades disponibles. Sube el listado de precios en la pestaña "Carga".</p>
+                <p className="text-sm text-stone-400">No hay unidades cargadas. Sube el listado de precios en la pestaña "Carga".</p>
               ) : (
                 <div className="border border-stone-200 rounded-sm max-h-72 overflow-y-auto divide-y divide-stone-100">
-                  {unidadesFiltradas.slice(0, 100).map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => elegirUnidad(u)}
-                      className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-stone-50"
-                    >
-                      <span>
-                        Unidad {u.unidad}{u.modelo ? ` (Modelo ${u.modelo})` : ""} <span className="text-xs text-stone-400">{u.tipologia || "—"} · {u.area ? `${u.area} m²` : "—"}</span>
-                      </span>
-                      <span className="text-xs font-mono">{currency(u.precio)} UF</span>
-                    </button>
-                  ))}
+                  {unidadesFiltradas.slice(0, 100).map((u) => {
+                    const disponible = u.estado === "Disponible";
+                    return (
+                      <button
+                        key={u.id}
+                        onClick={() => elegirUnidad(u)}
+                        disabled={!disponible}
+                        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm ${
+                          disponible ? "hover:bg-stone-50" : "opacity-50 cursor-not-allowed bg-stone-50/50"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          Unidad {u.unidad}{u.modelo ? ` (Modelo ${u.modelo})` : ""}{" "}
+                          <span className="text-xs text-stone-400">{u.tipologia || "—"} · {u.area ? `${u.area} m²` : "—"}</span>
+                        </span>
+                        <span className="flex items-center gap-2 shrink-0">
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                              disponible ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-stone-200 text-stone-500 border-stone-300"
+                            }`}
+                          >
+                            {u.estado}
+                          </span>
+                          <span className="text-xs font-mono">{currency(u.precio)} UF</span>
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
+            </div>
+          )}
+        </Panel>
+      )}
+
+      {/* Paso 3: estacionamiento (opcional) */}
+      {unidad && (
+        <Panel className="mb-4">
+          <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">3. Agrega un estacionamiento (opcional)</div>
+          {estacionamiento ? (
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="text-sm">
+                <span className="font-medium">Estacionamiento {estacionamiento.unidad}</span>
+                <span className="text-xs text-stone-400 ml-2">{currency(estacionamiento.precio)} UF</span>
+              </div>
+              <button onClick={() => elegirEstacionamiento("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
+                Quitar estacionamiento
+              </button>
+            </div>
+          ) : estacionamientosFiltrados.length === 0 ? (
+            <p className="text-sm text-stone-400">No hay estacionamientos disponibles en el listado.</p>
+          ) : (
+            <div className="border border-stone-200 rounded-sm max-h-56 overflow-y-auto divide-y divide-stone-100">
+              {estacionamientosFiltrados.slice(0, 100).map((e) => (
+                <button
+                  key={e.id}
+                  onClick={() => elegirEstacionamiento(e.id)}
+                  className="w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-stone-50"
+                >
+                  <span>Estacionamiento {e.unidad}</span>
+                  <span className="text-xs font-mono">{currency(e.precio)} UF</span>
+                </button>
+              ))}
             </div>
           )}
         </Panel>
@@ -288,7 +383,7 @@ export default function Cotizador({ db }) {
       {unidad && (
         <>
           <Panel className="mb-4">
-            <div className="text-xs text-stone-400 uppercase tracking-wide mb-3">3. Financiamiento</div>
+            <div className="text-xs text-stone-400 uppercase tracking-wide mb-3">4. Financiamiento</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               <Field label="Precio lista (UF)">
                 <div className="ipt bg-stone-50">{currency(precioListaUF)}</div>
