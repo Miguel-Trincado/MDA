@@ -5,12 +5,32 @@ import { fetchCotizacionesDeCliente, guardarCotizacionGenerada } from "../lib/db
 import { Panel, Field } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
-  reserva: { modo: "%", valor: 0 },
+  reserva: { modo: "UF", valor: 5 },
   pie: { modo: "%", valor: 0 },
-  contraEscritura: { modo: "%", valor: 5 },
+  contraEscritura: { modo: "UF", valor: 0 },
   hipotecario: { modo: "%", valor: 80 },
 };
 const ROW_LABEL = { reserva: "Reserva", pie: "Pie", contraEscritura: "Contra escritura", hipotecario: "Crédito hipotecario" };
+
+// Valores por defecto de la distribución cuando se elige una unidad o
+// cambia el % de descuento: Reserva siempre 5 UF, Hipotecario siempre
+// 80%, el Pie parte igualado al % de descuento (el descuento casi
+// siempre se cubre como bono dentro del pie, no restándolo directo del
+// precio — no es una fila aparte, es el valor por defecto del Pie), y
+// lo que sobra se carga a Contra escritura. Siguen siendo editables
+// después: esto solo precarga el punto de partida más común.
+function calcularDefaults(precioBaseUF, descuentoPctVal) {
+  const reservaUF = 5;
+  const hipotecarioUF = precioBaseUF * 0.8;
+  const pieUF = (precioBaseUF * (Number(descuentoPctVal) || 0)) / 100;
+  const contraEscrituraUF = Math.max(0, precioBaseUF - reservaUF - hipotecarioUF - pieUF);
+  return {
+    reserva: { modo: "UF", valor: reservaUF },
+    pie: { modo: "%", valor: Number(descuentoPctVal) || 0 },
+    contraEscritura: { modo: "UF", valor: Math.round(contraEscrituraUF * 100) / 100 },
+    hipotecario: { modo: "%", valor: 80 },
+  };
+}
 
 function useValorUF() {
   const [valorUF, setValorUF] = useState(null);
@@ -60,7 +80,9 @@ export default function Cotizador({ db }) {
       setHistorial([]);
       return;
     }
-    fetchCotizacionesDeCliente(rutCliente).then(setHistorial).catch(() => setHistorial([]));
+    fetchCotizacionesDeCliente(rutCliente)
+      .then((list) => setHistorial([...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))))
+      .catch(() => setHistorial([]));
   }, [rutCliente]);
 
   const clientesFiltrados = useMemo(() => {
@@ -112,8 +134,23 @@ export default function Cotizador({ db }) {
   const setRow = (key, patch) => setRows((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
 
   const precioListaUF = (unidad ? Number(unidad.precio) || 0 : 0) + (estacionamiento ? Number(estacionamiento.precio) || 0 : 0);
+
+  // Recalcula los valores por defecto de la distribución cada vez que
+  // cambia la unidad, el estacionamiento o el % de descuento — así el
+  // Bono Pie siempre parte igualado al descuento actual, sin tener que
+  // tocarlo a mano salvo que ese 1% de los casos lo requiera.
+  useEffect(() => {
+    if (!unidad) return;
+    setRows(calcularDefaults(precioListaUF, descuentoPct));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unidadId, estacionamientoId, descuentoPct]);
+
   const descuentoUF = (precioListaUF * (Number(descuentoPct) || 0)) / 100;
-  const precioFinalUF = precioListaUF - descuentoUF;
+  // El descuento ya no se resta directo del precio: ahora se refleja
+  // como Bono Pie dentro de la distribución. El precio final (lo que se
+  // reparte entre Reserva/Pie/Bono/Contra escritura/Hipotecario) es el
+  // precio de lista completo.
+  const precioFinalUF = precioListaUF;
 
   const rowValueUF = (row, baseUF) => (row.modo === "%" ? (baseUF * (Number(row.valor) || 0)) / 100 : Number(row.valor) || 0);
   const reservaUF = rowValueUF(rows.reserva, precioFinalUF);
@@ -121,7 +158,8 @@ export default function Cotizador({ db }) {
   const contraEscrituraUF = rowValueUF(rows.contraEscritura, precioFinalUF);
   const hipotecarioUF = rowValueUF(rows.hipotecario, precioFinalUF);
   const totalDistribuidoUF = reservaUF + pieUF + contraEscrituraUF + hipotecarioUF;
-  const distribucionValidada = Math.abs(totalDistribuidoUF - precioFinalUF) < 0.5;
+  const faltanteUF = precioFinalUF - totalDistribuidoUF;
+  const distribucionValidada = Math.abs(faltanteUF) < 0.5;
   const toCLP = (uf) => (valorUF ? uf * valorUF : 0);
 
   const quoteSnapshot = () => ({
@@ -147,6 +185,7 @@ export default function Cotizador({ db }) {
     contraEscrituraUF,
     hipotecarioRowUF: hipotecarioUF,
     totalDistribuidoUF,
+    faltanteUF,
     distribucionValidada,
     observaciones: observaciones?.trim() || null,
   });
@@ -169,7 +208,7 @@ export default function Cotizador({ db }) {
         snapshot: quoteSnapshot(),
       });
       setSavedCotizacion(saved);
-      setHistorial((prev) => [saved, ...prev]);
+      setHistorial((prev) => [saved, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       return saved;
     } catch (e) {
       setError(e.message || "No se pudo guardar la cotización.");
@@ -386,7 +425,7 @@ export default function Cotizador({ db }) {
             <div className="text-xs text-stone-400 uppercase tracking-wide mb-3">4. Financiamiento</div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               <Field label="Precio lista (UF)">
-                <div className="ipt bg-stone-50">{currency(precioListaUF)}</div>
+                <div className="ipt bg-stone-50 font-semibold text-[#0F3D66]">{currency(precioListaUF)}</div>
               </Field>
               <Field label={`Descuento (%)${unidad.descuentoMax != null ? ` — máx. ${unidad.descuentoMax}%` : ""}`}>
                 <input
@@ -396,11 +435,11 @@ export default function Cotizador({ db }) {
                   className="ipt"
                 />
               </Field>
-              <Field label="Precio final (UF)">
-                <div className="ipt bg-stone-50 font-semibold text-[#0F3D66]">{currency(precioFinalUF)}</div>
+              <Field label="Bono pie (UF)">
+                <div className="ipt bg-emerald-50 text-emerald-700 font-medium">{currency(descuentoUF)}</div>
               </Field>
-              <Field label="Precio final (CLP)">
-                <div className="ipt bg-stone-50">{valorUF ? `$${currency(toCLP(precioFinalUF))}` : "—"}</div>
+              <Field label="Precio lista (CLP)">
+                <div className="ipt bg-stone-50">{valorUF ? `$${currency(toCLP(precioListaUF))}` : "—"}</div>
               </Field>
             </div>
 
@@ -430,7 +469,9 @@ export default function Cotizador({ db }) {
               ))}
             </div>
             <div className={`mt-3 text-xs font-medium ${distribucionValidada ? "text-emerald-700" : "text-amber-700"}`}>
-              {distribucionValidada ? "✓ Distribución validada al 100%" : `Distribución de referencia: suma ${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF`}
+              {distribucionValidada
+                ? `✓ Distribución validada al 100% (${currency(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF)`
+                : `Llevas ${currency(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF — faltan ${currency(faltanteUF)} UF por distribuir`}
             </div>
 
             <Field label="Observaciones" className="mt-4">
@@ -475,7 +516,8 @@ export default function Cotizador({ db }) {
             {historial.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-sm border-b border-stone-50 py-2 last:border-0">
                 <span>
-                  N°{quoteNumber(c.displayId)} · {new Date(c.createdAt).toLocaleDateString("es-CL")} · {currency(c.precioFinal)} UF
+                  N°{quoteNumber(c.displayId)} · {new Date(c.createdAt).toLocaleDateString("es-CL")} ·{" "}
+                  {c.snapshot?.units?.[0]?.tipologia || "—"} · {currency(c.precioFinal)} UF
                 </span>
                 <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
                   <ChevronLeft size={12} className="rotate-180" /> Ver PDF
