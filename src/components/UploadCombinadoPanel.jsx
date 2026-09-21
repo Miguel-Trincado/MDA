@@ -29,13 +29,15 @@ function sheetToTsv(sheet) {
 }
 
 // Detecta qué es cada hoja mirando sus encabezados, no su nombre — así no
-// importa cómo se llamen las hojas ni en qué orden vengan.
+// importa cómo se llamen las hojas ni en qué orden vengan. Usa la misma
+// lista de columnas candidatas que parseListaPrecios.js, para no volver
+// a desincronizarse entre los dos archivos.
 function detectarTipoHoja(tsv) {
   const headerLine = (tsv.split("\n")[0] || "").split("\t").map(normalizeHeader);
   const esAval = headerLine.includes("RUT CLIENTE") && headerLine.includes("EJECUTIVO");
   if (esAval) return "aval";
-  const tieneUnidad = ["UNIDAD", "N°", "N", "NUMERO", "LOTE"].some((h) => headerLine.includes(h));
-  const tienePrecio = ["VALOR (UF)", "VALOR", "PRECIO", "PRECIO LISTA", "VALOR FINAL (UF)", "VALOR FINAL"].some((h) => headerLine.includes(h));
+  const tieneUnidad = ["DIRECCION NUMERO", "UNIDAD", "N°", "N", "NUMERO", "LOTE"].some((h) => headerLine.includes(h));
+  const tienePrecio = ["PRECIO LISTA", "VALOR (UF)", "VALOR", "PRECIO", "VALOR FINAL (UF)", "VALOR FINAL"].some((h) => headerLine.includes(h));
   if (tieneUnidad && tienePrecio) return "precios";
   return null;
 }
@@ -82,7 +84,7 @@ export default function UploadCombinadoPanel({ onUploadMaestro, onUploadListaPre
 
       if (!resumen.aval && !resumen.precios) {
         throw new Error(
-          "No reconocí ninguna hoja del archivo. La hoja del Aval debe tener las columnas 'RUT Cliente' y 'Ejecutivo'; la del listado de precios debe tener una columna de unidad (Unidad/N°/Lote) y una de precio (Valor/Precio)."
+          "No reconocí ninguna hoja del archivo. La hoja del Aval debe tener las columnas 'RUT Cliente' y 'Ejecutivo'; la del listado de precios debe tener una columna de unidad (Dirección Número/Unidad/N°/Lote) y una de precio (Precio Lista/Valor/Precio)."
         );
       }
       setResult(resumen);
