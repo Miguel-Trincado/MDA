@@ -422,3 +422,58 @@ export async function guardarCotizacionGenerada(payload) {
   return rowToObj(data);
 }
 
+/* ---------------------------------------------------------------------
+ * Limpieza de cartera: marcar como Perdidos los contactos sin gestión
+ * reciente (revisado y confirmado por la Jefa antes de aplicarse).
+ * ------------------------------------------------------------------- */
+export async function marcarPerdidosMasivoRemote(candidatos, motivo) {
+  const ruts = candidatos.map((c) => c.rut);
+  const today = todayISO();
+
+  const cambios = objToRow({
+    estado: "Perdido",
+    motivoPerdida: motivo,
+    proximaAccion: "",
+    fechaProximaAccion: "",
+    ultimaRevisionFecha: today,
+    ultimaActualizacionEjecutivo: nowISO(),
+    flagSistema: "",
+  });
+  const { error } = await supabase.from("gestion").update(cambios).in("rut", ruts);
+  if (error) throw error;
+
+  const historialRows = candidatos.map((c) =>
+    objToRow({
+      fecha: nowISO(),
+      ejecutivo: c.ejecutivo,
+      cliente: c.cliente,
+      rut: c.rut,
+      estado: "Perdido",
+      nivelInteres: c.nivelInteres,
+      etapaComercial: c.etapaComercial,
+      accionRealizada: "",
+      respuesta: "",
+      observaciones: `Marcado como Perdido automáticamente por falta de gestión reciente. Motivo: ${motivo}`,
+    })
+  );
+  for (const part of chunk(historialRows, 400)) {
+    if (part.length === 0) continue;
+    const { error: histErr } = await supabase.from("historial").insert(part);
+    if (histErr) throw histErr;
+  }
+
+  const gestionActualizado = {};
+  candidatos.forEach((c) => {
+    gestionActualizado[c.rut] = {
+      ...c,
+      estado: "Perdido",
+      motivoPerdida: motivo,
+      proximaAccion: "",
+      fechaProximaAccion: "",
+      ultimaRevisionFecha: today,
+      flagSistema: "",
+    };
+  });
+  return gestionActualizado;
+}
+
