@@ -1,21 +1,65 @@
 import { useState, useMemo } from "react";
-import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
-import { computeAlert, todayISO } from "../lib/helpers";
+import { ALERT_PRIORITY, ALERT_STYLE, MOTIVOS_PERDIDA } from "../lib/constants";
+import { computeAlert, todayISO, parseFechaCompleta } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, AlertTriangle } from "lucide-react";
 
-export default function JefaView({ db, onResolveCambio, onSetMeta }) {
+export default function JefaView({ db, onResolveCambio, onSetMeta, onMarcarPerdidosMasivo }) {
   const [buscar, setBuscar] = useState("");
   const [verCalendario, setVerCalendario] = useState(false);
+  const [fechaCorte, setFechaCorte] = useState("2026-08-01");
+  const [motivoMasivo, setMotivoMasivo] = useState(MOTIVOS_PERDIDA[0]);
+  const [verCandidatos, setVerCandidatos] = useState(false);
+  const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
+  const [resultadoMasivo, setResultadoMasivo] = useState(null);
 
   const clientes = useMemo(
     () => Object.values(db.gestion).map((g) => ({ ...g, _alerta: computeAlert(g) })),
     [db.gestion]
   );
   const tareas = useMemo(() => getTareas(clientes), [clientes]);
+
+  // Última fecha de cotización real (ya parseada, no el texto crudo) por
+  // RUT — para saber quién no tiene gestión desde antes de la fecha de
+  // corte, sin depender del formato de fecha que traiga el Aval.
+  const ultimaFechaPorRut = useMemo(() => {
+    const out = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      const d = parseFechaCompleta(c.fecha);
+      if (!d) return;
+      const iso = d.toISOString().slice(0, 10);
+      if (!out[c.rut] || iso > out[c.rut]) out[c.rut] = iso;
+    });
+    return out;
+  }, [db.cotizaciones]);
+
+  const candidatosPerdidos = useMemo(() => {
+    if (!fechaCorte) return [];
+    return clientes.filter((g) => {
+      if (g.estado === "Promesado" || g.estado === "Perdido") return false;
+      if (["Reservado", "Pre-reservado"].includes(g.etapaComercial)) return false;
+      const ultima = ultimaFechaPorRut[g.rut];
+      if (!ultima) return false; // sin fecha real conocida: no se toca, para evitar falsos positivos
+      return ultima < fechaCorte;
+    });
+  }, [clientes, ultimaFechaPorRut, fechaCorte]);
+
+  async function confirmarMarcarPerdidos() {
+    setAplicandoMasivo(true);
+    setResultadoMasivo(null);
+    try {
+      await onMarcarPerdidosMasivo(candidatosPerdidos, motivoMasivo);
+      setResultadoMasivo({ ok: true, cantidad: candidatosPerdidos.length });
+      setVerCandidatos(false);
+    } catch (e) {
+      setResultadoMasivo({ ok: false, error: e.message || "No se pudo aplicar el cambio." });
+    } finally {
+      setAplicandoMasivo(false);
+    }
+  }
 
   const auditoria = useMemo(() => {
     const cotizacionesPorRut = {};
@@ -200,6 +244,78 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
               ))}
             </div>
           </details>
+        )}
+      </Panel>
+
+      <Panel title="Limpieza de cartera: marcar Perdidos sin gestión reciente" className="mb-5">
+        <p className="text-xs text-stone-500 mb-3">
+          Marca como <strong>Perdido</strong> a todo cliente cuya última cotización real sea anterior a la fecha de
+          corte, excluyendo siempre a los que ya están <strong>Promesado</strong> o en etapa{" "}
+          <strong>Reservado / Pre-reservado</strong>. Los clientes sin ninguna fecha de cotización conocida no se
+          tocan, para evitar marcar algo por error.
+        </p>
+        <div className="flex items-center gap-3 flex-wrap mb-3">
+          <label className="text-xs text-stone-500 flex items-center gap-2">
+            Fecha de corte (antes de esta fecha = sin gestión reciente)
+            <input
+              type="date"
+              value={fechaCorte}
+              onChange={(e) => { setFechaCorte(e.target.value); setVerCandidatos(false); setResultadoMasivo(null); }}
+              className="border border-stone-300 rounded-sm px-2 py-1 text-xs"
+            />
+          </label>
+        </div>
+        <button
+          onClick={() => setVerCandidatos((v) => !v)}
+          className="text-xs px-4 py-2 rounded-full border border-stone-300 hover:border-[#1E5AA8] transition-colors flex items-center gap-2"
+        >
+          <AlertTriangle size={13} />
+          {verCandidatos ? "Ocultar candidatos" : `Revisar candidatos (${candidatosPerdidos.length})`}
+        </button>
+
+        {verCandidatos && (
+          <div className="mt-4">
+            {candidatosPerdidos.length === 0 ? (
+              <p className="text-sm text-stone-400">No hay clientes que cumplan la condición para esta fecha de corte.</p>
+            ) : (
+              <>
+                <div className="border border-stone-200 rounded-sm max-h-64 overflow-y-auto divide-y divide-stone-100 mb-3">
+                  {candidatosPerdidos.map((g) => (
+                    <div key={g.rut} className="text-xs text-stone-600 px-3 py-1.5 flex items-center justify-between gap-2">
+                      <span>{g.cliente || "(sin nombre)"} · RUT {g.rut} · {g.ejecutivo || "sin ejecutivo"}</span>
+                      <span className="text-stone-400 shrink-0">Última cotización: {ultimaFechaPorRut[g.rut]}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <select
+                    value={motivoMasivo}
+                    onChange={(e) => setMotivoMasivo(e.target.value)}
+                    className="border border-stone-300 rounded-sm px-2 py-1.5 text-xs"
+                  >
+                    {MOTIVOS_PERDIDA.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={confirmarMarcarPerdidos}
+                    disabled={aplicandoMasivo}
+                    className="bg-rose-700 hover:bg-rose-800 disabled:opacity-50 text-white text-xs rounded-full px-5 py-2"
+                  >
+                    {aplicandoMasivo ? "Aplicando…" : `Marcar ${candidatosPerdidos.length} cliente(s) como Perdidos`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {resultadoMasivo && (
+          <div className={`mt-3 text-xs px-3 py-2 border ${resultadoMasivo.ok ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-rose-300 bg-rose-50 text-rose-800"}`}>
+            {resultadoMasivo.ok
+              ? `✓ ${resultadoMasivo.cantidad} cliente(s) marcados como Perdidos.`
+              : resultadoMasivo.error}
+          </div>
         )}
       </Panel>
 
