@@ -59,11 +59,12 @@ export function AlertGroup({ tipo, lista }) {
       {open && (
         <div className="border-t border-stone-100 px-4 py-2">
           {lista.map((g) => (
-            <div key={g.rut} className="text-sm flex items-center justify-between py-1.5 border-b border-stone-50 last:border-0">
-              <span>
+            <div key={g.rut} className="text-sm flex items-center justify-between py-1.5 border-b border-stone-50 last:border-0 gap-2">
+              <span className="truncate">
                 {g.cliente} <span className="text-xs text-stone-400">RUT {g.rut}</span>
               </span>
-              <span className="text-xs text-stone-400">{g.ejecutivo}</span>
+              <span className="text-xs text-stone-400 shrink-0">{g._ultimaFecha || "Sin fecha"}</span>
+              <span className="text-xs text-stone-400 shrink-0">{g.ejecutivo}</span>
             </div>
           ))}
         </div>

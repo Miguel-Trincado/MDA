@@ -16,12 +16,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onMarcarPerdi
   const [aplicandoMasivo, setAplicandoMasivo] = useState(false);
   const [resultadoMasivo, setResultadoMasivo] = useState(null);
 
-  const clientes = useMemo(
-    () => Object.values(db.gestion).map((g) => ({ ...g, _alerta: computeAlert(g) })),
-    [db.gestion]
-  );
-  const tareas = useMemo(() => getTareas(clientes), [clientes]);
-
   // Última fecha de cotización real (ya parseada, no el texto crudo) por
   // RUT — para saber quién no tiene gestión desde antes de la fecha de
   // corte, sin depender del formato de fecha que traiga el Aval.
@@ -36,13 +30,24 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onMarcarPerdi
     return out;
   }, [db.cotizaciones]);
 
+  const clientes = useMemo(
+    () =>
+      Object.values(db.gestion).map((g) => ({
+        ...g,
+        _alerta: computeAlert(g),
+        _ultimaFecha: ultimaFechaPorRut[g.rut] || null,
+      })),
+    [db.gestion, ultimaFechaPorRut]
+  );
+  const tareas = useMemo(() => getTareas(clientes), [clientes]);
+
   const candidatosPerdidos = useMemo(() => {
     if (!fechaCorte) return [];
     return clientes.filter((g) => {
       if (g.estado === "Promesado" || g.estado === "Perdido") return false;
       if (["Reservado", "Pre-reservado"].includes(g.etapaComercial)) return false;
       const ultima = ultimaFechaPorRut[g.rut];
-      if (!ultima) return false; // sin fecha real conocida: no se toca, para evitar falsos positivos
+      if (!ultima) return true; // sin ninguna cotización con fecha conocida: se considera sin gestión reciente
       return ultima < fechaCorte;
     });
   }, [clientes, ultimaFechaPorRut, fechaCorte]);
@@ -250,9 +255,8 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onMarcarPerdi
       <Panel title="Limpieza de cartera: marcar Perdidos sin gestión reciente" className="mb-5">
         <p className="text-xs text-stone-500 mb-3">
           Marca como <strong>Perdido</strong> a todo cliente cuya última cotización real sea anterior a la fecha de
-          corte, excluyendo siempre a los que ya están <strong>Promesado</strong> o en etapa{" "}
-          <strong>Reservado / Pre-reservado</strong>. Los clientes sin ninguna fecha de cotización conocida no se
-          tocan, para evitar marcar algo por error.
+          corte — o que no tenga ninguna cotización con fecha conocida —, excluyendo siempre a los que ya están{" "}
+          <strong>Promesado</strong> o en etapa <strong>Reservado / Pre-reservado</strong>.
         </p>
         <div className="flex items-center gap-3 flex-wrap mb-3">
           <label className="text-xs text-stone-500 flex items-center gap-2">
@@ -283,7 +287,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onMarcarPerdi
                   {candidatosPerdidos.map((g) => (
                     <div key={g.rut} className="text-xs text-stone-600 px-3 py-1.5 flex items-center justify-between gap-2">
                       <span>{g.cliente || "(sin nombre)"} · RUT {g.rut} · {g.ejecutivo || "sin ejecutivo"}</span>
-                      <span className="text-stone-400 shrink-0">Última cotización: {ultimaFechaPorRut[g.rut]}</span>
+                      <span className="text-stone-400 shrink-0">Última cotización: {ultimaFechaPorRut[g.rut] || "sin fecha conocida"}</span>
                     </div>
                   ))}
                 </div>
