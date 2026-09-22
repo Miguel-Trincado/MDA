@@ -97,6 +97,10 @@ export async function saveGestionRemote(prevGestion, rut, updates) {
   if (!merged.fechaPrimeraGestionEfectiva) merged.fechaPrimeraGestionEfectiva = today;
   merged.fechaUltimaAccionEfectiva = today;
   merged.flagSistema = "";
+  // fecha_proxima_accion es una columna "date" real: un string vacío no
+  // es una fecha válida para Postgres, así que se normaliza a null aquí
+  // también, sin importar por qué camino haya llegado el guardado.
+  if (!merged.fechaProximaAccion) merged.fechaProximaAccion = null;
 
   const row = objToRow(merged, ["createdAt", "updatedAt", "_alerta"]);
   const { error } = await supabase.from("gestion").update(row).eq("rut", rut);

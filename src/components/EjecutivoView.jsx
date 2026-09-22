@@ -307,7 +307,12 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
     setSaveError("");
     try {
       const payload = seResuelveAlGuardar ? { ...form, proximaAccion: "", fechaProximaAccion: "" } : form;
-      const { _alerta, ...formSinAlerta } = payload; // _alerta es solo de la UI, no existe en la base de datos
+      // fecha_proxima_accion es una columna de tipo "date" en la base:
+      // un texto vacío no es una fecha válida para Postgres, sea porque
+      // se limpió automático (cliente resuelto) o porque se borró la
+      // fecha a mano — en ambos casos se manda null, nunca "".
+      const payloadSaneado = { ...payload, fechaProximaAccion: payload.fechaProximaAccion || null };
+      const { _alerta, ...formSinAlerta } = payloadSaneado; // _alerta es solo de la UI, no existe en la base de datos
       await onSave(formSinAlerta);
     } catch (e) {
       console.error(e);
