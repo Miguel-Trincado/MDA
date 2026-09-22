@@ -9,6 +9,7 @@ import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaRemote,
   uploadListaPreciosRemote,
+  marcarPerdidosMasivoRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -97,6 +98,11 @@ export default function App() {
     setDb((d) => ({ ...d, meta }));
   }
 
+  async function marcarPerdidosMasivo(candidatos, motivo) {
+    const actualizados = await marcarPerdidosMasivoRemote(candidatos, motivo);
+    setDb((d) => ({ ...d, gestion: { ...d.gestion, ...actualizados } }));
+  }
+
   return (
     <div className="min-h-screen bg-white font-body text-stone-900">
       {loading ? (
@@ -120,7 +126,7 @@ export default function App() {
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
           {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
           {view === "cotizador" && <Cotizador db={db} />}
-          {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} />}
+          {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} onMarcarPerdidosMasivo={marcarPerdidosMasivo} />}
         </div>
       )}
     </div>
