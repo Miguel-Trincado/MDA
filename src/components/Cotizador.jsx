@@ -27,7 +27,7 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
   return {
     reserva: { modo: "UF", valor: reservaUF },
     pie: { modo: "%", valor: Number(descuentoPctVal) || 0 },
-    contraEscritura: { modo: "UF", valor: Math.round(contraEscrituraUF * 100) / 100 },
+    contraEscritura: { modo: "UF", valor: contraEscrituraUF },
     hipotecario: { modo: "%", valor: 80 },
   };
 }
@@ -159,7 +159,7 @@ export default function Cotizador({ db }) {
   const hipotecarioUF = rowValueUF(rows.hipotecario, precioFinalUF);
   const totalDistribuidoUF = reservaUF + pieUF + contraEscrituraUF + hipotecarioUF;
   const faltanteUF = precioFinalUF - totalDistribuidoUF;
-  const distribucionValidada = Math.abs(faltanteUF) < 0.5;
+  const distribucionValidada = Math.abs(faltanteUF) < 0.01;
   const toCLP = (uf) => (valorUF ? uf * valorUF : 0);
 
   const quoteSnapshot = () => ({
@@ -459,15 +459,17 @@ export default function Cotizador({ db }) {
                     <span>{ROW_LABEL[key]}</span>
                     <input
                       type="number"
-                      value={row.modo === "%" ? row.valor : Math.round(pctValue * 100) / 100}
+                      value={row.modo === "%" ? row.valor : Math.round(pctValue * 10000) / 10000}
                       onChange={(e) => setRow(key, { modo: "%", valor: e.target.value })}
                       className="ipt text-xs"
+                      style={{ width: "80px" }}
                     />
                     <input
                       type="number"
                       value={row.modo === "UF" ? row.valor : Math.round(ufValue * 100) / 100}
                       onChange={(e) => setRow(key, { modo: "UF", valor: e.target.value })}
                       className="ipt text-xs"
+                      style={{ width: "80px" }}
                     />
                   </div>
                 );
