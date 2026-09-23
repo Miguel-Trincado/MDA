@@ -186,7 +186,14 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           <p className="text-stone-500 text-sm">{clientes.length} clientes en total</p>
         </div>
         <div className="flex items-center gap-3">
-          <NotificationBell tareas={tareas} />
+          <NotificationBell
+            tareas={tareas}
+            onClickTarea={(t) => {
+              setFiltro("Todos");
+              setBusqueda("");
+              setExpandido(t.rut);
+            }}
+          />
           <button
             onClick={() => setVerCalendario((v) => !v)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${

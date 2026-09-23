@@ -82,7 +82,11 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <h2 className="font-display text-2xl text-[#0F3D66]">Panel Jefa de Ventas</h2>
         <div className="flex items-center gap-3">
-          <NotificationBell tareas={tareas} mostrarEjecutivo />
+          <NotificationBell
+            tareas={tareas}
+            mostrarEjecutivo
+            onClickTarea={(t) => setClienteModal(db.gestion[t.rut])}
+          />
           <button
             onClick={() => setVerCalendario((v) => !v)}
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors ${

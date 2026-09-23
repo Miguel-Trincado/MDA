@@ -10,7 +10,7 @@ const ESTILO_TAREA = {
 };
 const LABEL_TAREA = { vencida: "Pendiente", hoy: "Hoy", proxima: "Próxima" };
 
-export default function NotificationBell({ tareas, mostrarEjecutivo }) {
+export default function NotificationBell({ tareas, mostrarEjecutivo, onClickTarea }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const pendientes = contarPendientes(tareas);
@@ -48,7 +48,14 @@ export default function NotificationBell({ tareas, mostrarEjecutivo }) {
           ) : (
             <div className="divide-y divide-stone-100">
               {tareas.map((t, i) => (
-                <div key={i} className="px-4 py-2.5 text-sm">
+                <button
+                  key={i}
+                  onClick={() => {
+                    setOpen(false);
+                    onClickTarea && onClickTarea(t);
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-sky-50/60 transition-colors"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium truncate">{t.cliente}</span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${ESTILO_TAREA[t.estadoTarea]}`}>
@@ -59,7 +66,7 @@ export default function NotificationBell({ tareas, mostrarEjecutivo }) {
                     {t.accion} · {fmtDate(t.fecha)}
                     {mostrarEjecutivo && t.ejecutivo && <span> · {t.ejecutivo}</span>}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
