@@ -48,7 +48,7 @@ export function SectionDivider({ label }) {
   );
 }
 
-export function AlertGroup({ tipo, lista }) {
+export function AlertGroup({ tipo, lista, onClickCliente }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="border border-stone-200 rounded-sm overflow-hidden">
@@ -59,13 +59,20 @@ export function AlertGroup({ tipo, lista }) {
       {open && (
         <div className="border-t border-stone-100 px-4 py-2">
           {lista.map((g) => (
-            <div key={g.rut} className="text-sm grid grid-cols-[1fr_100px_140px] items-center gap-3 py-1.5 border-b border-stone-50 last:border-0">
+            <button
+              key={g.rut}
+              onClick={() => onClickCliente && onClickCliente(g)}
+              className="w-full text-left grid grid-cols-[1fr_100px_140px] items-center gap-3 py-1.5 border-b border-stone-50 last:border-0 hover:bg-sky-50/60 transition-colors -mx-1 px-1 rounded-sm"
+            >
               <span className="truncate">
-                {g.cliente} <span className="text-xs text-stone-400">RUT {g.rut}</span>
+                <span className="text-sm">{g.cliente}</span> <span className="text-xs text-stone-400">RUT {g.rut}</span>
+                {g.cambioEstadoDetalle && (
+                  <span className="block text-xs text-indigo-700">{g.cambioEstadoDetalle}</span>
+                )}
               </span>
               <span className="text-xs text-stone-400 text-right">{g._ultimaFecha || "Sin fecha"}</span>
               <span className="text-xs text-stone-400 truncate">{g.ejecutivo}</span>
-            </div>
+            </button>
           ))}
         </div>
       )}

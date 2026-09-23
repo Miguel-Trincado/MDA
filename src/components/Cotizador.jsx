@@ -445,28 +445,33 @@ export default function Cotizador({ db }) {
 
             <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">Distribución del pie</div>
             <div className="border border-stone-200 rounded-sm overflow-hidden">
-              <div className="grid grid-cols-[1.2fr_0.8fr_0.7fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50">
+              <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50">
                 <span>Concepto</span>
-                <span>Modo</span>
-                <span>Valor</span>
-                <span>Equivale a</span>
+                <span>%</span>
+                <span>UF</span>
               </div>
-              {Object.keys(rows).map((key) => (
-                <div key={key} className="grid grid-cols-[1.2fr_0.8fr_0.7fr_1fr] gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm">
-                  <span>{ROW_LABEL[key]}</span>
-                  <select value={rows[key].modo} onChange={(e) => setRow(key, { modo: e.target.value })} className="ipt text-xs">
-                    <option value="%">%</option>
-                    <option value="UF">UF</option>
-                  </select>
-                  <input
-                    type="number"
-                    value={rows[key].valor}
-                    onChange={(e) => setRow(key, { valor: e.target.value })}
-                    className="ipt text-xs"
-                  />
-                  <span className="text-xs text-stone-500">{currency(rowValueUF(rows[key], precioFinalUF))} UF</span>
-                </div>
-              ))}
+              {Object.keys(rows).map((key) => {
+                const row = rows[key];
+                const ufValue = rowValueUF(row, precioFinalUF);
+                const pctValue = precioFinalUF > 0 ? (ufValue / precioFinalUF) * 100 : 0;
+                return (
+                  <div key={key} className="grid grid-cols-[1.3fr_1fr_1fr] gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm">
+                    <span>{ROW_LABEL[key]}</span>
+                    <input
+                      type="number"
+                      value={row.modo === "%" ? row.valor : Math.round(pctValue * 100) / 100}
+                      onChange={(e) => setRow(key, { modo: "%", valor: e.target.value })}
+                      className="ipt text-xs"
+                    />
+                    <input
+                      type="number"
+                      value={row.modo === "UF" ? row.valor : Math.round(ufValue * 100) / 100}
+                      onChange={(e) => setRow(key, { modo: "UF", valor: e.target.value })}
+                      className="ipt text-xs"
+                    />
+                  </div>
+                );
+              })}
             </div>
             <div className={`mt-3 text-xs font-medium ${distribucionValidada ? "text-emerald-700" : "text-amber-700"}`}>
               {distribucionValidada
@@ -517,7 +522,7 @@ export default function Cotizador({ db }) {
               <div key={c.id} className="flex items-center justify-between text-sm border-b border-stone-50 py-2 last:border-0">
                 <span>
                   N°{quoteNumber(c.displayId)} · {new Date(c.createdAt).toLocaleDateString("es-CL")} ·{" "}
-                  {c.snapshot?.units?.[0]?.tipologia || "—"} · {currency(c.precioFinal)} UF
+                  {c.snapshot?.units?.[0]?.label || "—"} · {c.snapshot?.units?.[0]?.tipologia || "—"} · {currency(c.precioFinal)} UF
                 </span>
                 <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
                   <ChevronLeft size={12} className="rotate-180" /> Ver PDF

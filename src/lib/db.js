@@ -97,6 +97,7 @@ export async function saveGestionRemote(prevGestion, rut, updates) {
   if (!merged.fechaPrimeraGestionEfectiva) merged.fechaPrimeraGestionEfectiva = today;
   merged.fechaUltimaAccionEfectiva = today;
   merged.flagSistema = "";
+  merged.cambioEstadoDetalle = "";
   // fecha_proxima_accion es una columna "date" real: un string vacío no
   // es una fecha válida para Postgres, así que se normaliza a null aquí
   // también, sin importar por qué camino haya llegado el guardado.
@@ -132,7 +133,7 @@ export async function saveGestionRemote(prevGestion, rut, updates) {
  * Marcar como revisado hoy, sin cambios de gestión
  * ------------------------------------------------------------------- */
 export async function markRevisadoRemote(prevGestion, rut) {
-  const updates = { ultimaRevisionFecha: todayISO(), flagSistema: "" };
+  const updates = { ultimaRevisionFecha: todayISO(), flagSistema: "", cambioEstadoDetalle: "" };
   const { error } = await supabase
     .from("gestion")
     .update(objToRow(updates))
@@ -198,7 +199,7 @@ function diffMaestro(byRut, gestionDict, controlDict, estadoCambiosPorRut) {
         estado: "Activo", nivelInteres: "", etapaComercial: "Cotizado", estadoEvaluacionBancaria: "No iniciada",
         accionRealizada: "", respuesta: "", objecionActual: "", motivoPerdida: "",
         proximaAccion: "", fechaProximaAccion: null, observaciones: "",
-        ejecutivo: rec.ejecutivo, flagSistema: "NUEVO", flagCambioEjecutivo: "",
+        ejecutivo: rec.ejecutivo, flagSistema: "NUEVO", flagCambioEjecutivo: "", cambioEstadoDetalle: "",
         ultimaRevisionFecha: null, ultimaActualizacionEjecutivo: null,
         fechaPrimeraGestionEfectiva: null, fechaUltimaAccionEfectiva: null,
         proyecto: rec.proyecto || "PILPILEN",
@@ -233,6 +234,9 @@ function diffMaestro(byRut, gestionDict, controlDict, estadoCambiosPorRut) {
       summary.cambiosEjecutivo++;
     } else if (cambiosEstadoDeEsteRut && cambiosEstadoDeEsteRut.length > 0) {
       g.flagSistema = "ESTADO";
+      g.cambioEstadoDetalle = cambiosEstadoDeEsteRut
+        .map((c) => `Opp ${c.opp}: ${c.estadoAnterior} → ${c.estadoNuevo}`)
+        .join("; ");
       summary.cambiosEstado++;
     } else if (cotizacionesSubieron) {
       g.flagSistema = "SI";

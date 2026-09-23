@@ -3,13 +3,15 @@ import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
+import ClientEditForm from "./ClientEditForm";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, X } from "lucide-react";
 
-export default function JefaView({ db, onResolveCambio, onSetMeta }) {
+export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion, onRevisado }) {
   const [buscar, setBuscar] = useState("");
   const [verCalendario, setVerCalendario] = useState(false);
+  const [clienteModal, setClienteModal] = useState(null);
 
   // Última fecha de cotización real (ya parseada, no el texto crudo) por
   // RUT — para saber quién no tiene gestión desde antes de la fecha de
@@ -168,7 +170,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
             {Object.entries(alertasPorTipo)
               .sort((a, b) => ALERT_PRIORITY[a[0]] - ALERT_PRIORITY[b[0]])
               .map(([tipo, lista]) => (
-                <AlertGroup key={tipo} tipo={tipo} lista={lista} />
+                <AlertGroup key={tipo} tipo={tipo} lista={lista} onClickCliente={setClienteModal} />
               ))}
           </div>
         )}
@@ -250,6 +252,39 @@ export default function JefaView({ db, onResolveCambio, onSetMeta }) {
           </tbody>
         </table>
       </Panel>
+
+      {clienteModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-start sm:items-center justify-center p-4 z-50 overflow-y-auto" onClick={() => setClienteModal(null)}>
+          <div
+            className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-8 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-display text-xl text-[#0F3D66]">{clienteModal.cliente || "(sin nombre)"}</h3>
+                <p className="text-xs text-stone-400">
+                  RUT {clienteModal.rut} · {clienteModal.ejecutivo || "sin ejecutivo"} · Teléfono {clienteModal.telefono || "—"}
+                </p>
+              </div>
+              <button onClick={() => setClienteModal(null)} className="text-stone-400 hover:text-stone-700">
+                <X size={18} />
+              </button>
+            </div>
+            <ClientEditForm
+              g={clienteModal}
+              resetKey={clienteModal.rut}
+              onSave={async (updates) => {
+                await onSaveGestion(clienteModal.rut, updates);
+                setClienteModal(null);
+              }}
+              onRevisado={async () => {
+                await onRevisado(clienteModal.rut);
+                setClienteModal(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

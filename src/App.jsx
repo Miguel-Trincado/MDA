@@ -120,7 +120,15 @@ export default function App() {
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
           {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
           {view === "cotizador" && <Cotizador db={db} />}
-          {view === "jefa" && <JefaView db={db} onResolveCambio={resolveCambio} onSetMeta={setMeta} />}
+          {view === "jefa" && (
+            <JefaView
+              db={db}
+              onResolveCambio={resolveCambio}
+              onSetMeta={setMeta}
+              onSaveGestion={saveGestion}
+              onRevisado={markRevisado}
+            />
+          )}
         </div>
       )}
     </div>
