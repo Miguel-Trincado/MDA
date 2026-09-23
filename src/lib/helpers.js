@@ -203,3 +203,24 @@ export function normalizarBusqueda(s) {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+// Cuenta los días hábiles (lunes a viernes, sin festivos) entre dos
+// fechas ISO "AAAA-MM-DD". No cuenta el día de inicio, sí el de término
+// (si son el mismo día, da 0). Se usa para los KPI de gestión: "mismo
+// día", "hasta 1 día hábil", "días promedio a primera gestión" y
+// "activos sin gestión reciente".
+export function diasHabilesEntre(desdeISO, hastaISO) {
+  if (!desdeISO || !hastaISO) return null;
+  const desde = new Date(desdeISO + "T00:00:00Z");
+  const hasta = new Date(hastaISO + "T00:00:00Z");
+  if (isNaN(desde.getTime()) || isNaN(hasta.getTime())) return null;
+  if (hasta <= desde) return 0;
+  let dias = 0;
+  const cursor = new Date(desde);
+  while (cursor < hasta) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const diaSemana = cursor.getUTCDay(); // 0=domingo, 6=sábado
+    if (diaSemana !== 0 && diaSemana !== 6) dias++;
+  }
+  return dias;
+}

@@ -1,12 +1,29 @@
 import { useState, useMemo } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
 import { CalendarDays, X } from "lucide-react";
+
+// Semáforo de cada KPI, según los umbrales de la planilla de referencia.
+// mejorEsMayor=true → un valor más alto es mejor (ej. % mismo día).
+// mejorEsMayor=false → un valor más bajo es mejor (ej. días promedio,
+// % de seguimientos vencidos).
+function colorKpi(valor, { mejorEsMayor, verde, amarillo }) {
+  if (valor == null) return "text-stone-400";
+  if (mejorEsMayor) {
+    if (valor >= verde) return "text-emerald-700";
+    if (valor >= amarillo) return "text-amber-700";
+    return "text-rose-700";
+  }
+  if (valor <= verde) return "text-emerald-700";
+  if (valor <= amarillo) return "text-amber-700";
+  return "text-rose-700";
+}
+const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : null);
 
 export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion, onRevisado }) {
   const [buscar, setBuscar] = useState("");
@@ -72,6 +89,64 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   });
 
   const cambiosPendientes = db.cambios.filter((c) => c.resolucion === "PENDIENTE REVISIÓN");
+
+  // Primera fecha de cotización real por RUT (la más antigua, no la más
+  // reciente) — es contra esta fecha que se mide qué tan rápido gestionó
+  // el ejecutivo, para el KPI "% mismo día" / "% hasta 1 día hábil".
+  const primeraFechaPorRut = useMemo(() => {
+    const out = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      const d = parseFechaCompleta(c.fecha);
+      if (!d) return;
+      const iso = d.toISOString().slice(0, 10);
+      if (!out[c.rut] || iso < out[c.rut]) out[c.rut] = iso;
+    });
+    return out;
+  }, [db.cotizaciones]);
+
+  // KPI de gestión por ejecutivo — misma definición que la planilla de
+  // referencia: gestionados el mismo día / hasta 1 día hábil (fecha de
+  // cotización vs. fecha de primera gestión efectiva), días promedio a
+  // primera gestión, % de seguimientos vencidos, y % de activos sin una
+  // gestión efectiva hace más de 3 días hábiles.
+  const kpiPorEjecutivo = useMemo(() => {
+    const hoy = todayISO();
+    const out = {};
+    clientes.forEach((g) => {
+      if (!g.ejecutivo) return;
+      if (!out[g.ejecutivo]) {
+        out[g.ejecutivo] = {
+          conGestion: 0, mismoDia: 0, hasta1DiaHabil: 0, sumaDiasHabiles: 0,
+          conProximaAccion: 0, proximaVencida: 0,
+          activos: 0, activosSinGestionReciente: 0,
+        };
+      }
+      const e = out[g.ejecutivo];
+
+      const fechaCot = primeraFechaPorRut[g.rut];
+      if (fechaCot && g.fechaPrimeraGestionEfectiva) {
+        const dias = diasHabilesEntre(fechaCot, g.fechaPrimeraGestionEfectiva);
+        if (dias != null) {
+          e.conGestion++;
+          e.sumaDiasHabiles += dias;
+          if (dias === 0) e.mismoDia++;
+          if (dias <= 1) e.hasta1DiaHabil++;
+        }
+      }
+
+      if (g.fechaProximaAccion) {
+        e.conProximaAccion++;
+        if (g.fechaProximaAccion < hoy) e.proximaVencida++;
+      }
+
+      if (g.estado === "Activo") {
+        e.activos++;
+        const diasSinGestion = diasHabilesEntre(g.fechaUltimaAccionEfectiva, hoy);
+        if (diasSinGestion != null && diasSinGestion > 3) e.activosSinGestionReciente++;
+      }
+    });
+    return out;
+  }, [clientes, primeraFechaPorRut]);
 
   const resultadoBusqueda = buscar
     ? clientes.filter((g) => normalizarBusqueda(g.cliente).includes(normalizarBusqueda(buscar)) || (g.rut || "").includes(buscar)).slice(0, 15)
@@ -193,6 +268,57 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
               ))}
           </div>
         )}
+      </Panel>
+
+      <Panel title="KPI de gestión por ejecutivo" className="mb-5 overflow-x-auto">
+        <table className="w-full text-sm min-w-[720px]">
+          <thead>
+            <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
+              <th className="py-2 pr-3">Ejecutivo</th>
+              <th className="py-2 pr-3">% mismo día</th>
+              <th className="py-2 pr-3">% hasta 1 día hábil</th>
+              <th className="py-2 pr-3">Días prom. 1ra gestión</th>
+              <th className="py-2 pr-3">% seguimientos vencidos</th>
+              <th className="py-2 pr-3">% activos sin gestión reciente</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(kpiPorEjecutivo)
+              .sort((a, b) => a[0].localeCompare(b[0]))
+              .map(([nombre, k]) => {
+                const pctMismoDia = pct(k.mismoDia, k.conGestion);
+                const pctHasta1Dia = pct(k.hasta1DiaHabil, k.conGestion);
+                const diasProm = k.conGestion > 0 ? Math.round((k.sumaDiasHabiles / k.conGestion) * 10) / 10 : null;
+                const pctVencidos = pct(k.proximaVencida, k.conProximaAccion);
+                const pctSinGestion = pct(k.activosSinGestionReciente, k.activos);
+                return (
+                  <tr key={nombre} className="border-b border-stone-100 hover:bg-stone-50/60 transition-colors">
+                    <td className="py-2 pr-3 font-medium">{nombre}</td>
+                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctMismoDia, { mejorEsMayor: true, verde: 90, amarillo: 75 })}`}>
+                      {pctMismoDia == null ? "—" : `${pctMismoDia}%`}
+                    </td>
+                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctHasta1Dia, { mejorEsMayor: true, verde: 95, amarillo: 85 })}`}>
+                      {pctHasta1Dia == null ? "—" : `${pctHasta1Dia}%`}
+                    </td>
+                    <td className={`py-2 pr-3 font-medium ${colorKpi(diasProm, { mejorEsMayor: false, verde: 1, amarillo: 2 })}`}>
+                      {diasProm == null ? "—" : diasProm}
+                    </td>
+                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctVencidos, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
+                      {pctVencidos == null ? "—" : `${pctVencidos}%`}
+                    </td>
+                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctSinGestion, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
+                      {pctSinGestion == null ? "—" : `${pctSinGestion}%`}
+                    </td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+        <p className="text-xs text-stone-400 mt-3">
+          "Mismo día" y "1 día hábil" comparan la fecha de cotización con la fecha de la primera gestión efectiva.
+          "Seguimientos vencidos" es sobre los clientes que tienen una próxima acción programada. "Sin gestión
+          reciente" es sobre los clientes Activos, contando días hábiles desde su última gestión efectiva.
+        </p>
       </Panel>
 
       <Panel title="Resumen por ejecutivo" className="overflow-x-auto">
