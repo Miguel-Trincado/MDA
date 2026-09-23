@@ -41,23 +41,26 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
 export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, configRes, listaPreciosRes] = await Promise.all([
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
     supabase.from("historial").select("*").order("fecha", { ascending: false }).limit(1500),
     supabase.from("cotizaciones").select("*"),
-    supabase.from("config").select("*").eq("key", "meta_mensual").maybeSingle(),
     supabase.from("lista_precios").select("*").order("unidad"),
+    supabase.from("metas_mensuales").select("*"),
+    supabase.from("cambios_estado_opp").select("*").order("fecha_deteccion", { ascending: false }),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
     if (res.error) throw res.error;
   }
-  if (configRes.error && configRes.error.code !== "PGRST116") throw configRes.error;
-  // lista_precios es opcional: si la tabla del Cotizador todavía no existe
-  // (migración no corrida), no rompe la carga del resto del sistema.
+  // lista_precios, metas_mensuales y cambios_estado_opp son opcionales: si
+  // esas tablas todavía no existen (migración no corrida), no rompen la
+  // carga del resto del sistema.
   if (listaPreciosRes.error) console.warn("No se pudo cargar lista_precios:", listaPreciosRes.error.message);
+  if (metasRes.error) console.warn("No se pudo cargar metas_mensuales:", metasRes.error.message);
+  if (cambiosEstadoOppRes.error) console.warn("No se pudo cargar cambios_estado_opp:", cambiosEstadoOppRes.error.message);
 
   const gestion = {};
   (gestionRes.data || []).forEach((row) => {
@@ -79,11 +82,17 @@ export async function fetchAllData() {
     listaPrecios[row.id] = rowToObj(row);
   });
 
+  const metas = {};
+  (metasRes.data || []).forEach((row) => {
+    metas[row.mes] = row.valor;
+  });
+
+  const cambiosEstadoOpp = (cambiosEstadoOppRes.data || []).map(rowToObj);
+
   const cambios = (cambiosRes.data || []).map(rowToObj);
   const historial = (historialRes.data || []).map(rowToObj);
-  const meta = configRes.data?.value || { value: 5 };
 
-  return { gestion, control, cambios, historial, cotizaciones, meta, listaPrecios };
+  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp };
 }
 
 /* ---------------------------------------------------------------------
@@ -275,22 +284,39 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
   // Aval traiga algo distinto para esa fila.
   const cotizacionesNuevas = [];
   const cotizacionesEstadoActualizado = [];
+  const cambiosEstadoLog = [];
   filasDetalle.forEach((r) => {
     const prev = (currentCotizaciones || {})[r.opp];
     if (!prev) {
       cotizacionesNuevas.push(r);
     } else if (r.estado && prev.estado !== r.estado) {
-      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado });
+      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa || "" });
+      cambiosEstadoLog.push({ opp: r.opp, rut: r.rut, estadoAnterior: prev.estado, estadoNuevo: r.estado, fechaPromesa: r.fechaPromesa || "" });
     }
   });
 
   await upsertInChunks("cotizaciones", cotizacionesNuevas.map((r) => objToRow(r)), "opp");
   await upsertInChunks("cotizaciones", cotizacionesEstadoActualizado.map((r) => objToRow(r)), "opp");
 
+  // Historial con fecha real de cada cambio de Estado de Opp — es la
+  // única forma de saber después cuántas Opp pasaron a "Promesada"
+  // durante un mes específico (el campo Estado de la ficha, que edita
+  // el ejecutivo a mano, no tiene fecha ni viene del Aval).
+  if (cambiosEstadoLog.length > 0) {
+    const rows = cambiosEstadoLog.map((c) => objToRow(c));
+    for (const part of chunk(rows, 400)) {
+      if (part.length === 0) continue;
+      const { error } = await supabase.from("cambios_estado_opp").insert(part);
+      if (error) throw error;
+    }
+  }
+
   const cotizacionesOut = { ...currentCotizaciones };
   filasDetalle.forEach((r) => {
     const prev = cotizacionesOut[r.opp];
-    cotizacionesOut[r.opp] = prev ? { ...prev, estado: r.estado !== prev.estado ? r.estado : prev.estado } : r;
+    cotizacionesOut[r.opp] = prev
+      ? { ...prev, estado: r.estado !== prev.estado ? r.estado : prev.estado, fechaPromesa: r.fechaPromesa || prev.fechaPromesa }
+      : r;
   });
 
   let cambiosInsertados = [];
@@ -352,12 +378,34 @@ export async function resolveCambioRemote(cambio, decision, prevGestion, prevCon
 /* ---------------------------------------------------------------------
  * Meta comercial mensual
  * ------------------------------------------------------------------- */
-export async function setMetaRemote(value) {
-  const { error } = await supabase
-    .from("config")
-    .upsert({ key: "meta_mensual", value: { value }, updated_at: nowISO() }, { onConflict: "key" });
+export async function fetchMetasMensuales() {
+  const { data, error } = await supabase.from("metas_mensuales").select("*");
   if (error) throw error;
-  return { value };
+  const out = {};
+  (data || []).forEach((row) => {
+    out[row.mes] = row.valor;
+  });
+  return out;
+}
+
+// Solo funciona si hay una sesión de Supabase Auth activa (la política
+// de la base exige "authenticated" para escribir metas_mensuales) — si
+// no la hay, Supabase devuelve un error de RLS y la UI lo muestra.
+export async function setMetaMensualRemote(mes, valor) {
+  const { error } = await supabase
+    .from("metas_mensuales")
+    .upsert({ mes, valor, updated_at: nowISO() }, { onConflict: "mes" });
+  if (error) throw error;
+  return { mes, valor };
+}
+
+export async function fetchCambiosEstadoOpp() {
+  const { data, error } = await supabase
+    .from("cambios_estado_opp")
+    .select("*")
+    .order("fecha_deteccion", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToObj);
 }
 
 /* ---------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
@@ -7,6 +7,7 @@ import ClientEditForm from "./ClientEditForm";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
 import { CalendarDays, X } from "lucide-react";
+import { useAuthSession } from "../lib/useAuthSession";
 
 // Semáforo de cada KPI, según los umbrales de la planilla de referencia.
 // mejorEsMayor=true → un valor más alto es mejor (ej. % mismo día).
@@ -34,6 +35,10 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   const [mesKpi, setMesKpi] = useState(todayISO().slice(0, 7));
   const [verCalendario, setVerCalendario] = useState(false);
   const [clienteModal, setClienteModal] = useState(null);
+  const [metaInput, setMetaInput] = useState("");
+  const [guardandoMeta, setGuardandoMeta] = useState(false);
+  const [errorMeta, setErrorMeta] = useState("");
+  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
 
   // Última fecha de cotización real (ya parseada, no el texto crudo) por
   // RUT — para saber quién no tiene gestión desde antes de la fecha de
@@ -80,16 +85,38 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   const tareas = useMemo(() => getTareas(clientes), [clientes]);
 
   const activos = clientes.filter((g) => g.estado === "Activo");
-  const promesados = clientes.filter((g) => g.estado === "Promesado").length;
+  // "Promesados del mes" sale del Aval (Opp que pasaron a Estado
+  // "Promesada" durante el mes elegido), no del campo Estado que el
+  // ejecutivo edita a mano en la ficha — ese campo no tiene fecha y
+  // puede no estar actualizado aunque la Opp ya haya sido promesada.
+  const promesados = useMemo(() => {
+    const oppsVistos = new Set();
+    (db.cambiosEstadoOpp || []).forEach((c) => {
+      if (c.estadoNuevo !== "Promesada") return;
+      // La fecha que manda es la real "Fecha Promesa" del Aval, no la
+      // fecha en que se subió/detectó el cambio — si por algún motivo
+      // esa fecha no viene informada, se usa la de detección como respaldo.
+      const fechaReal = parseFechaCompleta(c.fechaPromesa);
+      const mesReal = fechaReal ? fechaReal.toISOString().slice(0, 7) : String(c.fechaDeteccion || "").slice(0, 7);
+      if (mesReal !== mesKpi) return;
+      oppsVistos.add(c.opp);
+    });
+    return oppsVistos.size;
+  }, [db.cambiosEstadoOpp, mesKpi]);
   const pipeline = clientes.filter((g) =>
     ["Negociación", "Pre-reserva", "Pre-reservado", "Reservado"].includes(g.etapaComercial)
   ).length;
   const interesAlto = activos.filter((g) => g.nivelInteres === "Alto").length;
   const revisadosHoy = activos.filter((g) => g.ultimaRevisionFecha === todayISO()).length;
   const pctRevisados = activos.length ? Math.round((revisadosHoy / activos.length) * 100) : 0;
-  const meta = db.meta?.value || 0;
+  const meta = db.metas?.[mesKpi] || 0;
   const faltan = Math.max(meta - promesados, 0);
   const cumplimiento = meta ? Math.round((promesados / meta) * 100) : 0;
+  useEffect(() => {
+    setMetaInput(String(meta));
+    setErrorMeta("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mesKpi, meta]);
 
   const alertasPorTipo = {};
   clientes.forEach((g) => {
@@ -135,9 +162,14 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   // gestión efectiva hace más de 3 días hábiles.
   const opcionesMesKpi = useMemo(() => {
     const set = new Set(Object.values(primeraFechaPorRut).map((iso) => iso.slice(0, 7)));
+    (db.cambiosEstadoOpp || []).forEach((c) => {
+      const fechaReal = parseFechaCompleta(c.fechaPromesa);
+      if (fechaReal) set.add(fechaReal.toISOString().slice(0, 7));
+      else if (c.fechaDeteccion) set.add(String(c.fechaDeteccion).slice(0, 7));
+    });
     set.add(todayISO().slice(0, 7));
     return [...set].sort((a, b) => (a < b ? 1 : -1));
-  }, [primeraFechaPorRut]);
+  }, [primeraFechaPorRut, db.cambiosEstadoOpp]);
 
   const kpiPorEjecutivo = useMemo(() => {
     const hoy = todayISO();
@@ -180,6 +212,18 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     return out;
   }, [clientes, primeraFechaPorRut, mesKpi]);
 
+  async function guardarMeta() {
+    setGuardandoMeta(true);
+    setErrorMeta("");
+    try {
+      await onSetMeta(mesKpi, Number(metaInput) || 0);
+    } catch (e) {
+      setErrorMeta(e.message || "No se pudo guardar la meta.");
+    } finally {
+      setGuardandoMeta(false);
+    }
+  }
+
   const resultadoBusqueda = buscar
     ? clientes.filter((g) => normalizarBusqueda(g.cliente).includes(normalizarBusqueda(buscar)) || (g.rut || "").includes(buscar)).slice(0, 15)
     : [];
@@ -212,15 +256,66 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       )}
 
       <Panel className="mb-5">
-        <div className="flex items-center gap-3 mb-4">
-          <span className="text-xs text-stone-500">Meta comercial del mes</span>
-          <input
-            type="number"
-            value={meta}
-            onChange={(e) => onSetMeta(Number(e.target.value) || 0)}
-            className="border border-stone-300 rounded-sm px-2 py-1 w-20 text-sm focus:outline-none focus:border-[#1E5AA8]"
-          />
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <span className="text-xs text-stone-500">Mes</span>
+          <select
+            value={mesKpi}
+            onChange={(e) => setMesKpi(e.target.value)}
+            className="border border-stone-300 rounded-sm px-2 py-1.5 text-xs"
+          >
+            {opcionesMesKpi.map((key) => (
+              <option key={key} value={key}>{mesLabel(key)}</option>
+            ))}
+          </select>
+
+          <span className="text-xs text-stone-500 ml-3">Meta comercial de {mesLabel(mesKpi)}</span>
+          {session ? (
+            <>
+              <input
+                type="number"
+                value={metaInput}
+                onChange={(e) => setMetaInput(e.target.value)}
+                className="border border-stone-300 rounded-sm px-2 py-1 w-20 text-sm focus:outline-none focus:border-[#1E5AA8]"
+              />
+              <button
+                onClick={guardarMeta}
+                disabled={guardandoMeta}
+                className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-xs rounded-full px-4 py-1.5"
+              >
+                {guardandoMeta ? "Guardando…" : "Guardar meta"}
+              </button>
+              <button onClick={handleLogout} className="text-xs text-stone-400 underline">Cerrar sesión</button>
+            </>
+          ) : (
+            <>
+              <span className="text-lg font-semibold text-[#0F3D66]">{meta}</span>
+              <form onSubmit={handleLogin} className="flex items-center gap-2 ml-2">
+                <input
+                  type="email"
+                  placeholder="Correo del administrador"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="border border-stone-300 rounded-sm px-2 py-1 text-xs w-44"
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="border border-stone-300 rounded-sm px-2 py-1 text-xs w-32"
+                />
+                <button type="submit" disabled={loggingIn} className="text-xs px-3 py-1.5 border border-stone-300 rounded-sm hover:border-[#1E5AA8]">
+                  {loggingIn ? "…" : "Modificar meta"}
+                </button>
+              </form>
+            </>
+          )}
         </div>
+        {!session && (
+          <p className="text-xs text-stone-400 -mt-2 mb-3">Solo el administrador puede asignar o modificar la meta comercial.</p>
+        )}
+        {loginError && <p className="text-xs text-rose-600 -mt-2 mb-3">{loginError}</p>}
+        {errorMeta && <p className="text-xs text-rose-600 -mt-2 mb-3">{errorMeta}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat label="Promesados del mes" value={promesados} />
           <Stat label="Faltan para meta" value={faltan} accent="text-amber-700" />
@@ -303,18 +398,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       </Panel>
 
       <Panel title="KPI de gestión por ejecutivo" className="mb-5 overflow-x-auto">
-        <div className="flex items-center gap-2 mb-3">
-          <label className="text-xs text-stone-500">Mes</label>
-          <select
-            value={mesKpi}
-            onChange={(e) => setMesKpi(e.target.value)}
-            className="border border-stone-300 rounded-sm px-2 py-1.5 text-xs"
-          >
-            {opcionesMesKpi.map((key) => (
-              <option key={key} value={key}>{mesLabel(key)}</option>
-            ))}
-          </select>
-        </div>
+        <p className="text-xs text-stone-400 mb-3">Mes: {mesLabel(mesKpi)} (mismo selector de arriba)</p>
         {Object.keys(kpiPorEjecutivo).length === 0 ? (
           <p className="text-sm text-stone-400">No hay cotizaciones registradas en {mesLabel(mesKpi)}.</p>
         ) : (

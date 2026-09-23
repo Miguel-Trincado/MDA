@@ -98,6 +98,7 @@ export function parseMaestro(text) {
       rut,
       fecha: iFechaCot !== -1 ? (cols[iFechaCot] || "").trim() : "",
       fechaOpp: iFechaOpp !== -1 ? (cols[iFechaOpp] || "").trim() : "",
+      fechaPromesa: iFechaProm !== -1 ? (cols[iFechaProm] || "").trim() : "",
       tipologia: iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "",
       region: iRegion !== -1 ? (cols[iRegion] || "").trim() : "",
       proyecto: iProyecto !== -1 ? (cols[iProyecto] || "").trim() : "",

@@ -7,7 +7,7 @@ import CargaPage from "./components/CargaPage";
 import Cotizador from "./components/Cotizador";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
-  uploadMaestroRemote, resolveCambioRemote, setMetaRemote,
+  uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
   uploadListaPreciosRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
@@ -16,7 +16,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], meta: { value: 5 }, cotizaciones: {}, listaPrecios: {} });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [] });
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -92,9 +92,9 @@ export default function App() {
     }));
   }
 
-  async function setMeta(value) {
-    const meta = await setMetaRemote(value);
-    setDb((d) => ({ ...d, meta }));
+  async function setMetaMensual(mes, valor) {
+    await setMetaMensualRemote(mes, valor);
+    setDb((d) => ({ ...d, metas: { ...d.metas, [mes]: valor } }));
   }
 
   return (
@@ -124,7 +124,7 @@ export default function App() {
             <JefaView
               db={db}
               onResolveCambio={resolveCambio}
-              onSetMeta={setMeta}
+              onSetMeta={setMetaMensual}
               onSaveGestion={saveGestion}
               onRevisado={markRevisado}
             />
