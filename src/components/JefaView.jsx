@@ -93,12 +93,13 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     const oppsVistos = new Set();
     (db.cambiosEstadoOpp || []).forEach((c) => {
       if (c.estadoNuevo !== "Promesada") return;
-      // La fecha que manda es la real "Fecha Promesa" del Aval, no la
-      // fecha en que se subió/detectó el cambio — si por algún motivo
-      // esa fecha no viene informada, se usa la de detección como respaldo.
+      // Solo cuenta si hay una fecha real de "Fecha Promesa" en el Aval.
+      // Si no viene informada, esa Opp no se le atribuye a ningún mes —
+      // nunca se usa la fecha de carga como reemplazo, porque eso
+      // atribuiría promesas viejas al mes en que se subió el Aval.
       const fechaReal = parseFechaCompleta(c.fechaPromesa);
-      const mesReal = fechaReal ? fechaReal.toISOString().slice(0, 7) : String(c.fechaDeteccion || "").slice(0, 7);
-      if (mesReal !== mesKpi) return;
+      if (!fechaReal) return;
+      if (fechaReal.toISOString().slice(0, 7) !== mesKpi) return;
       oppsVistos.add(c.opp);
     });
     return oppsVistos.size;
@@ -165,7 +166,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     (db.cambiosEstadoOpp || []).forEach((c) => {
       const fechaReal = parseFechaCompleta(c.fechaPromesa);
       if (fechaReal) set.add(fechaReal.toISOString().slice(0, 7));
-      else if (c.fechaDeteccion) set.add(String(c.fechaDeteccion).slice(0, 7));
     });
     set.add(todayISO().slice(0, 7));
     return [...set].sort((a, b) => (a < b ? 1 : -1));
