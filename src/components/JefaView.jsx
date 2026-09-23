@@ -49,14 +49,33 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     return out;
   }, [db.cotizaciones]);
 
+  // Respaldo para alertas de "CAMBIO DE ESTADO OPP" antiguas, detectadas
+  // antes de que existiera cambio_estado_detalle: si no hay detalle
+  // guardado, al menos se muestra el estado actual de sus Opp.
+  const estadoActualPorRut = useMemo(() => {
+    const out = {};
+    Object.values(db.cotizaciones || {}).forEach((c) => {
+      if (!c.estado) return;
+      if (!out[c.rut]) out[c.rut] = new Set();
+      out[c.rut].add(c.estado);
+    });
+    const salida = {};
+    Object.entries(out).forEach(([rut, set]) => {
+      salida[rut] = [...set].join(" / ");
+    });
+    return salida;
+  }, [db.cotizaciones]);
+
   const clientes = useMemo(
     () =>
       Object.values(db.gestion).map((g) => ({
         ...g,
         _alerta: computeAlert(g),
         _ultimaFecha: ultimaFechaPorRut[g.rut] || null,
+        cambioEstadoDetalle:
+          g.cambioEstadoDetalle || (g.flagSistema === "ESTADO" && estadoActualPorRut[g.rut] ? `Estado actual: ${estadoActualPorRut[g.rut]}` : ""),
       })),
-    [db.gestion, ultimaFechaPorRut]
+    [db.gestion, ultimaFechaPorRut, estadoActualPorRut]
   );
   const tareas = useMemo(() => getTareas(clientes), [clientes]);
 
