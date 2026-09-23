@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre } from "../lib/helpers";
+import { ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
+import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
@@ -24,9 +24,14 @@ function colorKpi(valor, { mejorEsMayor, verde, amarillo }) {
   return "text-rose-700";
 }
 const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : null);
+function mesLabel(key) {
+  const [y, m] = key.split("-");
+  return `${MESES_ES[Number(m) - 1]} ${y}`;
+}
 
 export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion, onRevisado }) {
   const [buscar, setBuscar] = useState("");
+  const [mesKpi, setMesKpi] = useState(todayISO().slice(0, 7));
   const [verCalendario, setVerCalendario] = useState(false);
   const [clienteModal, setClienteModal] = useState(null);
 
@@ -109,10 +114,18 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   // cotización vs. fecha de primera gestión efectiva), días promedio a
   // primera gestión, % de seguimientos vencidos, y % de activos sin una
   // gestión efectiva hace más de 3 días hábiles.
+  const opcionesMesKpi = useMemo(() => {
+    const set = new Set(Object.values(primeraFechaPorRut).map((iso) => iso.slice(0, 7)));
+    set.add(todayISO().slice(0, 7));
+    return [...set].sort((a, b) => (a < b ? 1 : -1));
+  }, [primeraFechaPorRut]);
+
   const kpiPorEjecutivo = useMemo(() => {
     const hoy = todayISO();
     const out = {};
-    clientes.forEach((g) => {
+    clientes
+      .filter((g) => (primeraFechaPorRut[g.rut] || "").startsWith(mesKpi))
+      .forEach((g) => {
       if (!g.ejecutivo) return;
       if (!out[g.ejecutivo]) {
         out[g.ejecutivo] = {
@@ -146,7 +159,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       }
     });
     return out;
-  }, [clientes, primeraFechaPorRut]);
+  }, [clientes, primeraFechaPorRut, mesKpi]);
 
   const resultadoBusqueda = buscar
     ? clientes.filter((g) => normalizarBusqueda(g.cliente).includes(normalizarBusqueda(buscar)) || (g.rut || "").includes(buscar)).slice(0, 15)
@@ -271,53 +284,70 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       </Panel>
 
       <Panel title="KPI de gestión por ejecutivo" className="mb-5 overflow-x-auto">
-        <table className="w-full text-sm min-w-[720px]">
-          <thead>
-            <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
-              <th className="py-2 pr-3">Ejecutivo</th>
-              <th className="py-2 pr-3">% mismo día</th>
-              <th className="py-2 pr-3">% hasta 1 día hábil</th>
-              <th className="py-2 pr-3">Días prom. 1ra gestión</th>
-              <th className="py-2 pr-3">% seguimientos vencidos</th>
-              <th className="py-2 pr-3">% activos sin gestión reciente</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(kpiPorEjecutivo)
-              .sort((a, b) => a[0].localeCompare(b[0]))
-              .map(([nombre, k]) => {
-                const pctMismoDia = pct(k.mismoDia, k.conGestion);
-                const pctHasta1Dia = pct(k.hasta1DiaHabil, k.conGestion);
-                const diasProm = k.conGestion > 0 ? Math.round((k.sumaDiasHabiles / k.conGestion) * 10) / 10 : null;
-                const pctVencidos = pct(k.proximaVencida, k.conProximaAccion);
-                const pctSinGestion = pct(k.activosSinGestionReciente, k.activos);
-                return (
-                  <tr key={nombre} className="border-b border-stone-100 hover:bg-stone-50/60 transition-colors">
-                    <td className="py-2 pr-3 font-medium">{nombre}</td>
-                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctMismoDia, { mejorEsMayor: true, verde: 90, amarillo: 75 })}`}>
-                      {pctMismoDia == null ? "—" : `${pctMismoDia}%`}
-                    </td>
-                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctHasta1Dia, { mejorEsMayor: true, verde: 95, amarillo: 85 })}`}>
-                      {pctHasta1Dia == null ? "—" : `${pctHasta1Dia}%`}
-                    </td>
-                    <td className={`py-2 pr-3 font-medium ${colorKpi(diasProm, { mejorEsMayor: false, verde: 1, amarillo: 2 })}`}>
-                      {diasProm == null ? "—" : diasProm}
-                    </td>
-                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctVencidos, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
-                      {pctVencidos == null ? "—" : `${pctVencidos}%`}
-                    </td>
-                    <td className={`py-2 pr-3 font-medium ${colorKpi(pctSinGestion, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
-                      {pctSinGestion == null ? "—" : `${pctSinGestion}%`}
-                    </td>
-                  </tr>
-                );
-              })}
-          </tbody>
-        </table>
+        <div className="flex items-center gap-2 mb-3">
+          <label className="text-xs text-stone-500">Mes</label>
+          <select
+            value={mesKpi}
+            onChange={(e) => setMesKpi(e.target.value)}
+            className="border border-stone-300 rounded-sm px-2 py-1.5 text-xs"
+          >
+            {opcionesMesKpi.map((key) => (
+              <option key={key} value={key}>{mesLabel(key)}</option>
+            ))}
+          </select>
+        </div>
+        {Object.keys(kpiPorEjecutivo).length === 0 ? (
+          <p className="text-sm text-stone-400">No hay cotizaciones registradas en {mesLabel(mesKpi)}.</p>
+        ) : (
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
+                <th className="py-2 pr-3">Ejecutivo</th>
+                <th className="py-2 pr-3">% mismo día</th>
+                <th className="py-2 pr-3">% hasta 1 día hábil</th>
+                <th className="py-2 pr-3">Días prom. 1ra gestión</th>
+                <th className="py-2 pr-3">% seguimientos vencidos</th>
+                <th className="py-2 pr-3">% activos sin gestión reciente</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(kpiPorEjecutivo)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .map(([nombre, k]) => {
+                  const pctMismoDia = pct(k.mismoDia, k.conGestion);
+                  const pctHasta1Dia = pct(k.hasta1DiaHabil, k.conGestion);
+                  const diasProm = k.conGestion > 0 ? Math.round((k.sumaDiasHabiles / k.conGestion) * 10) / 10 : null;
+                  const pctVencidos = pct(k.proximaVencida, k.conProximaAccion);
+                  const pctSinGestion = pct(k.activosSinGestionReciente, k.activos);
+                  return (
+                    <tr key={nombre} className="border-b border-stone-100 hover:bg-stone-50/60 transition-colors">
+                      <td className="py-2 pr-3 font-medium">{nombre}</td>
+                      <td className={`py-2 pr-3 font-medium ${colorKpi(pctMismoDia, { mejorEsMayor: true, verde: 90, amarillo: 75 })}`}>
+                        {pctMismoDia == null ? "—" : `${pctMismoDia}%`}
+                      </td>
+                      <td className={`py-2 pr-3 font-medium ${colorKpi(pctHasta1Dia, { mejorEsMayor: true, verde: 95, amarillo: 85 })}`}>
+                        {pctHasta1Dia == null ? "—" : `${pctHasta1Dia}%`}
+                      </td>
+                      <td className={`py-2 pr-3 font-medium ${colorKpi(diasProm, { mejorEsMayor: false, verde: 1, amarillo: 2 })}`}>
+                        {diasProm == null ? "—" : diasProm}
+                      </td>
+                      <td className={`py-2 pr-3 font-medium ${colorKpi(pctVencidos, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
+                        {pctVencidos == null ? "—" : `${pctVencidos}%`}
+                      </td>
+                      <td className={`py-2 pr-3 font-medium ${colorKpi(pctSinGestion, { mejorEsMayor: false, verde: 10, amarillo: 20 })}`}>
+                        {pctSinGestion == null ? "—" : `${pctSinGestion}%`}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        )}
         <p className="text-xs text-stone-400 mt-3">
-          "Mismo día" y "1 día hábil" comparan la fecha de cotización con la fecha de la primera gestión efectiva.
-          "Seguimientos vencidos" es sobre los clientes que tienen una próxima acción programada. "Sin gestión
-          reciente" es sobre los clientes Activos, contando días hábiles desde su última gestión efectiva.
+          Los 5 indicadores se calculan sobre los clientes que cotizaron por primera vez en {mesLabel(mesKpi)}.
+          "Mismo día" y "1 día hábil" comparan esa fecha de cotización con la fecha de la primera gestión efectiva.
+          "Seguimientos vencidos" es sobre los de ese mes que tienen una próxima acción programada. "Sin gestión
+          reciente" es sobre los que están Activos hoy, contando días hábiles desde su última gestión efectiva.
         </p>
       </Panel>
 
@@ -361,6 +391,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
                 <h3 className="font-display text-xl text-[#0F3D66]">{clienteModal.cliente || "(sin nombre)"}</h3>
                 <p className="text-xs text-stone-400">
                   RUT {clienteModal.rut} · {clienteModal.ejecutivo || "sin ejecutivo"} · Teléfono {clienteModal.telefono || "—"}
+                  {clienteModal.createdAt && ` · Ingresó el ${fmtDate(String(clienteModal.createdAt).slice(0, 10))}`}
                 </p>
               </div>
               <button onClick={() => setClienteModal(null)} className="text-stone-400 hover:text-stone-700">

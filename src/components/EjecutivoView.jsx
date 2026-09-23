@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { EJECUTIVOS, ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, normalizarBusqueda } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, normalizarBusqueda, fmtDate } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
@@ -312,6 +312,7 @@ function ClientRow({ g, i, fechas, fechasOpp, estadoOpp, expanded, onToggle, onS
           <div className="grid sm:grid-cols-2 gap-3 mb-3 text-sm">
             <div><span className="text-stone-400">Teléfono:</span> {g.telefono || "—"}</div>
             <div><span className="text-stone-400">Renta:</span> {g.renta || "—"}</div>
+            <div><span className="text-stone-400">Fecha de ingreso:</span> {g.createdAt ? fmtDate(String(g.createdAt).slice(0, 10)) : "—"}</div>
             <div className="sm:col-span-2">
               <span className="text-stone-400">Historial de cotizaciones ({fechas.length}):</span>{" "}
               {fechas.length === 0 ? (
