@@ -196,6 +196,16 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const mesPico = data.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
   const mesPicoLabel = mesPico ? labelPeriodo(mesPico[0], "mes") : "—";
 
+  // Los "Principales hallazgos" y "Recomendaciones" deben reflejar siempre
+  // el histórico completo (solo respetan los filtros de Proyecto/Tipología,
+  // nunca el de Período) — por eso usan dataTendencia en vez de data, a
+  // diferencia de las tarjetas KPI de arriba, que sí respetan el período
+  // elegido a propósito.
+  const topTipologiaHistorica = dataTendencia.tipologiaOrdenada[0];
+  const topRegionHistorica = dataTendencia.regionOrdenada[0];
+  const mesPicoHistorico = dataTendencia.mesesOrdenados.slice().sort((a, b) => b[1] - a[1])[0];
+  const mesPicoHistoricoLabel = mesPicoHistorico ? labelPeriodo(mesPicoHistorico[0], "mes") : "—";
+
   const donutData = data.tipologiaOrdenada.map(([name, value]) => ({ name, value }));
   const lineData = serieTiempo.map(([key, value]) => ({ periodo: labelPeriodo(key, modo), value }));
 
@@ -215,17 +225,17 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const pctSinFecha = Math.round((data.sinFecha / data.total) * 100);
 
   const hallazgos = [
-    `La tipología ${topTipologia[0]} concentra el ${Math.round((topTipologia[1] / data.total) * 100)}% del total de cotizaciones.`,
-    topRegion ? `La región de ${topRegion[0]} representa el ${Math.round((topRegion[1] / data.total) * 100)}% de las cotizaciones.` : null,
-    mesPico ? `El mes de ${mesPicoLabel} registró el mayor número de cotizaciones (${mesPico[1]}).` : null,
+    `La tipología ${topTipologiaHistorica[0]} concentra el ${Math.round((topTipologiaHistorica[1] / dataTendencia.total) * 100)}% del total histórico de cotizaciones.`,
+    topRegionHistorica ? `La región de ${topRegionHistorica[0]} representa el ${Math.round((topRegionHistorica[1] / dataTendencia.total) * 100)}% del histórico de cotizaciones.` : null,
+    mesPicoHistorico ? `El mes de ${mesPicoHistoricoLabel} registró el mayor número de cotizaciones (${mesPicoHistorico[1]}).` : null,
     tendenciaTexto,
     pctSinFecha > 0 ? `El ${pctSinFecha}% de las cotizaciones no tiene una fecha de cotización interpretable.` : null,
     pctSinRegion > 0 ? `El ${pctSinRegion}% de las cotizaciones no cuenta con información de región.` : null,
   ].filter(Boolean);
 
   const recomendaciones = [
-    `Reforzar la oferta y comunicación de la tipología ${topTipologia[0]}, la más demandada.`,
-    topRegion ? `Concentrar esfuerzos comerciales en ${topRegion[0]}, de donde proviene la mayor parte de la demanda.` : null,
+    `Reforzar la oferta y comunicación de la tipología ${topTipologiaHistorica[0]}, la más demandada según el histórico.`,
+    topRegionHistorica ? `Concentrar esfuerzos comerciales en ${topRegionHistorica[0]}, de donde proviene la mayor parte de la demanda.` : null,
     tendenciaTexto && tendenciaTexto.includes("bajaron")
       ? "Investigar las causas de la baja de cotizaciones del último mes y reforzar la captación."
       : "Mantener el ritmo de captación observado en los últimos meses.",
