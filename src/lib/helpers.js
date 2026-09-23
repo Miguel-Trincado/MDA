@@ -189,3 +189,17 @@ export function labelPeriodo(key, modo, MESES_ES) {
   const [y, m] = key.split("-");
   return `${MESES_ES[Number(m) - 1]} ${y}`;
 }
+
+// Normaliza texto para buscar: minúsculas, sin tildes, sin puntos sueltos
+// (el Aval trae nombres como "NOMBRE . APELLIDO ."). Se usa en todos los
+// buscadores de la app para que una búsqueda encuentre al cliente sin
+// importar mayúsculas, tildes, o puntuación rara en el dato de origen.
+export function normalizarBusqueda(s) {
+  return String(s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\./g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}

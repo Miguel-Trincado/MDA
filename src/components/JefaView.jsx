@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
@@ -38,15 +38,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   );
   const tareas = useMemo(() => getTareas(clientes), [clientes]);
 
-  const auditoria = useMemo(() => {
-    const cotizacionesPorRut = {};
-    Object.values(db.cotizaciones || {}).forEach((c) => {
-      cotizacionesPorRut[c.rut] = (cotizacionesPorRut[c.rut] || 0) + 1;
-    });
-    const clientesFantasma = clientes.filter((g) => !cotizacionesPorRut[g.rut]);
-    return { clientesFantasma };
-  }, [clientes, db.cotizaciones]);
-
   const activos = clientes.filter((g) => g.estado === "Activo");
   const promesados = clientes.filter((g) => g.estado === "Promesado").length;
   const pipeline = clientes.filter((g) =>
@@ -83,7 +74,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   const cambiosPendientes = db.cambios.filter((c) => c.resolucion === "PENDIENTE REVISIÓN");
 
   const resultadoBusqueda = buscar
-    ? clientes.filter((g) => (g.cliente || "").toLowerCase().includes(buscar.toLowerCase()) || (g.rut || "").includes(buscar)).slice(0, 15)
+    ? clientes.filter((g) => normalizarBusqueda(g.cliente).includes(normalizarBusqueda(buscar)) || (g.rut || "").includes(buscar)).slice(0, 15)
     : [];
 
   return (
@@ -162,20 +153,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
         </div>
       )}
 
-      <Panel title="Panel de alertas" className="mb-5">
-        {Object.keys(alertasPorTipo).length === 0 ? (
-          <div className="text-sm text-stone-400">No hay alertas activas.</div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {Object.entries(alertasPorTipo)
-              .sort((a, b) => ALERT_PRIORITY[a[0]] - ALERT_PRIORITY[b[0]])
-              .map(([tipo, lista]) => (
-                <AlertGroup key={tipo} tipo={tipo} lista={lista} onClickCliente={setClienteModal} />
-              ))}
-          </div>
-        )}
-      </Panel>
-
       <Panel title="Buscar cliente" className="mb-5">
         <input
           value={buscar}
@@ -200,27 +177,17 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
         )}
       </Panel>
 
-      <Panel title="Calidad de datos" className="mb-5">
-        <div className="mb-3">
-          <Stat
-            label="Clientes fantasma (sin cotización real)"
-            value={auditoria.clientesFantasma.length}
-            accent={auditoria.clientesFantasma.length > 0 ? "text-rose-700" : "text-emerald-700"}
-          />
-        </div>
-        {auditoria.clientesFantasma.length === 0 ? (
-          <p className="text-xs text-emerald-700">Sin problemas detectados: cada cliente tiene al menos una cotización real asociada.</p>
+      <Panel title="Panel de alertas" className="mb-5">
+        {Object.keys(alertasPorTipo).length === 0 ? (
+          <div className="text-sm text-stone-400">No hay alertas activas.</div>
         ) : (
-          <details className="text-sm">
-            <summary className="cursor-pointer text-xs text-stone-500 underline">Ver detalle</summary>
-            <div className="mt-3 flex flex-col gap-1 max-h-56 overflow-y-auto">
-              {auditoria.clientesFantasma.map((g) => (
-                <div key={g.rut} className="text-xs text-stone-600 border-b border-stone-50 py-1">
-                  {g.cliente || "(sin nombre)"} · RUT {g.rut} · {g.ejecutivo || "sin ejecutivo"}
-                </div>
+          <div className="flex flex-col gap-2">
+            {Object.entries(alertasPorTipo)
+              .sort((a, b) => ALERT_PRIORITY[a[0]] - ALERT_PRIORITY[b[0]])
+              .map(([tipo, lista]) => (
+                <AlertGroup key={tipo} tipo={tipo} lista={lista} onClickCliente={setClienteModal} />
               ))}
-            </div>
-          </details>
+          </div>
         )}
       </Panel>
 

@@ -1,6 +1,10 @@
 import { jsPDF } from "jspdf";
 
 export const currency = (n) => new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(Number(n) || 0);
+// Igual que currency(), pero mostrando hasta 2 decimales — para montos
+// chicos (como cuánto falta o sobra en la distribución del pie) donde
+// redondear a UF entera escondería una diferencia real.
+export const currencyDecimal = (n) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
 // El display_id se guarda como "COT-000001"; para mostrarlo como "N°1"
 // solo hace falta sacar el prefijo y los ceros a la izquierda.
@@ -223,7 +227,9 @@ export const buildQuotePdfDoc = (data) => {
   doc.text(
     distribucionValidada
       ? `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF`
-      : `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF (faltan ${currency(faltanteUF)} UF)`,
+      : faltanteUF > 0
+      ? `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF (faltan ${currencyDecimal(faltanteUF)} UF)`
+      : `${currency(totalDistribuidoUF)} UF de ${currency(precioFinalUF)} UF (sobran ${currencyDecimal(-faltanteUF)} UF)`,
     pageWidth - margin,
     y,
     { align: "right" }

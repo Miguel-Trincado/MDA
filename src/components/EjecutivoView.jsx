@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { EJECUTIVOS, ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, normalizarBusqueda } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
@@ -77,12 +77,12 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   }, [db.cotizaciones, db.gestion]);
   const oppFiltradas = useMemo(() => {
     if (!buscarTodos) return todasLasOpp;
-    const q = buscarTodos.toLowerCase();
+    const q = normalizarBusqueda(buscarTodos);
     return todasLasOpp.filter(
       (c) =>
-        (c.cliente || "").toLowerCase().includes(q) ||
+        normalizarBusqueda(c.cliente).includes(q) ||
         (c.rut || "").includes(q) ||
-        (c.ejecutivo || "").toLowerCase().includes(q) ||
+        normalizarBusqueda(c.ejecutivo).includes(q) ||
         (c.opp || "").includes(q)
     );
   }, [todasLasOpp, buscarTodos]);
@@ -169,7 +169,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       if (filtro === "Pendientes") return !!g.fechaProximaAccion && g.fechaProximaAccion < todayISO();
       return g.estado === filtro;
     })
-    .filter((g) => !busqueda || (g.cliente || "").toLowerCase().includes(busqueda.toLowerCase()) || (g.rut || "").includes(busqueda))
+    .filter((g) => !busqueda || normalizarBusqueda(g.cliente).includes(normalizarBusqueda(busqueda)) || (g.rut || "").includes(busqueda))
     .filter((g) => {
       if (!periodo) return true;
       const fechas = fechasPorRut.map[g.rut] || [];

@@ -40,7 +40,8 @@ create table if not exists gestion (
   observaciones                    text default '',
   ejecutivo                        text default '',
   flag_sistema                     text not null default 'NUEVO'
-                                      check (flag_sistema in ('NUEVO','SI','')),
+                                      check (flag_sistema in ('NUEVO','SI','ESTADO','')),
+  cambio_estado_detalle            text default '',
   flag_cambio_ejecutivo            text not null default ''
                                       check (flag_cambio_ejecutivo in ('CAMBIO','')),
   ultima_revision_fecha            date,

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, FileText, Loader2, Check, ChevronLeft } from "lucide-react";
-import { buildQuotePdfDoc, currency, quoteNumber } from "../lib/quotePdf";
+import { buildQuotePdfDoc, currency, currencyDecimal, quoteNumber } from "../lib/quotePdf";
 import { fetchCotizacionesDeCliente, guardarCotizacionGenerada } from "../lib/db";
+import { normalizarBusqueda } from "../lib/helpers";
 import { Panel, Field } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
@@ -87,9 +88,9 @@ export default function Cotizador({ db }) {
 
   const clientesFiltrados = useMemo(() => {
     if (!buscarCliente) return [];
-    const q = buscarCliente.toLowerCase();
+    const q = normalizarBusqueda(buscarCliente);
     return Object.values(db.gestion)
-      .filter((g) => (g.cliente || "").toLowerCase().includes(q) || (g.rut || "").includes(q))
+      .filter((g) => normalizarBusqueda(g.cliente).includes(q) || (g.rut || "").includes(q))
       .slice(0, 12);
   }, [db.gestion, buscarCliente]);
 
@@ -478,7 +479,9 @@ export default function Cotizador({ db }) {
             <div className={`mt-3 text-xs font-medium ${distribucionValidada ? "text-emerald-700" : "text-amber-700"}`}>
               {distribucionValidada
                 ? `✓ Distribución validada al 100% (${currency(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF)`
-                : `Llevas ${currency(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF — faltan ${currency(faltanteUF)} UF por distribuir`}
+                : faltanteUF > 0
+                ? `Llevas ${currencyDecimal(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF — faltan ${currencyDecimal(faltanteUF)} UF por distribuir`
+                : `Llevas ${currencyDecimal(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF — sobran ${currencyDecimal(-faltanteUF)} UF distribuidas de más`}
             </div>
 
             <Field label="Observaciones" className="mt-4">
