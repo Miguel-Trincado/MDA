@@ -183,7 +183,9 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">Cartera de {nombre}</h2>
-          <p className="text-stone-500 text-sm">{clientes.length} clientes en total</p>
+          <p className="text-stone-500 text-sm">
+            {filtrados.length} {filtro === "Todos" ? "clientes en total" : `en "${filtro}"`}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <NotificationBell
