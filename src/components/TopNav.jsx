@@ -3,7 +3,7 @@ export default function TopNav({ active, onChange }) {
     { key: "carga", label: "Carga" },
     { key: "dashboard", label: "Dashboard" },
     { key: "ejecutivo", label: "Ejecutivo" },
-    { key: "cotizador", label: "Cotizador" },
+    { key: "cotizador", label: "Simulador" },
     { key: "jefa", label: "Jefa de Ventas" },
   ];
   return (

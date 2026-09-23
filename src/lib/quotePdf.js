@@ -19,7 +19,7 @@ export const buildQuotePdfDoc = (data) => {
     clientName, clientRut, clientPhone,
     units, // [{ label, tipologia, area, priceUF }]
     subtotal, discount, descuentoPct, precioFinalUF, valorUF,
-    reservaUF, pieUF, contraEscrituraUF, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
+    reservaUF, pieUF, contraEscrituraUF, cuotasContraEscritura, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
     observaciones,
     agentName,
     displayId,
@@ -86,7 +86,7 @@ export const buildQuotePdfDoc = (data) => {
   );
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("COTIZACIÓN — PROYECTO PILPILÉN", pageWidth / 2, logoTopY + 4, { align: "center" });
+  doc.text("SIMULACIÓN — PROYECTO PILPILÉN", pageWidth / 2, logoTopY + 4, { align: "center" });
   if (displayId) {
     doc.setFontSize(11);
     doc.setTextColor(...PURPLE);
@@ -307,9 +307,74 @@ export const buildQuotePdfDoc = (data) => {
   doc.line(contentX, footerY, pageWidth - margin, footerY);
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
-  doc.text("Cotización referencial, sujeta a disponibilidad y confirmación de precios al momento de la reserva.", contentX, footerY + 6);
+  doc.text("Simulación referencial, sujeta a disponibilidad y confirmación de precios al momento de la reserva.", contentX, footerY + 6);
   if (agentName) {
     doc.text(`Preparado por ${agentName} · MDA Inmobiliaria`, contentX, footerY + 11);
+  }
+
+  // ---- Segunda hoja: plan de pago de la Contra escritura en cuotas ----
+  if (cuotasContraEscritura && cuotasContraEscritura > 1 && contraEscrituraUF > 0) {
+    doc.addPage();
+    drawSideBand();
+    let y2 = 20;
+
+    doc.setFontSize(13);
+    doc.setFont(undefined, "bold");
+    doc.setTextColor(...PURPLE);
+    doc.text("PLAN DE PAGO — CONTRA ESCRITURA EN CUOTAS", contentX, y2);
+    doc.setFont(undefined, "normal");
+    y2 += 8;
+
+    const montoPorCuotaUF = contraEscrituraUF / cuotasContraEscritura;
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(
+      `${cuotasContraEscritura} cuotas de ${currencyDecimal(montoPorCuotaUF)} UF cada una (total ${currency(contraEscrituraUF)} UF).`,
+      contentX,
+      y2
+    );
+    y2 += 8;
+
+    doc.setFillColor(...PURPLE);
+    doc.roundedRect(contentX, y2, contentW, 8, 2, 2, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setFont(undefined, "bold");
+    doc.text("CUOTA", contentX + 5, y2 + 5.5);
+    doc.text("VENCIMIENTO", contentX + contentW * 0.3, y2 + 5.5);
+    doc.text("MONTO (UF)", contentX + contentW * 0.62, y2 + 5.5);
+    doc.text("MONTO (CLP)", pageWidth - margin - 5, y2 + 5.5, { align: "right" });
+    doc.setFont(undefined, "normal");
+    y2 += 8;
+
+    for (let i = 1; i <= cuotasContraEscritura; i++) {
+      if (y2 + 8 > pageHeight - 20) {
+        doc.addPage();
+        drawSideBand();
+        y2 = 20;
+      }
+      const rowH = 7.5;
+      if (i % 2 === 0) {
+        doc.setFillColor(...LIGHT);
+        doc.rect(contentX, y2, contentW, rowH, "F");
+      }
+      doc.setFontSize(8.5);
+      doc.setTextColor(...INK);
+      doc.text(`Cuota ${i} de ${cuotasContraEscritura}`, contentX + 5, y2 + 5.2);
+      doc.text(`Mes ${i}`, contentX + contentW * 0.3, y2 + 5.2);
+      doc.text(`${currencyDecimal(montoPorCuotaUF)} UF`, contentX + contentW * 0.62, y2 + 5.2);
+      doc.text(`$${currency(toCLP(montoPorCuotaUF))}`, pageWidth - margin - 5, y2 + 5.2, { align: "right" });
+      y2 += rowH;
+    }
+
+    y2 += 6;
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    const notaLines = doc.splitTextToSize(
+      "El vencimiento de cada cuota se cuenta en meses a partir de la firma de la promesa de compraventa; las fechas exactas se confirman en ese momento. Máximo 24 cuotas.",
+      contentW
+    );
+    doc.text(notaLines, contentX, y2);
   }
 
   return doc;

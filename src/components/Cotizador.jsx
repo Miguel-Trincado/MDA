@@ -62,6 +62,7 @@ export default function Cotizador({ db }) {
   const [estacionamientoId, setEstacionamientoId] = useState("");
   const [descuentoPct, setDescuentoPct] = useState("0");
   const [rows, setRows] = useState(FINANCIAMIENTO_ROWS_DEFAULT);
+  const [cuotasContraEscritura, setCuotasContraEscritura] = useState(1);
   const [observaciones, setObservaciones] = useState("");
   const [savedCotizacion, setSavedCotizacion] = useState(null);
   const [error, setError] = useState("");
@@ -124,6 +125,7 @@ export default function Cotizador({ db }) {
     setSavedCotizacion(null);
     closePreview();
     setDescuentoPct(u.descuentoMax != null ? String(u.descuentoMax) : "0");
+    setCuotasContraEscritura(1);
   }
 
   function elegirEstacionamiento(id) {
@@ -184,6 +186,7 @@ export default function Cotizador({ db }) {
     reservaUF,
     pieUF,
     contraEscrituraUF,
+    cuotasContraEscritura,
     hipotecarioRowUF: hipotecarioUF,
     totalDistribuidoUF,
     faltanteUF,
@@ -212,7 +215,7 @@ export default function Cotizador({ db }) {
       setHistorial((prev) => [saved, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
       return saved;
     } catch (e) {
-      setError(e.message || "No se pudo guardar la cotización.");
+      setError(e.message || "No se pudo guardar la simulación.");
       return null;
     } finally {
       setSaving(false);
@@ -226,7 +229,7 @@ export default function Cotizador({ db }) {
 
   async function abrirVistaPrevia() {
     if (!unidadId) {
-      setError("Elige una unidad antes de generar la cotización.");
+      setError("Elige una unidad antes de generar la simulación.");
       return;
     }
     setError("");
@@ -261,7 +264,7 @@ export default function Cotizador({ db }) {
   return (
     <div className="max-w-4xl mx-auto px-5 py-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-[#0F3D66]">Cotizador</h2>
+        <h2 className="font-display text-2xl text-[#0F3D66]">Simulador</h2>
         <span className="text-xs font-mono px-3 py-1.5 rounded-full border border-stone-300 text-stone-500">
           {loadingUF ? "Valor UF: obteniendo…" : valorUF ? `Valor UF hoy: $${currency(valorUF)}` : "Valor UF no disponible"}
         </span>
@@ -446,17 +449,18 @@ export default function Cotizador({ db }) {
 
             <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">Distribución del pie</div>
             <div className="border border-stone-200 rounded-sm overflow-hidden">
-              <div className="grid grid-cols-[1.3fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50">
+              <div className="grid grid-cols-[1.3fr_1fr_1fr_0.9fr] gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50">
                 <span>Concepto</span>
                 <span>%</span>
                 <span>UF</span>
+                <span>Cuotas</span>
               </div>
               {Object.keys(rows).map((key) => {
                 const row = rows[key];
                 const ufValue = rowValueUF(row, precioFinalUF);
                 const pctValue = precioFinalUF > 0 ? (ufValue / precioFinalUF) * 100 : 0;
                 return (
-                  <div key={key} className="grid grid-cols-[1.3fr_1fr_1fr] gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm">
+                  <div key={key} className="grid grid-cols-[1.3fr_1fr_1fr_0.9fr] gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm">
                     <span>{ROW_LABEL[key]}</span>
                     <input
                       type="number"
@@ -472,10 +476,30 @@ export default function Cotizador({ db }) {
                       className="ipt text-xs"
                       style={{ width: "80px" }}
                     />
+                    {key === "contraEscritura" ? (
+                      <select
+                        value={cuotasContraEscritura}
+                        onChange={(e) => setCuotasContraEscritura(Number(e.target.value))}
+                        className="ipt text-xs"
+                        style={{ width: "90px" }}
+                      >
+                        {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
+                          <option key={n} value={n}>{n === 1 ? "Al contado" : `${n} cuotas`}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                 );
               })}
             </div>
+            {cuotasContraEscritura > 1 && (
+              <p className="text-xs text-stone-500 mt-2">
+                Contra escritura en {cuotasContraEscritura} cuotas de {currency(contraEscrituraUF / cuotasContraEscritura)} UF cada una
+                (el plan de pago va en la segunda hoja del PDF).
+              </p>
+            )}
             <div className={`mt-3 text-xs font-medium ${distribucionValidada ? "text-emerald-700" : "text-amber-700"}`}>
               {distribucionValidada
                 ? `✓ Distribución validada al 100% (${currency(totalDistribuidoUF)} UF ingresadas de ${currency(precioFinalUF)} UF)`
@@ -509,11 +533,11 @@ export default function Cotizador({ db }) {
             <Panel className="mb-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs text-stone-400 uppercase tracking-wide">Vista previa</div>
-                <a href={previewUrl} download={`Cotizacion-${cliente?.cliente || "cliente"}.pdf`} className="text-xs text-[#0F3D66] underline">
+                <a href={previewUrl} download={`Simulacion-${cliente?.cliente || "cliente"}.pdf`} className="text-xs text-[#0F3D66] underline">
                   Descargar PDF
                 </a>
               </div>
-              <iframe title="Vista previa cotización" src={previewUrl} className="w-full h-[600px] border border-stone-200 rounded-sm" />
+              <iframe title="Vista previa simulación" src={previewUrl} className="w-full h-[600px] border border-stone-200 rounded-sm" />
             </Panel>
           )}
         </>
@@ -521,7 +545,7 @@ export default function Cotizador({ db }) {
 
       {/* Historial del cliente */}
       {cliente && historial.length > 0 && (
-        <Panel title={`Cotizaciones anteriores de ${cliente.cliente}`}>
+        <Panel title={`Simulaciones anteriores de ${cliente.cliente}`}>
           <div className="flex flex-col gap-1">
             {historial.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-sm border-b border-stone-50 py-2 last:border-0">
