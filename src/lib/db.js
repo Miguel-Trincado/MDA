@@ -289,9 +289,20 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     const prev = (currentCotizaciones || {})[r.opp];
     if (!prev) {
       cotizacionesNuevas.push(r);
-    } else if (r.estado && prev.estado !== r.estado) {
-      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa || "" });
+      return;
+    }
+    const estadoCambio = r.estado && prev.estado !== r.estado;
+    const fechaPromesaNueva = r.fechaPromesa && r.fechaPromesa !== prev.fechaPromesa;
+    if (estadoCambio) {
+      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa || prev.fechaPromesa || "" });
       cambiosEstadoLog.push({ opp: r.opp, rut: r.rut, estadoAnterior: prev.estado, estadoNuevo: r.estado, fechaPromesa: r.fechaPromesa || "" });
+    } else if (r.estado === "Promesada" && fechaPromesaNueva) {
+      // La Opp ya estaba en Promesada, pero recién ahora llega (o llega
+      // distinta) su Fecha Promesa real — no es un cambio de Estado, pero
+      // igual hay que registrarlo para que "Promesados del mes" pueda
+      // contarla con la fecha correcta.
+      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa });
+      cambiosEstadoLog.push({ opp: r.opp, rut: r.rut, estadoAnterior: prev.estado, estadoNuevo: r.estado, fechaPromesa: r.fechaPromesa });
     }
   });
 
