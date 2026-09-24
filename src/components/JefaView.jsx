@@ -38,7 +38,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   const [metaInput, setMetaInput] = useState("");
   const [guardandoMeta, setGuardandoMeta] = useState(false);
   const [errorMeta, setErrorMeta] = useState("");
-  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
+  const { session, handleLogout } = useAuthSession();
 
   // Última fecha de cotización real (ya parseada, no el texto crudo) por
   // RUT — para saber quién no tiene gestión desde antes de la fecha de
@@ -287,34 +287,14 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
               <button onClick={handleLogout} className="text-xs text-stone-400 underline">Cerrar sesión</button>
             </>
           ) : (
-            <>
-              <span className="text-lg font-semibold text-[#0F3D66]">{meta}</span>
-              <form onSubmit={handleLogin} className="flex items-center gap-2 ml-2">
-                <input
-                  type="email"
-                  placeholder="Correo del administrador"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="border border-stone-300 rounded-sm px-2 py-1 text-xs w-44"
-                />
-                <input
-                  type="password"
-                  placeholder="Contraseña"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="border border-stone-300 rounded-sm px-2 py-1 text-xs w-32"
-                />
-                <button type="submit" disabled={loggingIn} className="text-xs px-3 py-1.5 border border-stone-300 rounded-sm hover:border-[#1E5AA8]">
-                  {loggingIn ? "…" : "Modificar meta"}
-                </button>
-              </form>
-            </>
+            <span className="text-lg font-semibold text-[#0F3D66]">{meta}</span>
           )}
         </div>
         {!session && (
-          <p className="text-xs text-stone-400 -mt-2 mb-3">Solo el administrador puede asignar o modificar la meta comercial.</p>
+          <p className="text-xs text-stone-400 -mt-2 mb-3">
+            Solo el administrador puede asignar o modificar la meta comercial — inicia sesión en la pestaña "Carga".
+          </p>
         )}
-        {loginError && <p className="text-xs text-rose-600 -mt-2 mb-3">{loginError}</p>}
         {errorMeta && <p className="text-xs text-rose-600 -mt-2 mb-3">{errorMeta}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Stat label="Promesados del mes" value={promesados} />
