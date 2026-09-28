@@ -293,16 +293,27 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     }
     const estadoCambio = r.estado && prev.estado !== r.estado;
     const fechaPromesaNueva = r.fechaPromesa && r.fechaPromesa !== prev.fechaPromesa;
-    if (estadoCambio) {
-      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa || prev.fechaPromesa || "" });
-      cambiosEstadoLog.push({ opp: r.opp, rut: r.rut, estadoAnterior: prev.estado, estadoNuevo: r.estado, fechaPromesa: r.fechaPromesa || "" });
-    } else if (r.estado === "Promesada" && fechaPromesaNueva) {
-      // La Opp ya estaba en Promesada, pero recién ahora llega (o llega
-      // distinta) su Fecha Promesa real — no es un cambio de Estado, pero
-      // igual hay que registrarlo para que "Promesados del mes" pueda
-      // contarla con la fecha correcta.
-      cotizacionesEstadoActualizado.push({ opp: r.opp, estado: r.estado, fechaPromesa: r.fechaPromesa });
-      cambiosEstadoLog.push({ opp: r.opp, rut: r.rut, estadoAnterior: prev.estado, estadoNuevo: r.estado, fechaPromesa: r.fechaPromesa });
+    // El Lote (la unidad concreta) muchas veces no viene informado en el
+    // Aval mientras la Opp está recién "Cotización" — se asigna después,
+    // al reservarla o promesarla. Igual que la Fecha Promesa, hay que
+    // dejarlo entrar cuando llega o cambia, aunque no haya cambio de
+    // Estado, para que Comisiones pueda cruzarlo con el listado de precios.
+    const loteNuevo = r.lote && r.lote !== prev.lote;
+    if (estadoCambio || (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo)) || loteNuevo) {
+      const payload = {
+        opp: r.opp,
+        estado: r.estado || prev.estado,
+        fechaPromesa: r.fechaPromesa || prev.fechaPromesa || "",
+        lote: r.lote || prev.lote || "",
+      };
+      cotizacionesEstadoActualizado.push(payload);
+      if (estadoCambio || (r.estado === "Promesada" && fechaPromesaNueva)) {
+        cambiosEstadoLog.push({
+          opp: r.opp, rut: r.rut,
+          estadoAnterior: prev.estado, estadoNuevo: r.estado || prev.estado,
+          fechaPromesa: payload.fechaPromesa,
+        });
+      }
     }
   });
 
@@ -326,7 +337,12 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
   filasDetalle.forEach((r) => {
     const prev = cotizacionesOut[r.opp];
     cotizacionesOut[r.opp] = prev
-      ? { ...prev, estado: r.estado !== prev.estado ? r.estado : prev.estado, fechaPromesa: r.fechaPromesa || prev.fechaPromesa }
+      ? {
+          ...prev,
+          estado: r.estado !== prev.estado ? r.estado : prev.estado,
+          fechaPromesa: r.fechaPromesa || prev.fechaPromesa,
+          lote: r.lote || prev.lote,
+        }
       : r;
   });
 

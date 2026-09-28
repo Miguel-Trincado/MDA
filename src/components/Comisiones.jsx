@@ -148,10 +148,28 @@ export default function Comisiones({ db }) {
   // administrador. Se guarda como snapshot en comisiones_ventas apenas se
   // detecta (una sola vez por Opp, vía el ref de abajo) porque el listado
   // de precios se reemplaza completo cada vez que se sube uno nuevo.
+  // Se normaliza (sin espacios extra, sin distinguir mayúsculas) antes de
+  // comparar, porque el Aval y el listado de precios se escriben a mano en
+  // Excel por personas distintas y un espacio de más o una mayúscula
+  // distinta no debería impedir el cruce.
+  const normalizarCodigo = (s) => String(s || "").trim().toUpperCase();
+
+  // El listado real trae códigos repetidos (ej. estacionamientos listados
+  // más de una vez). Si un código aparece varias veces, se prioriza la
+  // fila que el listado marca como "Promesada" — es la que realmente
+  // corresponde a la venta — y solo si ninguna lo está se usa la primera
+  // como respaldo.
   const listaPreciosPorCodigo = useMemo(() => {
-    const map = {};
+    const grupos = {};
     Object.values(db.listaPrecios || {}).forEach((u) => {
-      if (u.codigo) map[u.codigo] = u;
+      if (!u.codigo) return;
+      const key = normalizarCodigo(u.codigo);
+      if (!grupos[key]) grupos[key] = [];
+      grupos[key].push(u);
+    });
+    const map = {};
+    Object.entries(grupos).forEach(([key, unidades]) => {
+      map[key] = unidades.find((u) => u.estado === "Promesada") || unidades[0];
     });
     return map;
   }, [db.listaPrecios]);
@@ -164,7 +182,7 @@ export default function Comisiones({ db }) {
       opps.forEach((o) => {
         if (ventas[o.opp] || autoAsignadosRef.current.has(o.opp)) return;
         const lote = db.cotizaciones[o.opp]?.lote;
-        const unidad = lote ? listaPreciosPorCodigo[lote] : null;
+        const unidad = lote ? listaPreciosPorCodigo[normalizarCodigo(lote)] : null;
         if (!unidad) return;
         pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad });
       });
@@ -461,12 +479,23 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
     );
   }
 
+  const loteOpp = db.cotizaciones?.[f.opp]?.lote || "";
+
   return (
     <div className="px-3 py-3 bg-amber-50/40">
       <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
         <span className="font-medium">{f.cliente}</span>
         <span className="text-xs text-stone-400">RUT {f.rut} · Opp {f.opp} · {f.orden}ª unidad ({f.pct}%)</span>
       </div>
+      {!f.venta && (
+        <p className="text-xs text-stone-500 mb-2">
+          Código de Lote en el Aval para esta Opp:{" "}
+          <span className="font-mono bg-white border border-stone-300 rounded-sm px-1.5 py-0.5">
+            {loteOpp || "(vacío — no vino informado en el Aval)"}
+          </span>{" "}
+          — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
+        </p>
+      )}
       {!unidadElegida && !f.venta && (
         <div className="relative mb-2">
           <input
