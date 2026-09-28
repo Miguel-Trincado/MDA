@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuthSession } from "../lib/useAuthSession";
 import {
-  fetchComisionesConfig, setComisionesConfigRemote,
+  fetchComisionesValidacion, setComisionesValidacionRemote,
   fetchComisionesVentas, guardarComisionVentaRemote, eliminarComisionVentaRemote,
 } from "../lib/db";
 import { parseFechaCompleta, todayISO } from "../lib/helpers";
@@ -22,10 +22,21 @@ function mesLabel(key) {
   return `${MESES_ES[Number(m) - 1]} ${y}`;
 }
 
+function fechaHoraCl(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
 // Tabla de tramos de comisión, escalonada por N° de orden de venta del
 // ejecutivo dentro del mes (la 1ª unidad vendida ese mes va al 0,50%, la
 // 2ª al 0,60%, la 3ª en adelante al 0,75%) — confirmado explícitamente
-// por el usuario, no es "todas las unidades al % del total".
+// por el usuario, no es "todas las unidades al % del total". Este valor
+// automático puede corregirse a mano caso a caso en cada fila (por
+// ejemplo si el SII o la venta real califica distinto).
 function tramoPct(orden) {
   if (orden <= 1) return 0.5;
   if (orden === 2) return 0.6;
@@ -56,7 +67,11 @@ export default function Comisiones({ db }) {
   const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
 
   const [mes, setMes] = useState(todayISO().slice(0, 7));
-  const [config, setConfig] = useState({});
+  // La UF y la retención de boleta de honorarios ya NO son un valor único
+  // para todo el mes: cada ejecutivo entrega su boleta un día distinto y
+  // se revisa caso a caso, así que se guardan y se aprueban ("validan")
+  // por (mes, ejecutivo) — ver comisiones_validacion_ejecutivo.
+  const [validaciones, setValidaciones] = useState({});
   const [ventas, setVentas] = useState({});
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState("");
@@ -68,11 +83,11 @@ export default function Comisiones({ db }) {
     let cancelado = false;
     setLoadingDatos(true);
     setErrorDatos("");
-    Promise.all([fetchComisionesConfig(), fetchComisionesVentas()])
-      .then(([c, v]) => {
+    Promise.all([fetchComisionesValidacion(), fetchComisionesVentas()])
+      .then(([v, ve]) => {
         if (cancelado) return;
-        setConfig(c);
-        setVentas(v);
+        setValidaciones(v);
+        setVentas(ve);
       })
       .catch((e) => !cancelado && setErrorDatos(e.message || "No se pudieron cargar los datos de comisiones."))
       .finally(() => !cancelado && setLoadingDatos(false));
@@ -80,37 +95,6 @@ export default function Comisiones({ db }) {
       cancelado = true;
     };
   }, [session]);
-
-  const configMes = config[mes];
-  const [valorUfInput, setValorUfInput] = useState("");
-  const [retencionInput, setRetencionInput] = useState(String(RETENCION_DEFAULT));
-  const [guardandoConfig, setGuardandoConfig] = useState(false);
-
-  useEffect(() => {
-    if (configMes) {
-      setValorUfInput(String(configMes.valorUf ?? valorUFHoy ?? ""));
-      setRetencionInput(String(configMes.retencionPct ?? RETENCION_DEFAULT));
-    } else {
-      setValorUfInput(valorUFHoy != null ? String(valorUFHoy) : "");
-      setRetencionInput(String(RETENCION_DEFAULT));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mes, configMes, valorUFHoy]);
-
-  const valorUfMes = Number(valorUfInput) || 0;
-  const retencionPct = Number(retencionInput) || 0;
-
-  async function guardarConfig() {
-    setGuardandoConfig(true);
-    try {
-      await setComisionesConfigRemote(mes, { valorUf: valorUfMes, retencionPct });
-      setConfig((c) => ({ ...c, [mes]: { mes, valorUf: valorUfMes, retencionPct } }));
-    } catch (e) {
-      setErrorDatos(e.message || "No se pudo guardar la configuración del mes.");
-    } finally {
-      setGuardandoConfig(false);
-    }
-  }
 
   // Opp que pasaron a "Promesada" durante el mes elegido, con la misma
   // regla que "Promesados del mes" en el panel de la Jefa: solo cuenta
@@ -211,6 +195,11 @@ export default function Comisiones({ db }) {
     })();
   }, [session, loadingDatos, promesadasPorEjecutivo, ventas, db.cotizaciones, listaPreciosPorCodigo, mes]);
 
+  async function guardarValidacionEjecutivo(ejecutivo, datos) {
+    const saved = await setComisionesValidacionRemote(mes, ejecutivo, datos);
+    setValidaciones((v) => ({ ...v, [`${mes}__${ejecutivo}`]: saved }));
+  }
+
   if (session === undefined) {
     return <p className="text-stone-400 text-sm px-5 py-8">Verificando sesión…</p>;
   }
@@ -274,39 +263,10 @@ export default function Comisiones({ db }) {
           <Field label="Mes">
             <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="ipt" />
           </Field>
-          <Field label="Valor UF a usar este mes">
-            <input
-              type="number"
-              step="0.01"
-              value={valorUfInput}
-              onChange={(e) => setValorUfInput(e.target.value)}
-              placeholder={loadingUFHoy ? "Obteniendo UF…" : ""}
-              className="ipt w-32"
-            />
-          </Field>
-          <Field label="Retención boleta honorarios (%)">
-            <input
-              type="number"
-              step="0.1"
-              value={retencionInput}
-              onChange={(e) => setRetencionInput(e.target.value)}
-              className="ipt w-28"
-            />
-          </Field>
-          <button
-            onClick={guardarConfig}
-            disabled={guardandoConfig}
-            className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2"
-          >
-            {guardandoConfig ? "Guardando…" : "Guardar configuración del mes"}
-          </button>
-          {configMes ? (
-            <span className="text-xs text-emerald-700">
-              Guardado: UF ${currencyDecimal(configMes.valorUf)} · retención {configMes.retencionPct}%
-            </span>
-          ) : (
-            <span className="text-xs text-stone-400">Aún no se ha guardado un valor de UF fijo para {mesLabel(mes)}.</span>
-          )}
+          <p className="text-xs text-stone-400 max-w-md">
+            La UF y la retención de boleta ya no son un solo valor para todo el mes: cada ejecutivo entrega su boleta
+            un día distinto, así que se configuran y se validan abajo, uno por uno.
+          </p>
         </div>
       </Panel>
 
@@ -326,8 +286,10 @@ export default function Comisiones({ db }) {
               ventas={ventas}
               db={db}
               mes={mes}
-              valorUfMes={valorUfMes}
-              retencionPct={retencionPct}
+              valorUFHoy={valorUFHoy}
+              loadingUFHoy={loadingUFHoy}
+              validacion={validaciones[`${mes}__${ejecutivo}`]}
+              onGuardarValidacion={(datos) => guardarValidacionEjecutivo(ejecutivo, datos)}
               onGuardarVenta={async (payload) => {
                 const saved = await guardarComisionVentaRemote(payload);
                 setVentas((v) => ({ ...v, [saved.opp]: saved }));
@@ -348,11 +310,55 @@ export default function Comisiones({ db }) {
   );
 }
 
-function EjecutivoComisionPanel({ ejecutivo, opps, ventas, db, mes, valorUfMes, retencionPct, onGuardarVenta, onQuitarVenta }) {
+function EjecutivoComisionPanel({
+  ejecutivo, opps, ventas, db, mes, valorUFHoy, loadingUFHoy, validacion,
+  onGuardarValidacion, onGuardarVenta, onQuitarVenta,
+}) {
+  const [editandoConfig, setEditandoConfig] = useState(!validacion);
+  const [valorUfInput, setValorUfInput] = useState(String(validacion?.valorUf ?? valorUFHoy ?? ""));
+  const [retencionInput, setRetencionInput] = useState(String(validacion?.retencionPct ?? RETENCION_DEFAULT));
+  const [guardandoConfig, setGuardandoConfig] = useState(false);
+  const [errorConfig, setErrorConfig] = useState("");
+
+  useEffect(() => {
+    if (validacion) {
+      setValorUfInput(String(validacion.valorUf ?? ""));
+      setRetencionInput(String(validacion.retencionPct ?? RETENCION_DEFAULT));
+      setEditandoConfig(false);
+    } else {
+      setValorUfInput(valorUFHoy != null ? String(valorUFHoy) : "");
+      setRetencionInput(String(RETENCION_DEFAULT));
+      setEditandoConfig(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ejecutivo, mes, validacion?.valorUf, validacion?.retencionPct, validacion?.validado]);
+
+  const valorUfMes = Number(valorUfInput) || 0;
+  const retencionPct = Number(retencionInput) || 0;
+  const validado = !!validacion?.validado;
+
+  async function guardar(validar) {
+    setGuardandoConfig(true);
+    setErrorConfig("");
+    try {
+      await onGuardarValidacion({ valorUf: valorUfMes, retencionPct, validado: validar });
+      setEditandoConfig(false);
+    } catch (e) {
+      setErrorConfig(e.message || "No se pudo guardar.");
+    } finally {
+      setGuardandoConfig(false);
+    }
+  }
+
   const filas = opps.map((o, i) => {
     const venta = ventas[o.opp];
     const orden = i + 1;
-    const pct = tramoPct(orden);
+    // El tramo se calcula por orden de venta del mes, pero puede
+    // corregirse a mano por unidad (venta.tramoPct guardado) — cada
+    // caso se revisa por separado, así que el automático es solo el
+    // punto de partida.
+    const pctAuto = tramoPct(orden);
+    const pct = venta?.tramoPct != null ? Number(venta.tramoPct) : pctAuto;
     let comisionUf = null, brutoClp = null, netoClp = null, precioNetoUf = null;
     if (venta) {
       precioNetoUf = Number(venta.precioUf) * (1 - (Number(venta.descuentoPct) || 0) / 100);
@@ -360,7 +366,7 @@ function EjecutivoComisionPanel({ ejecutivo, opps, ventas, db, mes, valorUfMes, 
       brutoClp = comisionUf * valorUfMes;
       netoClp = brutoClp * (1 - retencionPct / 100);
     }
-    return { ...o, orden, pct, venta, precioNetoUf, comisionUf, brutoClp, netoClp };
+    return { ...o, orden, pctAuto, pct, venta, precioNetoUf, comisionUf, brutoClp, netoClp };
   });
 
   const totalComisionUf = filas.reduce((s, f) => s + (f.comisionUf || 0), 0);
@@ -379,13 +385,87 @@ function EjecutivoComisionPanel({ ejecutivo, opps, ventas, db, mes, valorUfMes, 
           <span className="font-medium text-emerald-700">${currencyDecimal(totalNeto)}</span>
         </div>
       </div>
+
+      <div className={`border rounded-sm px-3 py-3 mb-3 ${validado ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"}`}>
+        {editandoConfig ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <Field label={`UF que entregó ${ejecutivo}`}>
+              <input
+                type="number"
+                step="0.01"
+                value={valorUfInput}
+                onChange={(e) => setValorUfInput(e.target.value)}
+                placeholder={loadingUFHoy ? "Obteniendo UF…" : ""}
+                className="ipt w-32"
+              />
+            </Field>
+            <Field label="Retención boleta honorarios (%)">
+              <input
+                type="number"
+                step="0.1"
+                value={retencionInput}
+                onChange={(e) => setRetencionInput(e.target.value)}
+                className="ipt w-28"
+              />
+            </Field>
+            <button
+              onClick={() => guardar(false)}
+              disabled={guardandoConfig}
+              className="border border-stone-300 text-sm rounded-sm px-3 py-2 text-stone-600 hover:border-[#1E5AA8] disabled:opacity-50"
+            >
+              Guardar
+            </button>
+            <button
+              onClick={() => guardar(true)}
+              disabled={guardandoConfig}
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2"
+            >
+              {guardandoConfig ? "Guardando…" : "Guardar y validar"}
+            </button>
+            {validacion && (
+              <button
+                onClick={() => setEditandoConfig(false)}
+                className="text-xs text-stone-400 hover:text-[#0F3D66] underline"
+              >
+                Cancelar
+              </button>
+            )}
+            {errorConfig && <p className="text-xs text-rose-600 w-full">{errorConfig}</p>}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between flex-wrap gap-2 text-sm">
+            <span>
+              UF <span className="font-medium">{ufFmt(validacion.valorUf)}</span> · Retención{" "}
+              <span className="font-medium">{validacion.retencionPct}%</span>
+              {validado ? (
+                <span className="ml-2 text-emerald-700 font-medium">
+                  ✓ Validado {validacion.validadoAt ? `el ${fechaHoraCl(validacion.validadoAt)}` : ""}
+                </span>
+              ) : (
+                <span className="ml-2 text-amber-700">Guardado, sin validar</span>
+              )}
+            </span>
+            <span className="flex items-center gap-3">
+              {!validado && (
+                <button onClick={() => guardar(true)} disabled={guardandoConfig} className="text-xs text-emerald-700 hover:underline font-medium disabled:opacity-50">
+                  Validar ahora
+                </button>
+              )}
+              <button onClick={() => setEditandoConfig(true)} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
+                {validado ? "Invalidar / editar" : "Editar"}
+              </button>
+            </span>
+          </div>
+        )}
+      </div>
+
       {faltanAsignar > 0 && (
         <p className="text-xs text-amber-700 mb-3">
           {faltanAsignar} unidad(es) sin poder cruzar automáticamente con el listado de precios (el código de Lote de
           esa Opp no aparece en el listado actual) — asígnala a mano abajo.
         </p>
       )}
-      <div className="hidden md:grid grid-cols-[1.5fr_1.6fr_0.8fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
+      <div className="hidden md:grid grid-cols-[1.4fr_1.5fr_0.7fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
         <span>Cliente</span>
         <span>Unidad</span>
         <span>Orden</span>
@@ -410,6 +490,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
   const [unidadElegida, setUnidadElegida] = useState(null);
   const [precioUfInput, setPrecioUfInput] = useState(f.venta ? String(f.venta.precioUf) : "");
   const [descuentoInput, setDescuentoInput] = useState(f.venta ? String(f.venta.descuentoPct) : "0");
+  const [tramoInput, setTramoInput] = useState(String(f.pct));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
 
@@ -439,6 +520,12 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
     setGuardando(true);
     setError("");
     try {
+      // Si el tramo editado a mano coincide con el que se habría calculado
+      // solo por orden, no vale la pena guardar un "override" — se deja en
+      // null para que siga el cálculo automático por si el orden cambia
+      // más adelante (ej. se agrega una venta anterior en el mes).
+      const tramoNum = Number(tramoInput);
+      const tramoOverride = Number.isFinite(tramoNum) && tramoNum !== f.pctAuto ? tramoNum : null;
       await onGuardarVenta({
         opp: f.opp,
         rut: f.rut,
@@ -448,6 +535,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         unidadLabel,
         precioUf: Number(precioUfInput) || 0,
         descuentoPct: Number(descuentoInput) || 0,
+        tramoPct: tramoOverride,
       });
       setEditando(false);
     } catch (e) {
@@ -459,13 +547,15 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
 
   if (!editando && f.venta) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1.6fr_0.8fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 items-center px-3 py-2 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1.5fr_0.7fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 items-center px-3 py-2 text-sm">
         <span className="truncate">
           {f.cliente} <span className="text-xs text-stone-400">RUT {f.rut}</span>
         </span>
         <span className="text-stone-700">{f.venta.unidadLabel}</span>
         <span className="text-stone-500">{f.orden}ª</span>
-        <span className="text-stone-500">{f.pct}%</span>
+        <span className="text-stone-500">
+          {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
+        </span>
         <span className="text-stone-500">{f.venta.descuentoPct}%</span>
         <span className="font-medium text-[#0F3D66]">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
@@ -485,7 +575,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
     <div className="px-3 py-3 bg-amber-50/40">
       <div className="flex flex-wrap items-center gap-2 mb-2 text-sm">
         <span className="font-medium">{f.cliente}</span>
-        <span className="text-xs text-stone-400">RUT {f.rut} · Opp {f.opp} · {f.orden}ª unidad ({f.pct}%)</span>
+        <span className="text-xs text-stone-400">RUT {f.rut} · Opp {f.opp} · {f.orden}ª unidad (automático: {f.pctAuto}%)</span>
       </div>
       {!f.venta && (
         <p className="text-xs text-stone-500 mb-2">
@@ -539,6 +629,9 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         </Field>
         <Field label="Descuento (%)">
           <input type="number" step="0.01" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} className="ipt w-24" />
+        </Field>
+        <Field label="Tramo (%)">
+          <input type="number" step="0.01" value={tramoInput} onChange={(e) => setTramoInput(e.target.value)} className="ipt w-24" />
         </Field>
         <button
           onClick={guardar}

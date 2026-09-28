@@ -551,3 +551,35 @@ export async function eliminarComisionVentaRemote(opp) {
   if (error) throw error;
 }
 
+/* ---------------------------------------------------------------------
+ * Validación de comisiones por ejecutivo y mes: la UF y la retención no
+ * son un valor único para todo el mes — cada ejecutivo entrega su boleta
+ * de honorarios un día distinto y se revisa caso a caso, así que el
+ * administrador las aprueba ("valida") una por una.
+ * ------------------------------------------------------------------- */
+export async function fetchComisionesValidacion() {
+  const { data, error } = await supabase.from("comisiones_validacion_ejecutivo").select("*");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => {
+    out[`${row.mes}__${row.ejecutivo}`] = rowToObj(row);
+  });
+  return out;
+}
+
+export async function setComisionesValidacionRemote(mes, ejecutivo, { valorUf, retencionPct, validado }) {
+  const payload = {
+    mes, ejecutivo, valorUf, retencionPct,
+    validado: !!validado,
+    validadoAt: validado ? nowISO() : null,
+    updatedAt: nowISO(),
+  };
+  const { data, error } = await supabase
+    .from("comisiones_validacion_ejecutivo")
+    .upsert(objToRow(payload), { onConflict: "mes,ejecutivo" })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToObj(data);
+}
+
