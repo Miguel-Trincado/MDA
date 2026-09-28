@@ -247,7 +247,9 @@ export default function Comisiones({ db }) {
     <div className="max-w-5xl mx-auto px-5 py-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-2xl text-[#0F3D66]">Comisiones</h2>
+          <h2 className="font-display text-2xl text-[#0F3D66]">
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v79</span>
+          </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
         <button onClick={handleLogout} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
