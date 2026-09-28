@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useAuthSession } from "../lib/useAuthSession";
 import {
   fetchComisionesConfig, setComisionesConfigRemote,
@@ -141,6 +141,57 @@ export default function Comisiones({ db }) {
     () => Object.keys(promesadasPorEjecutivo).sort((a, b) => a.localeCompare(b)),
     [promesadasPorEjecutivo]
   );
+
+  // Cruce automático: el Aval trae el código de "Lote" de cada Opp y el
+  // listado de precios trae ese mismo código en su columna "Codigo" — con
+  // eso se identifica sola la unidad vendida, sin pedirle nada al
+  // administrador. Se guarda como snapshot en comisiones_ventas apenas se
+  // detecta (una sola vez por Opp, vía el ref de abajo) porque el listado
+  // de precios se reemplaza completo cada vez que se sube uno nuevo.
+  const listaPreciosPorCodigo = useMemo(() => {
+    const map = {};
+    Object.values(db.listaPrecios || {}).forEach((u) => {
+      if (u.codigo) map[u.codigo] = u;
+    });
+    return map;
+  }, [db.listaPrecios]);
+
+  const autoAsignadosRef = useRef(new Set());
+  useEffect(() => {
+    if (!session || loadingDatos) return;
+    const pendientes = [];
+    Object.entries(promesadasPorEjecutivo).forEach(([ejecutivo, opps]) => {
+      opps.forEach((o) => {
+        if (ventas[o.opp] || autoAsignadosRef.current.has(o.opp)) return;
+        const lote = db.cotizaciones[o.opp]?.lote;
+        const unidad = lote ? listaPreciosPorCodigo[lote] : null;
+        if (!unidad) return;
+        pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad });
+      });
+    });
+    if (pendientes.length === 0) return;
+    pendientes.forEach((p) => autoAsignadosRef.current.add(p.opp));
+    (async () => {
+      for (const p of pendientes) {
+        try {
+          const saved = await guardarComisionVentaRemote({
+            opp: p.opp,
+            rut: p.rut,
+            cliente: p.cliente,
+            ejecutivo: p.ejecutivo,
+            mes,
+            unidadLabel: `${p.unidad.unidad}${p.unidad.modelo ? ` (${p.unidad.modelo})` : ""}`,
+            precioUf: Number(p.unidad.precio) || 0,
+            descuentoPct: Number(p.unidad.descuentoMax) || 0,
+          });
+          setVentas((v) => ({ ...v, [saved.opp]: saved }));
+        } catch (e) {
+          console.error("No se pudo auto-asignar la comisión de la Opp", p.opp, e);
+          autoAsignadosRef.current.delete(p.opp); // permite reintentar en el próximo render
+        }
+      }
+    })();
+  }, [session, loadingDatos, promesadasPorEjecutivo, ventas, db.cotizaciones, listaPreciosPorCodigo, mes]);
 
   if (session === undefined) {
     return <p className="text-stone-400 text-sm px-5 py-8">Verificando sesión…</p>;
@@ -312,7 +363,8 @@ function EjecutivoComisionPanel({ ejecutivo, opps, ventas, db, mes, valorUfMes, 
       </div>
       {faltanAsignar > 0 && (
         <p className="text-xs text-amber-700 mb-3">
-          {faltanAsignar} unidad(es) sin asignar todavía — elige la unidad vendida para calcular su comisión.
+          {faltanAsignar} unidad(es) sin poder cruzar automáticamente con el listado de precios (el código de Lote de
+          esa Opp no aparece en el listado actual) — asígnala a mano abajo.
         </p>
       )}
       <div className="hidden md:grid grid-cols-[1.5fr_1.6fr_0.8fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">

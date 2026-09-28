@@ -452,6 +452,7 @@ export async function uploadListaPreciosRemote(unidades) {
       area: u.area,
       precio: u.precio,
       descuentoMax: u.descuentoMax,
+      codigo: u.codigo,
       estado: u.estado,
       rawData: u.raw,
       updatedAt: nowISO(),

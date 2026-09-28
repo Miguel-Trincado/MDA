@@ -68,6 +68,10 @@ export function parseListaPrecios(text) {
     area: col("SUPERFICIE TOTAL", "SUP TOTAL (M2)", "SUP TOTAL", "M2", "M²"),
     descuentoMax: col("DECUENTO", "DESCUENTO", "DSCTO (MAX)", "DSCTO MAX", "DESCUENTO MAX", "DSCTO"),
     estado: col("ESTADO"),
+    // Código que coincide con la columna "Lote" del Maestro Aval — permite
+    // cruzar automáticamente cada Opp promesada con su unidad real (ver
+    // pestaña Comisiones), sin depender del N° de unidad "para mostrar".
+    codigo: col("CODIGO", "CÓDIGO", "COD"),
   };
 
   const required = [
@@ -95,6 +99,7 @@ export function parseListaPrecios(text) {
       precio: idx.precio !== -1 ? parseNumero(cols[idx.precio]) : null,
       descuentoMax: idx.descuentoMax !== -1 ? normalizeDescuento(cols[idx.descuentoMax]) : null,
       estado: ESTADO_MAP[normalizeHeader(idx.estado !== -1 ? cols[idx.estado] : "")] || (idx.estado !== -1 ? (cols[idx.estado] || "").trim() : "") || "Disponible",
+      codigo: idx.codigo !== -1 ? (cols[idx.codigo] || "").trim() : "",
       raw: rawRow,
     });
   }

@@ -128,6 +128,7 @@ create table if not exists cotizaciones (
   region      text default '',
   proyecto    text default '',
   estado      text default '',
+  lote        text default '',
   created_at  timestamptz not null default now()
 );
 
@@ -291,6 +292,7 @@ create table if not exists lista_precios (
   area           numeric,
   precio         numeric,
   descuento_max  numeric,
+  codigo         text default '',
   estado         text not null default 'Disponible',
   raw_data       jsonb,
   created_at     timestamptz not null default now(),

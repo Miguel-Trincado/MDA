@@ -24,6 +24,11 @@ export function parseMaestro(text) {
   const iTipologia = idx("Tipología");
   const iRegion = idx("Región Cliente");
   const iEstado = idx("Estado");
+  // El código de "Lote" es lo que permite, en la pestaña Comisiones,
+  // cruzar automáticamente cada Opp con su unidad real en el listado de
+  // precios (columna "Codigo" allá) para traer precio y descuento sin
+  // tener que asignarlos a mano.
+  const iLote = idx("Lote");
 
   if (iRut === -1 || iEjec === -1) {
     throw new Error(
@@ -103,6 +108,7 @@ export function parseMaestro(text) {
       region: iRegion !== -1 ? (cols[iRegion] || "").trim() : "",
       proyecto: iProyecto !== -1 ? (cols[iProyecto] || "").trim() : "",
       estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
+      lote: iLote !== -1 ? (cols[iLote] || "").trim() : "",
     });
   }
   return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
