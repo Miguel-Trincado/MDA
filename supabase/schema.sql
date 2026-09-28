@@ -123,6 +123,7 @@ create table if not exists cotizaciones (
   rut         text references gestion(rut) on delete cascade,
   fecha       text default '',
   fecha_opp   text default '',
+  fecha_promesa text default '',
   tipologia   text default '',
   region      text default '',
   proyecto    text default '',
@@ -345,6 +346,49 @@ create policy "allow_all_delete_cotizaciones_generadas" on cotizaciones_generada
 grant select on lista_precios to anon, authenticated;
 grant insert, update, delete on lista_precios to authenticated;
 grant select, insert, update, delete on cotizaciones_generadas to anon, authenticated;
+
+-- =====================================================================
+-- Metas comerciales mensuales (solo un usuario autenticado las asigna o
+-- modifica) y el historial de cambios de Estado por Opp, con fecha real
+-- de detección — es lo que permite calcular "Promesados del mes" desde
+-- el Aval en vez del campo Estado que el ejecutivo edita a mano.
+-- =====================================================================
+create table if not exists metas_mensuales (
+  mes         text primary key,
+  valor       numeric not null default 0,
+  updated_at  timestamptz not null default now()
+);
+
+alter table metas_mensuales enable row level security;
+
+create policy "select_metas_mensuales" on metas_mensuales for select using (true);
+create policy "auth_insert_metas_mensuales" on metas_mensuales for insert to authenticated with check (true);
+create policy "auth_update_metas_mensuales" on metas_mensuales for update to authenticated using (true) with check (true);
+create policy "auth_delete_metas_mensuales" on metas_mensuales for delete to authenticated using (true);
+
+grant select on metas_mensuales to anon, authenticated;
+grant insert, update, delete on metas_mensuales to authenticated;
+
+create table if not exists cambios_estado_opp (
+  id               uuid primary key default gen_random_uuid(),
+  opp              text not null,
+  rut              text,
+  estado_anterior  text,
+  estado_nuevo     text,
+  fecha_promesa    text default '',
+  fecha_deteccion  timestamptz not null default now()
+);
+
+create index if not exists idx_cambios_estado_opp_fecha on cambios_estado_opp (fecha_deteccion);
+create index if not exists idx_cambios_estado_opp_estado_nuevo on cambios_estado_opp (estado_nuevo);
+
+alter table cambios_estado_opp enable row level security;
+
+create policy "select_cambios_estado_opp" on cambios_estado_opp for select using (true);
+create policy "auth_insert_cambios_estado_opp" on cambios_estado_opp for insert to authenticated with check (true);
+
+grant select on cambios_estado_opp to anon, authenticated;
+grant insert on cambios_estado_opp to authenticated;
 
 -- =====================================================================
 -- Fin del esquema
