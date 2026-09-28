@@ -471,9 +471,9 @@ function EjecutivoComisionPanel({
       <div className="hidden md:grid grid-cols-[1.4fr_1.5fr_0.7fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
         <span>Cliente</span>
         <span>Unidad</span>
-        <span className="text-center">Orden</span>
-        <span className="text-center">Tramo</span>
-        <span className="text-center">Desc.</span>
+        <span className="flex justify-center">Orden</span>
+        <span className="flex justify-center">Tramo</span>
+        <span className="flex justify-center">Desc.</span>
         <span>Comisión UF</span>
         <span>Bruto CLP</span>
         <span>Neto CLP</span>
@@ -555,11 +555,11 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
           {f.cliente} <span className="text-xs text-stone-400">RUT {f.rut}</span>
         </span>
         <span className="text-stone-700">{f.venta.unidadLabel}</span>
-        <span className="text-stone-500 text-center">{f.orden}ª</span>
-        <span className="text-stone-500 text-center">
+        <span className="text-stone-500 flex justify-center">{f.orden}ª</span>
+        <span className="text-stone-500 flex justify-center">
           {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
         </span>
-        <span className="text-stone-500 text-center">{f.venta.descuentoPct}%</span>
+        <span className="text-stone-500 flex justify-center">{f.venta.descuentoPct}%</span>
         <span className="font-medium text-[#0F3D66]">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
         <span className="flex items-center justify-between gap-2">
