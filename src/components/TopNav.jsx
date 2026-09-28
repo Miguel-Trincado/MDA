@@ -1,10 +1,13 @@
-export default function TopNav({ active, onChange }) {
+export default function TopNav({ active, onChange, showComisiones }) {
   const tabs = [
     { key: "carga", label: "Carga" },
     { key: "dashboard", label: "Dashboard" },
     { key: "ejecutivo", label: "Ejecutivo" },
     { key: "cotizador", label: "Simulador" },
     { key: "jefa", label: "Jefa de Ventas" },
+    // Pestaña privada: solo aparece en el menú si hay una sesión de
+    // administrador activa (misma sesión que habilita subir el Aval).
+    ...(showComisiones ? [{ key: "comisiones", label: "Comisiones" }] : []),
   ];
   return (
     <div className="bg-[#0F3D66] text-white px-5 flex items-center justify-between flex-wrap">

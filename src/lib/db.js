@@ -489,3 +489,48 @@ export async function guardarCotizacionGenerada(payload) {
   return rowToObj(data);
 }
 
+/* ---------------------------------------------------------------------
+ * Comisiones (solo administrador). Estas tablas exigen sesión de
+ * Supabase Auth incluso para leer (a diferencia de todo lo demás en el
+ * sistema, que es de lectura abierta) — sin login, Supabase devuelve un
+ * error de RLS, que la UI trata como "no hay datos aún".
+ * ------------------------------------------------------------------- */
+export async function fetchComisionesConfig() {
+  const { data, error } = await supabase.from("comisiones_config").select("*");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => {
+    out[row.mes] = rowToObj(row);
+  });
+  return out;
+}
+
+export async function setComisionesConfigRemote(mes, { valorUf, retencionPct }) {
+  const row = objToRow({ mes, valorUf, retencionPct, updatedAt: nowISO() });
+  const { error } = await supabase.from("comisiones_config").upsert(row, { onConflict: "mes" });
+  if (error) throw error;
+  return { mes, valorUf, retencionPct };
+}
+
+export async function fetchComisionesVentas() {
+  const { data, error } = await supabase.from("comisiones_ventas").select("*");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => {
+    out[row.opp] = rowToObj(row);
+  });
+  return out;
+}
+
+export async function guardarComisionVentaRemote(payload) {
+  const row = objToRow({ ...payload, updatedAt: nowISO() });
+  const { data, error } = await supabase.from("comisiones_ventas").upsert(row, { onConflict: "opp" }).select().single();
+  if (error) throw error;
+  return rowToObj(data);
+}
+
+export async function eliminarComisionVentaRemote(opp) {
+  const { error } = await supabase.from("comisiones_ventas").delete().eq("opp", opp);
+  if (error) throw error;
+}
+

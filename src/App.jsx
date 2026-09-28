@@ -5,6 +5,8 @@ import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
 import CargaPage from "./components/CargaPage";
 import Cotizador from "./components/Cotizador";
+import Comisiones from "./components/Comisiones";
+import { useAuthSession } from "./lib/useAuthSession";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
@@ -17,6 +19,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
   const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [] });
+  // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
+  // menú (es privada: solo el administrador debe verla). El contenido de
+  // esa pestaña vuelve a validar la sesión por su cuenta.
+  const { session: authSession } = useAuthSession();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -38,6 +44,13 @@ export default function App() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  // Si la sesión de administrador se cierra (o nunca existió) mientras se
+  // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
+  // pantalla en blanco.
+  useEffect(() => {
+    if (view === "comisiones" && authSession === null) setView("dashboard");
+  }, [view, authSession]);
 
   async function saveGestion(rut, updates) {
     const prev = db.gestion[rut];
@@ -115,11 +128,12 @@ export default function App() {
         </div>
       ) : (
         <div>
-          <TopNav active={view} onChange={setView} />
+          <TopNav active={view} onChange={setView} showComisiones={!!authSession} />
           {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
           {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
           {view === "cotizador" && <Cotizador db={db} />}
+          {view === "comisiones" && authSession && <Comisiones db={db} />}
           {view === "jefa" && (
             <JefaView
               db={db}
