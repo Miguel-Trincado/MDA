@@ -31,15 +31,16 @@ function fechaHoraCl(iso) {
   }
 }
 
-// Tabla de tramos de comisión, escalonada por N° de orden de venta del
-// ejecutivo dentro del mes (la 1ª unidad vendida ese mes va al 0,50%, la
-// 2ª al 0,60%, la 3ª en adelante al 0,75%) — confirmado explícitamente
-// por el usuario, no es "todas las unidades al % del total". Este valor
+// Tabla de tramos de comisión: el % depende del TOTAL de unidades que el
+// ejecutivo vendió en el mes, y ese mismo % se aplica a TODAS sus unidades
+// de ese mes (1 unidad → todas al 0,50%; 2 unidades → todas al 0,60%; 3 o
+// más → todas al 0,75%) — corregido explícitamente por el usuario: no es
+// un tramo distinto por cada unidad según su orden de venta. Este valor
 // automático puede corregirse a mano caso a caso en cada fila (por
 // ejemplo si el SII o la venta real califica distinto).
-function tramoPct(orden) {
-  if (orden <= 1) return 0.5;
-  if (orden === 2) return 0.6;
+function tramoPctPorTotal(totalUnidades) {
+  if (totalUnidades <= 1) return 0.5;
+  if (totalUnidades === 2) return 0.6;
   return 0.75;
 }
 
@@ -350,14 +351,16 @@ function EjecutivoComisionPanel({
     }
   }
 
+  // El tramo automático depende del TOTAL de unidades del mes de este
+  // ejecutivo (no del orden de cada venta) y es el mismo para todas.
+  const pctAuto = tramoPctPorTotal(opps.length);
+
   const filas = opps.map((o, i) => {
     const venta = ventas[o.opp];
     const orden = i + 1;
-    // El tramo se calcula por orden de venta del mes, pero puede
-    // corregirse a mano por unidad (venta.tramoPct guardado) — cada
+    // Puede corregirse a mano por unidad (venta.tramoPct guardado) — cada
     // caso se revisa por separado, así que el automático es solo el
     // punto de partida.
-    const pctAuto = tramoPct(orden);
     const pct = venta?.tramoPct != null ? Number(venta.tramoPct) : pctAuto;
     let comisionUf = null, brutoClp = null, netoClp = null, precioNetoUf = null;
     if (venta) {
