@@ -27,7 +27,7 @@ function retencionSugeridaPorAnio(anio) {
 // Los montos en UF se muestran con 4 decimales (no 2): el % de comisión
 // aplicado sobre un precio con decimales puede arrastrar una fracción de
 // UF que a 2 decimales ya se ve "aproximada" — con 4 queda exacta.
-const ufFmt = (n) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(Number(n) || 0);
+const ufFmt = (n) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 
 function mesLabel(key) {
   const [y, m] = (key || "").split("-");
@@ -261,7 +261,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v82</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v83</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -419,6 +419,9 @@ function EjecutivoComisionPanel({
                 placeholder={loadingUFHoy ? "Obteniendo UF…" : ""}
                 className="ipt w-32"
               />
+              <span className="text-[10px] text-stone-400 block mt-0.5">
+                {loadingUFHoy ? "Consultando UF oficial…" : valorUFHoy != null ? `UF oficial hoy: ${ufFmt(valorUFHoy)}` : " "}
+              </span>
             </Field>
             <Field label="Retención boleta honorarios (%)">
               <input
