@@ -9,7 +9,20 @@ import { currencyDecimal } from "../lib/quotePdf";
 import { MESES_ES } from "../lib/constants";
 import { Panel, Field } from "./Shared";
 
-const RETENCION_DEFAULT = 14.5;
+// Retención de boleta de honorarios: el SII la sube gradualmente cada año
+// (0,75 puntos por año) hasta llegar a 17% en 2028 — ver
+// https://www.sii.cl/destacados/boletas_honorarios/aumento_gradual.html.
+// Esto es solo el valor sugerido por defecto al abrir un mes nuevo: sigue
+// siendo 100% editable por ejecutivo, porque cada caso se revisa aparte.
+const RETENCION_POR_ANIO = {
+  2020: 10.75, 2021: 11.5, 2022: 12.25, 2023: 13, 2024: 13.75,
+  2025: 14.5, 2026: 15.25, 2027: 16, 2028: 17,
+};
+function retencionSugeridaPorAnio(anio) {
+  if (RETENCION_POR_ANIO[anio] != null) return RETENCION_POR_ANIO[anio];
+  if (anio > 2028) return 17; // la escala se detiene en 17%
+  return 10.75; // años anteriores a la escala publicada
+}
 
 // Los montos en UF se muestran con 4 decimales (no 2): el % de comisión
 // aplicado sobre un precio con decimales puede arrastrar una fracción de
@@ -248,7 +261,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v79</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v81</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -317,20 +330,23 @@ function EjecutivoComisionPanel({
   ejecutivo, opps, ventas, db, mes, valorUFHoy, loadingUFHoy, validacion,
   onGuardarValidacion, onGuardarVenta, onQuitarVenta,
 }) {
+  const anioDelMes = Number((mes || "").split("-")[0]) || new Date().getFullYear();
+  const retencionSugerida = retencionSugeridaPorAnio(anioDelMes);
+
   const [editandoConfig, setEditandoConfig] = useState(!validacion);
   const [valorUfInput, setValorUfInput] = useState(String(validacion?.valorUf ?? valorUFHoy ?? ""));
-  const [retencionInput, setRetencionInput] = useState(String(validacion?.retencionPct ?? RETENCION_DEFAULT));
+  const [retencionInput, setRetencionInput] = useState(String(validacion?.retencionPct ?? retencionSugerida));
   const [guardandoConfig, setGuardandoConfig] = useState(false);
   const [errorConfig, setErrorConfig] = useState("");
 
   useEffect(() => {
     if (validacion) {
       setValorUfInput(String(validacion.valorUf ?? ""));
-      setRetencionInput(String(validacion.retencionPct ?? RETENCION_DEFAULT));
+      setRetencionInput(String(validacion.retencionPct ?? retencionSugerida));
       setEditandoConfig(false);
     } else {
       setValorUfInput(valorUFHoy != null ? String(valorUFHoy) : "");
-      setRetencionInput(String(RETENCION_DEFAULT));
+      setRetencionInput(String(retencionSugerida));
       setEditandoConfig(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -412,6 +428,9 @@ function EjecutivoComisionPanel({
                 onChange={(e) => setRetencionInput(e.target.value)}
                 className="ipt w-28"
               />
+              <span className="text-[10px] text-stone-400 block mt-0.5">
+                Sugerido {anioDelMes}: {retencionSugerida}% (escala SII)
+              </span>
             </Field>
             <button
               onClick={() => guardar(false)}
@@ -476,7 +495,7 @@ function EjecutivoComisionPanel({
         <span className="flex justify-center">Orden</span>
         <span className="flex justify-center">Tramo</span>
         <span className="flex justify-center">Desc.</span>
-        <span>Comisión UF</span>
+        <span className="flex justify-end">Comisión UF</span>
         <span>Bruto CLP</span>
         <span>Neto CLP</span>
       </div>
@@ -562,7 +581,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
           {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
         </span>
         <span className="text-stone-500 flex justify-center">{f.venta.descuentoPct}%</span>
-        <span className="font-medium text-[#0F3D66]">{ufFmt(f.comisionUf)} UF</span>
+        <span className="font-medium text-[#0F3D66] flex justify-end">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
         <span className="flex items-center justify-between gap-2">
           <span className="text-emerald-700 font-medium">${currencyDecimal(f.netoClp)}</span>
