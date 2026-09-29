@@ -261,7 +261,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v81</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v82</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -489,7 +489,7 @@ function EjecutivoComisionPanel({
           esa Opp no aparece en el listado actual) — asígnala a mano abajo.
         </p>
       )}
-      <div className="hidden md:grid grid-cols-[1.4fr_1.5fr_0.7fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
+      <div className="hidden md:grid grid-cols-[minmax(0,1.4fr)_minmax(0,1.5fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
         <span>Cliente</span>
         <span>Unidad</span>
         <span className="flex justify-center">Orden</span>
@@ -571,11 +571,11 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
 
   if (!editando && f.venta) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1.5fr_0.7fr_0.9fr_0.6fr_0.9fr_1fr_1fr] gap-2 items-center px-3 py-2 text-sm">
-        <span className="truncate">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1.5fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_minmax(0,0.6fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center px-3 py-2 text-sm">
+        <span className="truncate min-w-0">
           {f.cliente} <span className="text-xs text-stone-400">RUT {f.rut}</span>
         </span>
-        <span className="text-stone-700">{f.venta.unidadLabel}</span>
+        <span className="text-stone-700 truncate min-w-0">{f.venta.unidadLabel}</span>
         <span className="text-stone-500 flex justify-center">{f.orden}ª</span>
         <span className="text-stone-500 flex justify-center">
           {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
