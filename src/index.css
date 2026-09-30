@@ -14,11 +14,14 @@
 .ipt {
   width: 100%;
   border: 1px solid #d6d3d1;
-  padding: 0.4rem 0.5rem;
-  font-size: 0.8125rem;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
   background: white;
+  transition: border-color 0.15s ease;
 }
 .ipt:focus {
   outline: none;
-  border-color: #0f3d66;
+  border-color: #1e5aa8;
+  box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.12);
 }

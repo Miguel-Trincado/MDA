@@ -1,6 +1,41 @@
 import { useState } from "react";
 import { ALERT_STYLE } from "../lib/constants";
 
+// Círculo con las iniciales de un nombre o correo — usado en el header de
+// usuario y en las tarjetas de ejecutivo, para darle a cada persona una
+// identidad visual rápida de reconocer sin depender de una foto real.
+export function Avatar({ name, size = "md" }) {
+  const initials = String(name || "?")
+    .trim()
+    .split(/\s+/)
+    .map((p) => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const sizeClass = size === "lg" ? "w-11 h-11 text-base" : "w-9 h-9 text-sm";
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full bg-sky-100 text-[#0F3D66] font-semibold shrink-0 ${sizeClass}`}>
+      {initials || "?"}
+    </span>
+  );
+}
+
+// Un ícono + etiqueta + valor, en línea — usado para las cifras destacadas
+// de cada tarjeta de ejecutivo (unidades, comisión, bruto, neto) en vez de
+// simples números sueltos, para que se lean de un vistazo.
+export function IconStat({ icon: Icon, label, value, accent = "text-[#0F3D66]" }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon size={18} className="text-stone-400 shrink-0" />
+      <div className="leading-tight">
+        <div className="text-[11px] text-stone-400">{label}</div>
+        <div className={`text-sm font-semibold ${accent}`}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
 export function Stat({ label, value, accent = "text-[#0F3D66]" }) {
   return (
     <div>
@@ -12,8 +47,8 @@ export function Stat({ label, value, accent = "text-[#0F3D66]" }) {
 
 export function Field({ label, children, className = "" }) {
   return (
-    <label className={`flex flex-col gap-1 ${className}`}>
-      <span className="text-xs text-stone-500">{label}</span>
+    <label className={`flex flex-col gap-1.5 ${className}`}>
+      <span className="text-xs font-medium text-stone-500">{label}</span>
       {children}
     </label>
   );
@@ -21,7 +56,7 @@ export function Field({ label, children, className = "" }) {
 
 export function KpiCard({ label, value, sub, small }) {
   return (
-    <div className="bg-white border border-stone-200 border-t-2 border-t-[#1E5AA8] rounded-sm shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-1">
+    <div className="bg-white border border-stone-200 border-t-2 border-t-[#1E5AA8] rounded-xl shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-1">
       <div className="text-[11px] text-stone-400 uppercase tracking-wide">{label}</div>
       <div className={`font-display font-bold text-[#0F3D66] ${small ? "text-lg leading-snug" : "text-3xl"}`}>{value}</div>
       <div className="text-xs text-stone-500">{sub}</div>
@@ -31,8 +66,23 @@ export function KpiCard({ label, value, sub, small }) {
 
 export function Panel({ title, children, className = "" }) {
   return (
-    <div className={`bg-white border border-stone-200 rounded-sm shadow-sm p-5 ${className}`}>
+    <div className={`bg-white border border-stone-200 rounded-xl shadow-sm p-5 ${className}`}>
       {title && <div className="font-display text-lg text-[#0F3D66] mb-3">{title}</div>}
+      {children}
+    </div>
+  );
+}
+
+// Encabezado de página estándar: título grande + subtítulo, con espacio a
+// la derecha para un control propio de la vista (ej. el selector de Mes en
+// Comisiones), para que todas las pantallas compartan la misma jerarquía.
+export function PageHeader({ title, subtitle, children }) {
+  return (
+    <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+      <div>
+        <h1 className="font-display text-3xl font-semibold text-[#0F3D66]">{title}</h1>
+        {subtitle && <p className="text-sm text-stone-500 mt-1">{subtitle}</p>}
+      </div>
       {children}
     </div>
   );
@@ -51,7 +101,7 @@ export function SectionDivider({ label }) {
 export function AlertGroup({ tipo, lista, onClickCliente }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border border-stone-200 rounded-sm overflow-hidden">
+    <div className="border border-stone-200 rounded-xl overflow-hidden">
       <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between px-4 py-2.5 text-left hover:bg-stone-50 transition-colors">
         <span className={`text-xs px-2 py-1 rounded-sm border ${ALERT_STYLE[tipo]}`}>{tipo}</span>
         <span className="text-sm text-stone-500">{lista.length} cliente(s)</span>

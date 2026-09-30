@@ -264,7 +264,7 @@ export default function Cotizador({ db }) {
   return (
     <div className="max-w-4xl mx-auto px-5 py-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h2 className="font-display text-2xl text-[#0F3D66]">Simulador</h2>
+        <h2 className="font-display text-3xl font-semibold text-[#0F3D66]">Simulador</h2>
         <span className="text-xs font-mono px-3 py-1.5 rounded-full border border-stone-300 text-stone-500">
           {loadingUF ? "Valor UF: obteniendo…" : valorUF ? `Valor UF hoy: $${currency(valorUF)}` : "Valor UF no disponible"}
         </span>

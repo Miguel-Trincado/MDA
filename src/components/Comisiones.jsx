@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { Building2, Layers, Receipt, Pencil, Calendar } from "lucide-react";
 import { useAuthSession } from "../lib/useAuthSession";
 import {
   fetchComisionesValidacion, setComisionesValidacionRemote,
@@ -7,7 +8,7 @@ import {
 import { parseFechaCompleta, todayISO } from "../lib/helpers";
 import { currencyDecimal } from "../lib/quotePdf";
 import { MESES_ES } from "../lib/constants";
-import { Panel, Field } from "./Shared";
+import { Panel, Field, PageHeader, Avatar, IconStat } from "./Shared";
 
 // Retención de boleta de honorarios: el SII la sube gradualmente cada año
 // (0,75 puntos por año) hasta llegar a 17% en 2028 — ver
@@ -78,7 +79,7 @@ function useValorUFHoy() {
 }
 
 export default function Comisiones({ db }) {
-  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
+  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin } = useAuthSession();
 
   const [mes, setMes] = useState(todayISO().slice(0, 7));
   // La UF y la retención de boleta de honorarios ya NO son un valor único
@@ -276,7 +277,7 @@ export default function Comisiones({ db }) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="border border-stone-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-[#1E5AA8]"
+              className="ipt"
             />
             <input
               type="password"
@@ -284,13 +285,13 @@ export default function Comisiones({ db }) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="border border-stone-300 rounded-sm px-3 py-2 text-sm focus:outline-none focus:border-[#1E5AA8]"
+              className="ipt"
             />
             {loginError && <div className="text-rose-600 text-xs">{loginError}</div>}
             <button
               type="submit"
               disabled={loggingIn}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-4 py-2 text-sm font-medium rounded-sm"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-4 py-2.5 text-sm font-medium rounded-lg"
             >
               {loggingIn ? "Ingresando…" : "Ingresar"}
             </button>
@@ -301,39 +302,30 @@ export default function Comisiones({ db }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-5 py-6">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div>
-          <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v88</span>
-          </h2>
-          <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
+    <div className="max-w-5xl mx-auto">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v89</span></>} subtitle="Gestión y validación de comisiones">
+        <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
+          <div className="text-xs text-stone-400 mb-1">Mes</div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Calendar size={16} className="text-[#0F3D66]" />
+            <input
+              type="month"
+              value={mes}
+              onChange={(e) => setMes(e.target.value)}
+              className="text-sm font-medium text-[#0F3D66] outline-none bg-transparent cursor-pointer"
+            />
+          </label>
         </div>
-        <button onClick={handleLogout} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
-          Cerrar sesión
-        </button>
-      </div>
+      </PageHeader>
 
       {errorDatos && (
-        <div className="border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-3 rounded-sm mb-4">{errorDatos}</div>
+        <div className="border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-3 rounded-xl mb-4">{errorDatos}</div>
       )}
-
-      <Panel className="mb-5">
-        <div className="flex flex-wrap items-end gap-4">
-          <Field label="Mes">
-            <input type="month" value={mes} onChange={(e) => setMes(e.target.value)} className="ipt" />
-          </Field>
-          <p className="text-xs text-stone-400 max-w-md">
-            La UF y la retención de boleta ya no son un solo valor para todo el mes: cada ejecutivo entrega su boleta
-            un día distinto, así que se configuran y se validan abajo, uno por uno.
-          </p>
-        </div>
-      </Panel>
 
       {loadingDatos ? (
         <p className="text-stone-400 text-sm">Cargando comisiones…</p>
       ) : ejecutivosOrdenados.length === 0 ? (
-        <div className="border border-stone-200 rounded-sm bg-white p-8 text-center text-stone-400 text-sm">
+        <div className="border border-stone-200 rounded-xl bg-white p-8 text-center text-stone-400 text-sm">
           No hay Opp promesadas con fecha real de promesa en {mesLabel(mes)}.
         </div>
       ) : (
@@ -441,17 +433,20 @@ function EjecutivoComisionPanel({
 
   return (
     <Panel>
-      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-        <div className="font-display text-lg text-[#0F3D66]">{ejecutivo}</div>
-        <div className="text-sm text-stone-600">
-          {filas.length} unidad(es) · Comisión total:{" "}
-          <span className="font-medium text-[#0F3D66]">{ufFmt(totalComisionUf)} UF</span> · Bruto{" "}
-          <span className="font-medium">${currencyDecimal(totalBruto)}</span> · Neto{" "}
-          <span className="font-medium text-emerald-700">${currencyDecimal(totalNeto)}</span>
+      <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <Avatar name={ejecutivo} size="lg" />
+          <div className="font-display text-xl font-semibold text-[#0F3D66]">{ejecutivo}</div>
+        </div>
+        <div className="flex items-center gap-6 flex-wrap">
+          <IconStat icon={Building2} label="Unidades" value={`${filas.length} unidad(es)`} accent="text-[#0F3D66]" />
+          <IconStat icon={Layers} label="Comisión total" value={`${ufFmt(totalComisionUf)} UF`} accent="text-[#0F3D66]" />
+          <IconStat icon={Receipt} label="Bruto" value={`$${currencyDecimal(totalBruto)}`} accent="text-[#0F3D66]" />
+          <IconStat icon={Layers} label="Neto" value={`$${currencyDecimal(totalNeto)}`} accent="text-emerald-700" />
         </div>
       </div>
 
-      <div className={`border rounded-sm px-3 py-3 mb-3 ${validado ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"}`}>
+      <div className={`border rounded-xl px-4 py-3.5 mb-4 ${validado ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"}`}>
         {editandoConfig ? (
           <div className="flex flex-wrap items-end gap-3">
             <Field label={`UF que entregó ${ejecutivo}`}>
@@ -482,14 +477,14 @@ function EjecutivoComisionPanel({
             <button
               onClick={() => guardar(false)}
               disabled={guardandoConfig}
-              className="border border-stone-300 text-sm rounded-sm px-3 py-2 text-stone-600 hover:border-[#1E5AA8] disabled:opacity-50"
+              className="border border-stone-300 bg-white text-sm rounded-lg px-4 py-2.5 text-stone-600 hover:border-[#1E5AA8] hover:text-[#0F3D66] disabled:opacity-50 font-medium"
             >
               Guardar
             </button>
             <button
               onClick={() => guardar(true)}
               disabled={guardandoConfig}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2"
+              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2.5 font-medium"
             >
               {guardandoConfig ? "Guardando…" : "Guardar y validar"}
             </button>
@@ -536,7 +531,7 @@ function EjecutivoComisionPanel({
           esa Opp no aparece en el listado actual) — asígnala a mano abajo.
         </p>
       )}
-      <div className="hidden md:grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.5fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 px-3 py-2 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-100 border border-b-0 border-stone-200 rounded-t-sm">
+      <div className="hidden md:grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.5fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 px-3 py-2.5 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-50 border border-b-0 border-stone-200 rounded-t-xl">
         <span>Cliente</span>
         <span>Unidad</span>
         <span className="flex justify-center">Orden</span>
@@ -545,9 +540,9 @@ function EjecutivoComisionPanel({
         <span className="flex justify-end">Comisión UF</span>
         <span>Bruto CLP</span>
         <span>Neto CLP</span>
-        <span></span>
+        <span>Acciones</span>
       </div>
-      <div className="border border-stone-200 rounded-b-sm divide-y divide-stone-200 overflow-hidden bg-white">
+      <div className="border border-stone-200 rounded-b-xl divide-y divide-stone-100 overflow-hidden bg-white">
         {filas.map((f) => (
           <FilaComision key={f.opp} f={f} db={db} mes={mes} ejecutivo={ejecutivo} onGuardarVenta={onGuardarVenta} onQuitarVenta={onQuitarVenta} />
         ))}
@@ -641,9 +636,9 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <span className="font-medium text-[#0F3D66] flex justify-end">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
         <span className="text-emerald-700 font-medium">${currencyDecimal(f.netoClp)}</span>
-        <span className="flex justify-end">
-          <button onClick={() => setEditando(true)} className="text-xs text-stone-400 hover:text-[#0F3D66] underline shrink-0">
-            Editar
+        <span>
+          <button onClick={() => setEditando(true)} className="flex items-center gap-1 text-xs text-sky-700 hover:text-[#0F3D66] font-medium shrink-0">
+            <Pencil size={12} /> Editar
           </button>
         </span>
       </div>
@@ -661,7 +656,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
       {!f.venta && (
         <p className="text-xs text-stone-500 mb-2">
           Código de Lote en el Aval para esta Opp:{" "}
-          <span className="font-mono bg-white border border-stone-300 rounded-sm px-1.5 py-0.5">
+          <span className="font-mono bg-white border border-stone-300 rounded-md px-1.5 py-0.5">
             {loteOpp || "(vacío — no vino informado en el Aval)"}
           </span>{" "}
           — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
@@ -683,7 +678,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
             className="ipt"
           />
           {unidadesFiltradas.length > 0 && (
-            <div className="absolute z-10 left-0 right-0 bg-white border border-stone-300 rounded-sm shadow-md mt-1 max-h-56 overflow-auto">
+            <div className="absolute z-10 left-0 right-0 bg-white border border-stone-300 rounded-xl shadow-md mt-1 max-h-56 overflow-auto">
               {unidadesFiltradas.map((u) => (
                 <button
                   key={u.id}
@@ -724,14 +719,14 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <button
           onClick={guardar}
           disabled={guardando}
-          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-sm px-4 py-2"
+          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2.5 font-medium"
         >
           {guardando ? "Guardando…" : "Guardar"}
         </button>
         {f.venta && (
           <button
             onClick={() => setEditando(false)}
-            className="border border-stone-300 text-sm rounded-sm px-3 py-2 text-stone-600 hover:border-[#1E5AA8]"
+            className="border border-stone-300 bg-white text-sm rounded-lg px-4 py-2.5 text-stone-600 hover:border-[#1E5AA8] hover:text-[#0F3D66] font-medium"
           >
             Cancelar
           </button>

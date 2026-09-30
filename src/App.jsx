@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import TopNav from "./components/TopNav";
+import Sidebar from "./components/Sidebar";
+import Topbar from "./components/Topbar";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
@@ -22,7 +23,7 @@ export default function App() {
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
-  const { session: authSession } = useAuthSession();
+  const { session: authSession, handleLogout } = useAuthSession();
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -110,25 +111,34 @@ export default function App() {
     setDb((d) => ({ ...d, metas: { ...d.metas, [mes]: valor } }));
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-white font-body text-stone-900 flex items-center justify-center h-screen">
+        <div className="text-stone-500 font-body">Cargando datos del sistema…</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-white font-body text-stone-900 flex items-center justify-center h-screen px-5">
+        <div className="max-w-md border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-4 rounded-xl">
+          <div className="font-medium mb-1">No se pudo cargar el sistema</div>
+          <div>{error}</div>
+          <button onClick={reload} className="mt-3 bg-rose-700 hover:bg-rose-800 text-white text-xs px-3 py-1.5 rounded-lg">
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white font-body text-stone-900">
-      {loading ? (
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-stone-500 font-body">Cargando datos del sistema…</div>
-        </div>
-      ) : error ? (
-        <div className="flex items-center justify-center h-screen px-5">
-          <div className="max-w-md border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-4">
-            <div className="font-medium mb-1">No se pudo cargar el sistema</div>
-            <div>{error}</div>
-            <button onClick={reload} className="mt-3 bg-rose-700 hover:bg-rose-800 text-white text-xs px-3 py-1.5">
-              Reintentar
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <TopNav active={view} onChange={setView} showComisiones={!!authSession} />
+    <div className="min-h-screen bg-[#F4F6FA] font-body text-stone-900 flex">
+      <Sidebar active={view} onChange={setView} showComisiones={!!authSession} />
+      <div className="flex-1 min-w-0">
+        <Topbar email={authSession?.user?.email} onLogout={handleLogout} />
+        <div className="px-6 py-6">
           {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
           {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
@@ -144,7 +154,7 @@ export default function App() {
             />
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
