@@ -173,20 +173,43 @@ export default function Comisiones({ db }) {
   }, [db.listaPrecios]);
 
   const autoAsignadosRef = useRef(new Set());
+  const autoCorregidosRef = useRef(new Set());
   useEffect(() => {
     if (!session || loadingDatos) return;
     const pendientes = [];
+    // Correcciones: Opp que ya tenían una comisión guardada con el precio
+    // genérico del listado (de antes de que existiera "Precio Lista" del
+    // Aval, o de una carga donde esa columna aún no traía dato) y ahora sí
+    // hay un Precio Lista distinto disponible — se actualiza el precio
+    // automáticamente, sin tocar descuento ni tramo ya guardados. Nunca se
+    // pisa un precio que el administrador haya editado a mano a otro valor
+    // (eso ya no coincidiría con el precio del listado).
+    const correcciones = [];
     Object.entries(promesadasPorEjecutivo).forEach(([ejecutivo, opps]) => {
       opps.forEach((o) => {
-        if (ventas[o.opp] || autoAsignadosRef.current.has(o.opp)) return;
         const lote = db.cotizaciones[o.opp]?.lote;
         const unidad = lote ? listaPreciosPorCodigo[normalizarCodigo(lote)] : null;
         if (!unidad) return;
-        pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad });
+        const ventaActual = ventas[o.opp];
+        if (!ventaActual) {
+          if (autoAsignadosRef.current.has(o.opp)) return;
+          pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad });
+          return;
+        }
+        const precioListaAval = db.cotizaciones[o.opp]?.precioLista;
+        if (
+          precioListaAval != null &&
+          Number(ventaActual.precioUf) === Number(unidad.precio) &&
+          Number(ventaActual.precioUf) !== Number(precioListaAval) &&
+          !autoCorregidosRef.current.has(o.opp)
+        ) {
+          correcciones.push({ opp: o.opp, ventaActual, precioListaAval });
+        }
       });
     });
-    if (pendientes.length === 0) return;
+    if (pendientes.length === 0 && correcciones.length === 0) return;
     pendientes.forEach((p) => autoAsignadosRef.current.add(p.opp));
+    correcciones.forEach((c) => autoCorregidosRef.current.add(c.opp));
     (async () => {
       for (const p of pendientes) {
         try {
@@ -214,6 +237,18 @@ export default function Comisiones({ db }) {
         } catch (e) {
           console.error("No se pudo auto-asignar la comisión de la Opp", p.opp, e);
           autoAsignadosRef.current.delete(p.opp); // permite reintentar en el próximo render
+        }
+      }
+      for (const c of correcciones) {
+        try {
+          const saved = await guardarComisionVentaRemote({
+            ...c.ventaActual,
+            precioUf: Number(c.precioListaAval),
+          });
+          setVentas((v) => ({ ...v, [saved.opp]: saved }));
+        } catch (e) {
+          console.error("No se pudo corregir el precio de la comisión de la Opp", c.opp, e);
+          autoCorregidosRef.current.delete(c.opp);
         }
       }
     })();
@@ -271,7 +306,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v84</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v85</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
