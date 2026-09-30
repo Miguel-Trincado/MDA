@@ -5,7 +5,7 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios }) {
   const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
 
   return (
-    <div className="max-w-3xl mx-auto px-5 py-8">
+    <div className="max-w-3xl mx-auto px-5 pt-4 pb-8">
       <h2 className="font-display text-3xl font-semibold text-[#0F3D66] mb-5">Carga</h2>
 
       {session === undefined ? (

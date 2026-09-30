@@ -175,7 +175,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // Hay datos en el sistema, pero el filtro elegido no deja ninguna fila.
   if (data.total === 0) {
     return (
-      <div className="max-w-6xl mx-auto px-5 py-6">
+      <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
         {header}
         <div className="bg-white border border-stone-200 p-10 text-center">
           <div className="text-stone-500 text-sm mb-3">No hay cotizaciones para esta combinación de filtros.</div>
@@ -245,7 +245,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   ].filter(Boolean);
 
   return (
-    <div className="max-w-6xl mx-auto px-5 py-6">
+    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
       {header}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">

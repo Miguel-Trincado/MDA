@@ -229,7 +229,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     : [];
 
   return (
-    <div className="max-w-6xl mx-auto px-5 py-6">
+    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <h2 className="font-display text-3xl font-semibold text-[#0F3D66]">Panel Jefa de Ventas</h2>
         <div className="flex items-center gap-3">

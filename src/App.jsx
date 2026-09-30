@@ -142,22 +142,20 @@ export default function App() {
         onLogout={handleLogout}
       />
       <div className="flex-1 min-w-0">
-        <div className="px-6 py-6">
-          {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
-          {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
-          {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
-          {view === "cotizador" && <Cotizador db={db} />}
-          {view === "comisiones" && authSession && <Comisiones db={db} />}
-          {view === "jefa" && (
-            <JefaView
-              db={db}
-              onResolveCambio={resolveCambio}
-              onSetMeta={setMetaMensual}
-              onSaveGestion={saveGestion}
-              onRevisado={markRevisado}
-            />
-          )}
-        </div>
+        {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
+        {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
+        {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
+        {view === "cotizador" && <Cotizador db={db} />}
+        {view === "comisiones" && authSession && <Comisiones db={db} />}
+        {view === "jefa" && (
+          <JefaView
+            db={db}
+            onResolveCambio={resolveCambio}
+            onSetMeta={setMetaMensual}
+            onSaveGestion={saveGestion}
+            onRevisado={markRevisado}
+          />
+        )}
       </div>
     </div>
   );

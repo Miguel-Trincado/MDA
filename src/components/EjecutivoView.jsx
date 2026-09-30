@@ -28,7 +28,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
   const [periodo, setPeriodo] = useState(""); // "" = Todo, o "YYYY-MM"
   const [verCalendario, setVerCalendario] = useState(false);
 
-  const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 py-6";
+  const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 pt-4 pb-6";
 
   const fechasPorRut = useMemo(() => {
     const map = {};
