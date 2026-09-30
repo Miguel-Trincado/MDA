@@ -29,7 +29,7 @@ export default function Sidebar({ active, onChange, showComisiones, email, onLog
 
   return (
     <div
-      className={`shrink-0 bg-[#0B2547] text-white flex flex-col min-h-screen transition-[width] duration-150 ${
+      className={`shrink-0 sticky top-0 h-screen overflow-y-auto bg-[#0B2547] text-white flex flex-col transition-[width] duration-150 ${
         colapsado ? "w-[68px]" : "w-[220px]"
       }`}
     >
