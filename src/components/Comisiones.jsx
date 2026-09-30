@@ -190,6 +190,16 @@ export default function Comisiones({ db }) {
     (async () => {
       for (const p of pendientes) {
         try {
+          // El precio real de venta de esa Opp es el "Precio Lista" del
+          // Aval, no el precio genérico de la unidad principal en el
+          // listado — a veces el del Aval ya viene sumado con otras
+          // unidades del mismo cliente (estacionamiento, bodega, etc.). El
+          // % de descuento sí se toma de la unidad principal cruzada.
+          // Si esa Opp todavía no trae Precio Lista (Aval más antiguo o
+          // columna aún no parseada), se cae de respaldo al precio de la
+          // unidad en el listado, como antes.
+          const precioListaAval = db.cotizaciones[p.opp]?.precioLista;
+          const precioUf = precioListaAval != null ? Number(precioListaAval) : Number(p.unidad.precio) || 0;
           const saved = await guardarComisionVentaRemote({
             opp: p.opp,
             rut: p.rut,
@@ -197,7 +207,7 @@ export default function Comisiones({ db }) {
             ejecutivo: p.ejecutivo,
             mes,
             unidadLabel: `${p.unidad.unidad}${p.unidad.modelo ? ` (${p.unidad.modelo})` : ""}`,
-            precioUf: Number(p.unidad.precio) || 0,
+            precioUf,
             descuentoPct: Number(p.unidad.descuentoMax) || 0,
           });
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
@@ -261,7 +271,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v83</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v84</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -529,10 +539,17 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
       .slice(0, 10);
   }, [db.listaPrecios, buscarUnidad]);
 
+  // Precio real de venta de esa Opp según el Aval (columna "Precio
+  // Lista") — puede venir sumado con otras unidades del mismo cliente. Si
+  // no está disponible, se usa el precio de la unidad en el listado como
+  // respaldo (comportamiento anterior).
+  const precioListaAval = db.cotizaciones?.[f.opp]?.precioLista;
+
   function elegirUnidad(u) {
     setUnidadElegida(u);
     setBuscarUnidad("");
-    setPrecioUfInput(u.precio != null ? String(u.precio) : "");
+    const precioBase = precioListaAval != null ? precioListaAval : u.precio;
+    setPrecioUfInput(precioBase != null ? String(precioBase) : "");
     setDescuentoInput(u.descuentoMax != null ? String(u.descuentoMax) : "0");
   }
 
@@ -611,6 +628,13 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
             {loteOpp || "(vacío — no vino informado en el Aval)"}
           </span>{" "}
           — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
+        </p>
+      )}
+      {precioListaAval != null && (
+        <p className="text-xs text-stone-500 mb-2">
+          Precio Lista del Aval para esta Opp: <span className="font-medium">{ufFmt(precioListaAval)} UF</span> — se
+          usa como base del cálculo en vez del precio del listado (puede venir sumado con otras unidades del mismo
+          cliente).
         </p>
       )}
       {!unidadElegida && !f.venta && (

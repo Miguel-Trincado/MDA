@@ -299,12 +299,20 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     // dejarlo entrar cuando llega o cambia, aunque no haya cambio de
     // Estado, para que Comisiones pueda cruzarlo con el listado de precios.
     const loteNuevo = r.lote && r.lote !== prev.lote;
-    if (estadoCambio || (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo)) || loteNuevo) {
+    // El "Precio Lista" (precio real de venta de esa Opp, según el Aval)
+    // sigue exactamente la misma regla que el Lote: no siempre viene
+    // informado mientras la Opp está en "Cotización", así que hay que
+    // dejarlo entrar cuando aparece o cambia, aunque no haya cambio de
+    // Estado — es lo que usa Comisiones para calcular sobre el precio
+    // real en vez del precio genérico del listado.
+    const precioListaNuevo = r.precioLista != null && r.precioLista !== prev.precioLista;
+    if (estadoCambio || (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo || precioListaNuevo)) || loteNuevo || precioListaNuevo) {
       const payload = {
         opp: r.opp,
         estado: r.estado || prev.estado,
         fechaPromesa: r.fechaPromesa || prev.fechaPromesa || "",
         lote: r.lote || prev.lote || "",
+        precioLista: r.precioLista != null ? r.precioLista : (prev.precioLista ?? null),
       };
       cotizacionesEstadoActualizado.push(payload);
       if (estadoCambio || (r.estado === "Promesada" && fechaPromesaNueva)) {
@@ -342,6 +350,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
           estado: r.estado !== prev.estado ? r.estado : prev.estado,
           fechaPromesa: r.fechaPromesa || prev.fechaPromesa,
           lote: r.lote || prev.lote,
+          precioLista: r.precioLista != null ? r.precioLista : prev.precioLista,
         }
       : r;
   });

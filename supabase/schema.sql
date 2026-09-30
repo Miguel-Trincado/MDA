@@ -129,6 +129,7 @@ create table if not exists cotizaciones (
   proyecto    text default '',
   estado      text default '',
   lote        text default '',
+  precio_lista numeric,
   created_at  timestamptz not null default now()
 );
 

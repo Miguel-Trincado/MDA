@@ -1,5 +1,34 @@
 import { esProyectoPilpilen, normalizeName, normalizeRut } from "./helpers";
 
+// Para columnas cuyo nombre puede venir con variantes de mayúsculas, tildes
+// o "de" de por medio (ej. "Precio Lista" vs "Precio de Lista"), en vez de
+// exigir el nombre exacto como el resto de las columnas del Aval.
+const normalizeHeaderFlexible = (s) =>
+  String(s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+
+// El Aval a veces trae los números con formato chileno ("3.957,25") y a
+// veces ya vienen simples ("3957.25") según cómo se copió desde Excel —
+// se detecta cuál separador es cuál en vez de asumir uno solo.
+function parseNumeroCL(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim().replace(/[^0-9.,-]/g, "");
+  if (!s) return null;
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (hasComma) {
+    s = s.replace(",", ".");
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function parseMaestro(text) {
   const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
   if (lines.length < 2) {
@@ -7,6 +36,10 @@ export function parseMaestro(text) {
   }
   const headers = lines[0].split("\t").map((h) => h.trim());
   const idx = (name) => headers.indexOf(name);
+  const idxFlexible = (...names) => {
+    const wanted = names.map(normalizeHeaderFlexible);
+    return headers.findIndex((h) => wanted.includes(normalizeHeaderFlexible(h)));
+  };
   const iRut = idx("RUT Cliente");
   const iNombre = idx("Nombre Cliente");
   const iSegundo = idx("Segundo Nombre");
@@ -29,6 +62,12 @@ export function parseMaestro(text) {
   // precios (columna "Codigo" allá) para traer precio y descuento sin
   // tener que asignarlos a mano.
   const iLote = idx("Lote");
+  // El "Precio Lista" del Aval es el precio REAL de venta de esa Opp — a
+  // veces ya viene sumado con otras unidades del mismo cliente (depto +
+  // estacionamiento + bodega, etc.), por eso puede no coincidir con el
+  // precio de una sola unidad en el listado de precios. Se acepta
+  // cualquier variante razonable del nombre de esta columna.
+  const iPrecioLista = idxFlexible("Precio Lista", "Precio de Lista");
 
   if (iRut === -1 || iEjec === -1) {
     throw new Error(
@@ -109,6 +148,7 @@ export function parseMaestro(text) {
       proyecto: iProyecto !== -1 ? (cols[iProyecto] || "").trim() : "",
       estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
       lote: iLote !== -1 ? (cols[iLote] || "").trim() : "",
+      precioLista: iPrecioLista !== -1 ? parseNumeroCL(cols[iPrecioLista]) : null,
     });
   }
   return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
