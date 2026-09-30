@@ -306,13 +306,22 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     // Estado — es lo que usa Comisiones para calcular sobre el precio
     // real en vez del precio genérico del listado.
     const precioListaNuevo = r.precioLista != null && r.precioLista !== prev.precioLista;
-    if (estadoCambio || (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo || precioListaNuevo)) || loteNuevo || precioListaNuevo) {
+    // El % de descuento de la unidad principal sigue la misma regla.
+    const descuentoUniPrincipalNuevo =
+      r.descuentoUniPrincipal != null && r.descuentoUniPrincipal !== prev.descuentoUniPrincipal;
+    if (
+      estadoCambio ||
+      (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo)) ||
+      loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo
+    ) {
       const payload = {
         opp: r.opp,
         estado: r.estado || prev.estado,
         fechaPromesa: r.fechaPromesa || prev.fechaPromesa || "",
         lote: r.lote || prev.lote || "",
         precioLista: r.precioLista != null ? r.precioLista : (prev.precioLista ?? null),
+        descuentoUniPrincipal:
+          r.descuentoUniPrincipal != null ? r.descuentoUniPrincipal : (prev.descuentoUniPrincipal ?? null),
       };
       cotizacionesEstadoActualizado.push(payload);
       if (estadoCambio || (r.estado === "Promesada" && fechaPromesaNueva)) {
@@ -351,6 +360,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
           fechaPromesa: r.fechaPromesa || prev.fechaPromesa,
           lote: r.lote || prev.lote,
           precioLista: r.precioLista != null ? r.precioLista : prev.precioLista,
+          descuentoUniPrincipal: r.descuentoUniPrincipal != null ? r.descuentoUniPrincipal : prev.descuentoUniPrincipal,
         }
       : r;
   });

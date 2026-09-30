@@ -178,33 +178,41 @@ export default function Comisiones({ db }) {
     if (!session || loadingDatos) return;
     const pendientes = [];
     // Correcciones: Opp que ya tenían una comisión guardada con el precio
-    // genérico del listado (de antes de que existiera "Precio Lista" del
-    // Aval, o de una carga donde esa columna aún no traía dato) y ahora sí
-    // hay un Precio Lista distinto disponible — se actualiza el precio
-    // automáticamente, sin tocar descuento ni tramo ya guardados. Nunca se
-    // pisa un precio que el administrador haya editado a mano a otro valor
-    // (eso ya no coincidiría con el precio del listado).
+    // y/o descuento genéricos del listado (de antes de que el sistema
+    // supiera leer "Precio Lista Opp" / "Descuento Uni. Principal" del
+    // Aval, o de una carga donde esas columnas aún no traían dato) y ahora
+    // sí hay un valor real del Aval disponible — se actualiza
+    // automáticamente. Nunca se pisa un precio o descuento que el
+    // administrador haya editado a mano a otro valor (eso ya no
+    // coincidiría con el valor del listado que se usaba antes).
     const correcciones = [];
     Object.entries(promesadasPorEjecutivo).forEach(([ejecutivo, opps]) => {
       opps.forEach((o) => {
         const lote = db.cotizaciones[o.opp]?.lote;
         const unidad = lote ? listaPreciosPorCodigo[normalizarCodigo(lote)] : null;
         if (!unidad) return;
+        const cot = db.cotizaciones[o.opp];
+        const precioEsperado = cot?.precioLista != null ? Number(cot.precioLista) : Number(unidad.precio) || 0;
+        const descuentoEsperado =
+          cot?.descuentoUniPrincipal != null ? Number(cot.descuentoUniPrincipal) : Number(unidad.descuentoMax) || 0;
         const ventaActual = ventas[o.opp];
         if (!ventaActual) {
           if (autoAsignadosRef.current.has(o.opp)) return;
-          pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad });
+          pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad, precioEsperado, descuentoEsperado });
           return;
         }
-        const precioListaAval = db.cotizaciones[o.opp]?.precioLista;
-        if (
-          precioListaAval != null &&
-          Number(ventaActual.precioUf) === Number(unidad.precio) &&
-          Number(ventaActual.precioUf) !== Number(precioListaAval) &&
-          !autoCorregidosRef.current.has(o.opp)
-        ) {
-          correcciones.push({ opp: o.opp, ventaActual, precioListaAval });
+        if (autoCorregidosRef.current.has(o.opp)) return;
+        const cambios = {};
+        if (Number(ventaActual.precioUf) === Number(unidad.precio) && Number(ventaActual.precioUf) !== precioEsperado) {
+          cambios.precioUf = precioEsperado;
         }
+        if (
+          Number(ventaActual.descuentoPct) === Number(unidad.descuentoMax) &&
+          Number(ventaActual.descuentoPct) !== descuentoEsperado
+        ) {
+          cambios.descuentoPct = descuentoEsperado;
+        }
+        if (Object.keys(cambios).length > 0) correcciones.push({ opp: o.opp, ventaActual, cambios });
       });
     });
     if (pendientes.length === 0 && correcciones.length === 0) return;
@@ -213,16 +221,13 @@ export default function Comisiones({ db }) {
     (async () => {
       for (const p of pendientes) {
         try {
-          // El precio real de venta de esa Opp es el "Precio Lista" del
-          // Aval, no el precio genérico de la unidad principal en el
-          // listado — a veces el del Aval ya viene sumado con otras
-          // unidades del mismo cliente (estacionamiento, bodega, etc.). El
-          // % de descuento sí se toma de la unidad principal cruzada.
-          // Si esa Opp todavía no trae Precio Lista (Aval más antiguo o
-          // columna aún no parseada), se cae de respaldo al precio de la
-          // unidad en el listado, como antes.
-          const precioListaAval = db.cotizaciones[p.opp]?.precioLista;
-          const precioUf = precioListaAval != null ? Number(precioListaAval) : Number(p.unidad.precio) || 0;
+          // El precio y el descuento reales de esa Opp son "Precio Lista
+          // Opp" y "Descuento Uni. Principal" del Aval — el precio a veces
+          // ya viene sumado con otras unidades del mismo cliente
+          // (estacionamiento, bodega, etc.). Si esa Opp todavía no trae
+          // esos datos (Aval más antiguo o columnas no encontradas), se
+          // cae de respaldo al precio/descuento de la unidad en el
+          // listado, como antes.
           const saved = await guardarComisionVentaRemote({
             opp: p.opp,
             rut: p.rut,
@@ -230,8 +235,8 @@ export default function Comisiones({ db }) {
             ejecutivo: p.ejecutivo,
             mes,
             unidadLabel: `${p.unidad.unidad}${p.unidad.modelo ? ` (${p.unidad.modelo})` : ""}`,
-            precioUf,
-            descuentoPct: Number(p.unidad.descuentoMax) || 0,
+            precioUf: p.precioEsperado,
+            descuentoPct: p.descuentoEsperado,
           });
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
         } catch (e) {
@@ -241,13 +246,10 @@ export default function Comisiones({ db }) {
       }
       for (const c of correcciones) {
         try {
-          const saved = await guardarComisionVentaRemote({
-            ...c.ventaActual,
-            precioUf: Number(c.precioListaAval),
-          });
+          const saved = await guardarComisionVentaRemote({ ...c.ventaActual, ...c.cambios });
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
         } catch (e) {
-          console.error("No se pudo corregir el precio de la comisión de la Opp", c.opp, e);
+          console.error("No se pudo corregir la comisión de la Opp", c.opp, e);
           autoCorregidosRef.current.delete(c.opp);
         }
       }
@@ -306,7 +308,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v85</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v86</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -574,18 +576,21 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
       .slice(0, 10);
   }, [db.listaPrecios, buscarUnidad]);
 
-  // Precio real de venta de esa Opp según el Aval (columna "Precio
-  // Lista") — puede venir sumado con otras unidades del mismo cliente. Si
-  // no está disponible, se usa el precio de la unidad en el listado como
-  // respaldo (comportamiento anterior).
+  // Precio y descuento reales de esa Opp según el Aval ("Precio Lista
+  // Opp" y "Descuento Uni. Principal") — el precio puede venir sumado con
+  // otras unidades del mismo cliente. Si no están disponibles, se usa el
+  // precio/descuento de la unidad en el listado como respaldo
+  // (comportamiento anterior).
   const precioListaAval = db.cotizaciones?.[f.opp]?.precioLista;
+  const descuentoAval = db.cotizaciones?.[f.opp]?.descuentoUniPrincipal;
 
   function elegirUnidad(u) {
     setUnidadElegida(u);
     setBuscarUnidad("");
     const precioBase = precioListaAval != null ? precioListaAval : u.precio;
+    const descuentoBase = descuentoAval != null ? descuentoAval : u.descuentoMax;
     setPrecioUfInput(precioBase != null ? String(precioBase) : "");
-    setDescuentoInput(u.descuentoMax != null ? String(u.descuentoMax) : "0");
+    setDescuentoInput(descuentoBase != null ? String(descuentoBase) : "0");
   }
 
   async function guardar() {
@@ -665,11 +670,14 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
           — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
         </p>
       )}
-      {precioListaAval != null && (
+      {(precioListaAval != null || descuentoAval != null) && (
         <p className="text-xs text-stone-500 mb-2">
-          Precio Lista del Aval para esta Opp: <span className="font-medium">{ufFmt(precioListaAval)} UF</span> — se
-          usa como base del cálculo en vez del precio del listado (puede venir sumado con otras unidades del mismo
-          cliente).
+          Del Aval para esta Opp — Precio Lista:{" "}
+          <span className="font-medium">{precioListaAval != null ? `${ufFmt(precioListaAval)} UF` : "no disponible"}</span>
+          {" "}· Descuento Uni. Principal:{" "}
+          <span className="font-medium">{descuentoAval != null ? `${descuentoAval}%` : "no disponible"}</span> — se
+          usan como base del cálculo en vez de los valores del listado (el precio puede venir sumado con otras
+          unidades del mismo cliente).
         </p>
       )}
       {!unidadElegida && !f.venta && (

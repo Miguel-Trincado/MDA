@@ -1,12 +1,15 @@
 import { esProyectoPilpilen, normalizeName, normalizeRut } from "./helpers";
 
-// Para columnas cuyo nombre puede venir con variantes de mayúsculas, tildes
-// o "de" de por medio (ej. "Precio Lista" vs "Precio de Lista"), en vez de
-// exigir el nombre exacto como el resto de las columnas del Aval.
+// Para columnas cuyo nombre puede venir con variantes de mayúsculas, tildes,
+// puntos (ej. "Uni." vs "Unidad") o palabras de más (ej. "Precio Lista" vs
+// "Precio Lista Opp"), en vez de exigir el nombre exacto como el resto de
+// las columnas del Aval — nunca hay que adivinar el nombre real, pero sí
+// hay que aceptar varias formas razonables de escribirlo.
 const normalizeHeaderFlexible = (s) =>
   String(s || "")
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .trim()
     .toUpperCase()
     .replace(/\s+/g, " ");
@@ -29,6 +32,19 @@ function parseNumeroCL(raw) {
   return Number.isFinite(n) ? n : null;
 }
 
+// El descuento puede venir como fracción (0.06 = 6%), como texto con "%"
+// (ej. "6%"), o directamente como el número de porcentaje (6) — mismo
+// criterio que ya se usa para el listado de precios (parseListaPrecios.js).
+function parseDescuentoPct(raw) {
+  const txt = String(raw || "").trim();
+  if (!txt) return null;
+  const tienePorcentaje = txt.includes("%");
+  const n = parseNumeroCL(txt.replace("%", ""));
+  if (n == null) return null;
+  if (tienePorcentaje) return n;
+  return n > 0 && n <= 1 ? n * 100 : n;
+}
+
 export function parseMaestro(text) {
   const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
   if (lines.length < 2) {
@@ -38,7 +54,16 @@ export function parseMaestro(text) {
   const idx = (name) => headers.indexOf(name);
   const idxFlexible = (...names) => {
     const wanted = names.map(normalizeHeaderFlexible);
-    return headers.findIndex((h) => wanted.includes(normalizeHeaderFlexible(h)));
+    // 1) coincidencia exacta con alguna de las variantes aceptadas
+    let found = headers.findIndex((h) => wanted.includes(normalizeHeaderFlexible(h)));
+    if (found !== -1) return found;
+    // 2) el encabezado real trae palabras de más (ej. "Precio Lista Opp"
+    // cuando se buscaba "Precio Lista") — alcanza con que empiece igual o
+    // contenga la variante completa, sin exigir el nombre exacto.
+    return headers.findIndex((h) => {
+      const nh = normalizeHeaderFlexible(h);
+      return wanted.some((w) => w && (nh.startsWith(w) || nh.includes(w)));
+    });
   };
   const iRut = idx("RUT Cliente");
   const iNombre = idx("Nombre Cliente");
@@ -62,12 +87,20 @@ export function parseMaestro(text) {
   // precios (columna "Codigo" allá) para traer precio y descuento sin
   // tener que asignarlos a mano.
   const iLote = idx("Lote");
-  // El "Precio Lista" del Aval es el precio REAL de venta de esa Opp — a
-  // veces ya viene sumado con otras unidades del mismo cliente (depto +
+  // El "Precio Lista Opp" del Aval es el precio REAL de venta de esa Opp —
+  // viene sumado con otras unidades del mismo cliente (depto +
   // estacionamiento + bodega, etc.), por eso puede no coincidir con el
   // precio de una sola unidad en el listado de precios. Se acepta
-  // cualquier variante razonable del nombre de esta columna.
-  const iPrecioLista = idxFlexible("Precio Lista", "Precio de Lista");
+  // cualquier variante razonable del nombre de esta columna, nunca un
+  // nombre único y exacto.
+  const iPrecioLista = idxFlexible("Precio Lista Opp", "Precio Lista", "Precio de Lista");
+  // El "Descuento Uni. Principal" es el % de descuento real que se le
+  // aplicó a la unidad principal de esa Opp — se usa sobre el Precio
+  // Lista Opp para llegar al valor neto de la comisión, en vez del
+  // descuento genérico del listado de precios.
+  const iDescuentoUniPrincipal = idxFlexible(
+    "Descuento Uni Principal", "Descuento Unidad Principal", "Descuento Principal", "Descuento Uni"
+  );
 
   if (iRut === -1 || iEjec === -1) {
     throw new Error(
@@ -149,6 +182,7 @@ export function parseMaestro(text) {
       estado: iEstado !== -1 ? (cols[iEstado] || "").trim() : "",
       lote: iLote !== -1 ? (cols[iLote] || "").trim() : "",
       precioLista: iPrecioLista !== -1 ? parseNumeroCL(cols[iPrecioLista]) : null,
+      descuentoUniPrincipal: iDescuentoUniPrincipal !== -1 ? parseDescuentoPct(cols[iDescuentoUniPrincipal]) : null,
     });
   }
   return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
