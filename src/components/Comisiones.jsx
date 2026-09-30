@@ -177,14 +177,13 @@ export default function Comisiones({ db }) {
   useEffect(() => {
     if (!session || loadingDatos) return;
     const pendientes = [];
-    // Correcciones: Opp que ya tenían una comisión guardada con el precio
-    // y/o descuento genéricos del listado (de antes de que el sistema
-    // supiera leer "Precio Lista Opp" / "Descuento Uni. Principal" del
-    // Aval, o de una carga donde esas columnas aún no traían dato) y ahora
-    // sí hay un valor real del Aval disponible — se actualiza
-    // automáticamente. Nunca se pisa un precio o descuento que el
-    // administrador haya editado a mano a otro valor (eso ya no
-    // coincidiría con el valor del listado que se usaba antes).
+    // Correcciones: Opp que ya tenían una comisión guardada con un precio
+    // o descuento que no coincide con la fuente correcta de cada uno —
+    // precio: "Precio Lista Opp" del Aval; descuento: SIEMPRE el de la
+    // unidad principal en el listado de precios (el "Descuento Uni.
+    // Principal" del Aval es un dato manual poco confiable, se puede
+    // olvidar cargar, así que no se usa para el cálculo). Se corrige
+    // automáticamente al detectar el desajuste.
     const correcciones = [];
     Object.entries(promesadasPorEjecutivo).forEach(([ejecutivo, opps]) => {
       opps.forEach((o) => {
@@ -193,8 +192,7 @@ export default function Comisiones({ db }) {
         if (!unidad) return;
         const cot = db.cotizaciones[o.opp];
         const precioEsperado = cot?.precioLista != null ? Number(cot.precioLista) : Number(unidad.precio) || 0;
-        const descuentoEsperado =
-          cot?.descuentoUniPrincipal != null ? Number(cot.descuentoUniPrincipal) : Number(unidad.descuentoMax) || 0;
+        const descuentoEsperado = Number(unidad.descuentoMax) || 0;
         const ventaActual = ventas[o.opp];
         if (!ventaActual) {
           if (autoAsignadosRef.current.has(o.opp)) return;
@@ -206,10 +204,10 @@ export default function Comisiones({ db }) {
         if (Number(ventaActual.precioUf) === Number(unidad.precio) && Number(ventaActual.precioUf) !== precioEsperado) {
           cambios.precioUf = precioEsperado;
         }
-        if (
-          Number(ventaActual.descuentoPct) === Number(unidad.descuentoMax) &&
-          Number(ventaActual.descuentoPct) !== descuentoEsperado
-        ) {
+        // El descuento siempre debe ser el del listado — se corrige
+        // cualquier desajuste, sin excepción (a diferencia del precio, que
+        // solo se corrige si nadie lo editó a mano).
+        if (Number(ventaActual.descuentoPct) !== descuentoEsperado) {
           cambios.descuentoPct = descuentoEsperado;
         }
         if (Object.keys(cambios).length > 0) correcciones.push({ opp: o.opp, ventaActual, cambios });
@@ -221,13 +219,12 @@ export default function Comisiones({ db }) {
     (async () => {
       for (const p of pendientes) {
         try {
-          // El precio y el descuento reales de esa Opp son "Precio Lista
-          // Opp" y "Descuento Uni. Principal" del Aval — el precio a veces
-          // ya viene sumado con otras unidades del mismo cliente
-          // (estacionamiento, bodega, etc.). Si esa Opp todavía no trae
-          // esos datos (Aval más antiguo o columnas no encontradas), se
-          // cae de respaldo al precio/descuento de la unidad en el
-          // listado, como antes.
+          // El precio real de esa Opp es "Precio Lista Opp" del Aval — a
+          // veces ya viene sumado con otras unidades del mismo cliente
+          // (estacionamiento, bodega, etc.). Si esa Opp todavía no trae ese
+          // dato (Aval más antiguo o columna no encontrada), se cae de
+          // respaldo al precio de la unidad en el listado, como antes. El
+          // descuento SIEMPRE sale del listado de precios.
           const saved = await guardarComisionVentaRemote({
             opp: p.opp,
             rut: p.rut,
@@ -308,7 +305,7 @@ export default function Comisiones({ db }) {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h2 className="font-display text-2xl text-[#0F3D66]">
-            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v86</span>
+            Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v87</span>
           </h2>
           <p className="text-stone-500 text-sm">Sesión: {session.user.email}</p>
         </div>
@@ -576,21 +573,20 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
       .slice(0, 10);
   }, [db.listaPrecios, buscarUnidad]);
 
-  // Precio y descuento reales de esa Opp según el Aval ("Precio Lista
-  // Opp" y "Descuento Uni. Principal") — el precio puede venir sumado con
-  // otras unidades del mismo cliente. Si no están disponibles, se usa el
-  // precio/descuento de la unidad en el listado como respaldo
-  // (comportamiento anterior).
+  // Precio real de esa Opp según el Aval ("Precio Lista Opp") — puede
+  // venir sumado con otras unidades del mismo cliente. Si no está
+  // disponible, se usa el precio de la unidad en el listado como respaldo
+  // (comportamiento anterior). El descuento SIEMPRE sale del listado de
+  // precios — el "Descuento Uni. Principal" del Aval es un dato manual
+  // poco confiable (se puede olvidar cargar), así que no se usa.
   const precioListaAval = db.cotizaciones?.[f.opp]?.precioLista;
-  const descuentoAval = db.cotizaciones?.[f.opp]?.descuentoUniPrincipal;
 
   function elegirUnidad(u) {
     setUnidadElegida(u);
     setBuscarUnidad("");
     const precioBase = precioListaAval != null ? precioListaAval : u.precio;
-    const descuentoBase = descuentoAval != null ? descuentoAval : u.descuentoMax;
     setPrecioUfInput(precioBase != null ? String(precioBase) : "");
-    setDescuentoInput(descuentoBase != null ? String(descuentoBase) : "0");
+    setDescuentoInput(u.descuentoMax != null ? String(u.descuentoMax) : "0");
   }
 
   async function guardar() {
@@ -670,14 +666,11 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
           — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
         </p>
       )}
-      {(precioListaAval != null || descuentoAval != null) && (
+      {precioListaAval != null && (
         <p className="text-xs text-stone-500 mb-2">
-          Del Aval para esta Opp — Precio Lista:{" "}
-          <span className="font-medium">{precioListaAval != null ? `${ufFmt(precioListaAval)} UF` : "no disponible"}</span>
-          {" "}· Descuento Uni. Principal:{" "}
-          <span className="font-medium">{descuentoAval != null ? `${descuentoAval}%` : "no disponible"}</span> — se
-          usan como base del cálculo en vez de los valores del listado (el precio puede venir sumado con otras
-          unidades del mismo cliente).
+          Precio Lista del Aval para esta Opp: <span className="font-medium">{ufFmt(precioListaAval)} UF</span> — se
+          usa como base del cálculo en vez del precio del listado (puede venir sumado con otras unidades del mismo
+          cliente). El % de descuento se toma siempre del listado de precios.
         </p>
       )}
       {!unidadElegida && !f.venta && (
