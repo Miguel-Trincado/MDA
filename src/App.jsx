@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
-import Topbar from "./components/Topbar";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
@@ -135,9 +134,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F4F6FA] font-body text-stone-900 flex">
-      <Sidebar active={view} onChange={setView} showComisiones={!!authSession} />
+      <Sidebar
+        active={view}
+        onChange={setView}
+        showComisiones={!!authSession}
+        email={authSession?.user?.email}
+        onLogout={handleLogout}
+      />
       <div className="flex-1 min-w-0">
-        <Topbar email={authSession?.user?.email} onLogout={handleLogout} />
         <div className="px-6 py-6">
           {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
           {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
