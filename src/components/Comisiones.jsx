@@ -303,7 +303,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v92</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v93</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -448,7 +448,7 @@ function EjecutivoComisionPanel({
 
       <div className={`border rounded-xl px-4 py-3.5 mb-4 ${validado ? "border-emerald-300 bg-emerald-50/50" : "border-amber-300 bg-amber-50/50"}`}>
         {editandoConfig ? (
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-start gap-3">
             <Field label={`UF que entregó ${ejecutivo}`}>
               <input
                 type="number"
@@ -474,28 +474,37 @@ function EjecutivoComisionPanel({
                 Sugerido {anioDelMes}: {retencionSugerida}% (escala SII)
               </span>
             </Field>
-            <button
-              onClick={() => guardar(false)}
-              disabled={guardandoConfig}
-              className="border border-stone-300 bg-white text-sm rounded-lg px-4 py-2.5 text-stone-600 hover:border-[#1E5AA8] hover:text-[#0F3D66] disabled:opacity-50 font-medium"
-            >
-              Guardar
-            </button>
-            <button
-              onClick={() => guardar(true)}
-              disabled={guardandoConfig}
-              className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2.5 font-medium"
-            >
-              {guardandoConfig ? "Guardando…" : "Guardar y validar"}
-            </button>
-            {validacion && (
-              <button
-                onClick={() => setEditandoConfig(false)}
-                className="text-xs text-stone-400 hover:text-[#0F3D66] underline"
-              >
-                Cancelar
-              </button>
-            )}
+            {/* El span invisible replica la altura de la etiqueta de los Field
+                de al lado (UF / Retención), para que los botones queden
+                alineados con las CAJAS de esos campos y no con el texto de
+                ayuda que va debajo de ellas. */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs font-medium text-transparent select-none" aria-hidden="true">.</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => guardar(false)}
+                  disabled={guardandoConfig}
+                  className="h-10 inline-flex items-center justify-center border border-stone-300 bg-white text-sm rounded-lg px-4 text-stone-600 hover:border-[#1E5AA8] hover:text-[#0F3D66] disabled:opacity-50 font-medium"
+                >
+                  Guardar
+                </button>
+                <button
+                  onClick={() => guardar(true)}
+                  disabled={guardandoConfig}
+                  className="h-10 inline-flex items-center justify-center bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-sm rounded-lg px-4 font-medium"
+                >
+                  {guardandoConfig ? "Guardando…" : "Guardar y validar"}
+                </button>
+                {validacion && (
+                  <button
+                    onClick={() => setEditandoConfig(false)}
+                    className="text-xs text-stone-400 hover:text-[#0F3D66] underline"
+                  >
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </div>
             {errorConfig && <p className="text-xs text-rose-600 w-full">{errorConfig}</p>}
           </div>
         ) : (
