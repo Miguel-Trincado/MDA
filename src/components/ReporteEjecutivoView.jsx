@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
-import { parseFechaAMes, labelPeriodo as labelPeriodoBase } from "../lib/helpers";
+import { parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo } from "../lib/helpers";
 import { KpiCard } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
@@ -26,7 +26,23 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [filtros, setFiltros] = useState({ periodoDesde: mesActualKey(), periodoHasta: mesActualKey(), proyecto: TODO, tipologia: TODO });
 
-  const filasTotales = useMemo(() => Object.values(db.cotizaciones || {}), [db.cotizaciones]);
+  // El Aval a veces trae la Tipología mal o vacía para una Opp (problema
+  // del archivo de origen, no de esta app). En vez de confiar en esa
+  // columna, se cruza el "Lote" que sí trae el Aval contra el "Codigo" del
+  // listado de precios vigente y se usa la columna "Tipología Reporte" de
+  // esa fila del listado — si no hay cruce o esa columna viene vacía, se
+  // deja la tipología que haya traído el Aval como respaldo.
+  const listaPreciosPorCodigo = useMemo(
+    () => agruparListaPreciosPorCodigo(db.listaPrecios),
+    [db.listaPrecios]
+  );
+  const filasTotales = useMemo(() => {
+    return Object.values(db.cotizaciones || {}).map((r) => {
+      const unidad = r.lote ? listaPreciosPorCodigo[normalizarCodigo(r.lote)] : null;
+      const tipologiaReporte = unidad?.tipologiaReporte?.trim();
+      return tipologiaReporte ? { ...r, tipologia: tipologiaReporte } : r;
+    });
+  }, [db.cotizaciones, listaPreciosPorCodigo]);
 
   // Opciones de los filtros: se calculan siempre sobre el universo completo,
   // para que no se achiquen a medida que el usuario va filtrando.

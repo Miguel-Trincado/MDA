@@ -47,8 +47,10 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       <h3 className="font-display text-lg text-[#0F3D66] mb-2">Listado de precios</h3>
       <p className="text-stone-500 text-sm mb-4">
         Sube el Excel con las unidades disponibles (Unidad, Tipología, Orientación, m², Precio en UF, Descuento
-        máximo, Estado). Reemplaza por completo el listado anterior — es siempre la foto actual de lo disponible. Si
-        el archivo trae varios proyectos juntos, solo se toman las filas de Pilpilén.
+        máximo, Estado, Codigo). Si trae una columna "Tipología Reporte", el Dashboard la usa para corregir la
+        tipología de cada Opp cuando el Aval la trae mal o vacía. Reemplaza por completo el listado anterior — es
+        siempre la foto actual de lo disponible. Si el archivo trae varios proyectos juntos, solo se toman las filas
+        de Pilpilén.
       </p>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />

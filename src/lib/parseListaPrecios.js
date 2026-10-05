@@ -66,6 +66,11 @@ export function parseListaPrecios(text) {
     unidad: col("DIRECCION NUMERO", "UNIDAD", "N°", "N", "NUMERO", "LOTE"),
     precio: col("PRECIO LISTA", "VALOR (UF)", "VALOR", "PRECIO", "VALOR FINAL (UF)", "VALOR FINAL"),
     tipologia: col("TIPOLOGIA", "TIPOLOGÍA"),
+    // Columna aparte que usa el Dashboard para resolver la tipología de
+    // cada Opp cuando la del Aval viene mal o vacía (ver App.jsx / helpers
+    // agruparListaPreciosPorCodigo): se cruza el "Lote" del Aval con el
+    // "Codigo" de esta misma fila y se usa ESTA columna, no "Tipologia".
+    tipologiaReporte: col("TIPOLOGIA REPORTE", "TIPOLOGÍA REPORTE"),
     orientacion: col("ORIENTACION", "ORIENTACIÓN"),
     area: col("SUPERFICIE TOTAL", "SUP TOTAL (M2)", "SUP TOTAL", "M2", "M²"),
     descuentoMax: col("DECUENTO", "DESCUENTO", "DSCTO (MAX)", "DSCTO MAX", "DESCUENTO MAX", "DSCTO"),
@@ -105,6 +110,7 @@ export function parseListaPrecios(text) {
       modelo: idx.modelo !== -1 ? (cols[idx.modelo] || "").trim() : "",
       unidad,
       tipologia: idx.tipologia !== -1 ? (cols[idx.tipologia] || "").trim() : "",
+      tipologiaReporte: idx.tipologiaReporte !== -1 ? (cols[idx.tipologiaReporte] || "").trim() : "",
       orientacion: idx.orientacion !== -1 ? (cols[idx.orientacion] || "").trim() : "",
       area: idx.area !== -1 ? parseNumero(cols[idx.area]) : null,
       precio: idx.precio !== -1 ? parseNumero(cols[idx.precio]) : null,

@@ -204,6 +204,36 @@ export function normalizarBusqueda(s) {
     .trim();
 }
 
+// Normaliza un código de unidad (columna "Lote" del Aval / "Codigo" del
+// listado de precios) para poder cruzarlos aunque los haya escrito a mano
+// gente distinta en cada archivo (espacios de más, mayúsculas distintas).
+export function normalizarCodigo(s) {
+  return String(s || "").trim().toUpperCase();
+}
+
+// Agrupa el listado de precios por su columna "Codigo" (la misma que trae
+// el Aval en su columna "Lote"). El listado real trae códigos repetidos
+// (ej. estacionamientos listados más de una vez): si un código se repite,
+// se prioriza la fila que el listado marca como "Promesada" — es la que
+// realmente corresponde a la venta — y solo si ninguna lo está se usa la
+// primera como respaldo. Mismo criterio que ya usaba Comisiones para
+// cruzar precio y descuento; se reutiliza acá para resolver la Tipología
+// Reporte del Dashboard.
+export function agruparListaPreciosPorCodigo(listaPrecios) {
+  const grupos = {};
+  Object.values(listaPrecios || {}).forEach((u) => {
+    if (!u.codigo) return;
+    const key = normalizarCodigo(u.codigo);
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(u);
+  });
+  const map = {};
+  Object.entries(grupos).forEach(([key, unidades]) => {
+    map[key] = unidades.find((u) => u.estado === "Promesada") || unidades[0];
+  });
+  return map;
+}
+
 // Cuenta los días hábiles (lunes a viernes, sin festivos) entre dos
 // fechas ISO "AAAA-MM-DD". No cuenta el día de inicio, sí el de término
 // (si son el mismo día, da 0). Se usa para los KPI de gestión: "mismo

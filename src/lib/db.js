@@ -497,6 +497,7 @@ export async function uploadListaPreciosRemote(unidades) {
       modelo: u.modelo,
       unidad: u.unidad,
       tipologia: u.tipologia,
+      tipologiaReporte: u.tipologiaReporte,
       orientacion: u.orientacion,
       area: u.area,
       precio: u.precio,
