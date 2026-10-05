@@ -38,7 +38,8 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   const [metaInput, setMetaInput] = useState("");
   const [guardandoMeta, setGuardandoMeta] = useState(false);
   const [errorMeta, setErrorMeta] = useState("");
-  const { session, handleLogout } = useAuthSession();
+  // El logout vive centralizado en el menú de Cuenta del sidebar.
+  const { session } = useAuthSession();
 
   // Última fecha de cotización real (ya parseada, no el texto crudo) por
   // RUT — para saber quién no tiene gestión desde antes de la fecha de
@@ -297,7 +298,6 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
               >
                 {guardandoMeta ? "Guardando…" : "Guardar meta"}
               </button>
-              <button onClick={handleLogout} className="text-xs text-stone-400 underline">Cerrar sesión</button>
             </>
           ) : (
             <span className="text-lg font-semibold text-[#0F3D66]">{meta}</span>

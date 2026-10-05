@@ -87,17 +87,15 @@ export default function Sidebar({ active, onChange, showComisiones, email, onLog
               >
                 <FileUp size={14} /> Cargar archivo
               </button>
-              {email && (
-                <button
-                  onClick={() => {
-                    setCuentaAbierta(false);
-                    onLogout && onLogout();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
-                >
-                  <LogOut size={14} /> Cerrar sesión
-                </button>
-              )}
+              <button
+                onClick={() => {
+                  setCuentaAbierta(false);
+                  onLogout && onLogout();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
+              >
+                <LogOut size={14} /> Cerrar sesión
+              </button>
             </div>
           </>
         )}

@@ -2,7 +2,10 @@ import { useAuthSession } from "../lib/useAuthSession";
 import UploadCombinadoPanel from "./UploadCombinadoPanel";
 
 export default function CargaPage({ onUploadMaestro, onUploadListaPrecios }) {
-  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin, handleLogout } = useAuthSession();
+  // El logout vive centralizado en el menú de Cuenta del sidebar (cierra
+  // sesión Y borra el candado general de entrada); acá solo se usa la
+  // sesión para decidir si mostrar el login o el formulario de carga.
+  const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin } = useAuthSession();
 
   return (
     <div className="max-w-3xl mx-auto px-5 pt-4 pb-8">
@@ -45,12 +48,7 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios }) {
         </div>
       ) : (
         <>
-          <div className="text-xs text-stone-400 mb-4">
-            Sesión: {session.user.email} ·{" "}
-            <button onClick={handleLogout} className="underline hover:text-stone-700">
-              Cerrar sesión
-            </button>
-          </div>
+          <div className="text-xs text-stone-400 mb-4">Sesión: {session.user.email}</div>
           <div className="flex flex-col gap-4">
             <UploadCombinadoPanel onUploadMaestro={onUploadMaestro} onUploadListaPrecios={onUploadListaPrecios} />
           </div>

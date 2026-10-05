@@ -40,6 +40,21 @@ export default function App() {
   // esa pestaña vuelve a validar la sesión por su cuenta.
   const { session: authSession, handleLogout } = useAuthSession();
 
+  // "Cerrar sesión" debe expulsar de verdad, no solo ocultar Comisiones:
+  // además de cerrar la sesión de Supabase, se borra el candado general
+  // (pilpilen_gate_unlocked) para que la próxima vez vuelva a pedir
+  // usuario y contraseña en vez de dejar pasar directo al Dashboard.
+  async function handleLogoutCompleto() {
+    try {
+      localStorage.removeItem("pilpilen_gate_unlocked");
+      sessionStorage.removeItem("pilpilen_gate_unlocked");
+    } catch {
+      // Si el navegador bloquea el almacenamiento, no es grave.
+    }
+    await handleLogout();
+    setDesbloqueado(false);
+  }
+
   const reload = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -159,7 +174,7 @@ export default function App() {
         onChange={setView}
         showComisiones={!!authSession}
         email={authSession?.user?.email}
-        onLogout={handleLogout}
+        onLogout={handleLogoutCompleto}
       />
       <div className="flex-1 min-w-0">
         {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
