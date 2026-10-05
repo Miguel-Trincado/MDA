@@ -62,14 +62,14 @@ export default function SiteGate({ onUnlock }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center bg-gradient-to-br from-[#F4F8FA] via-[#EEF3F6] to-[#DCE9ED] px-6 py-10">
-      <div className="max-w-md w-full mx-auto sm:ml-[12%]">
-        <div className="bg-[#0F3D66] text-white w-16 h-16 flex flex-col items-center justify-center leading-none shrink-0 rounded-lg mb-8">
-          <span className="font-display font-bold text-lg">MDA</span>
-          <span className="text-[7px] tracking-wider mt-1">INMOBILIARIA</span>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F4F8FA] via-[#EEF3F6] to-[#DCE9ED] px-6 py-10">
+      <div className="max-w-md w-full mx-auto">
+        {/* Logo: reemplaza este comentario por <img src="/logo.png" alt="MDA"
+            className="h-16 mb-8" /> cuando tengas el archivo de la imagen —
+            ponla en la carpeta "public" del proyecto como "logo.png" (o el
+            nombre que uses, ajustando el src). */}
 
-        <h1 className="font-display text-4xl font-bold text-[#0F3D66] leading-tight mb-2">¡Bienvenido a Pilpilén!</h1>
+        <h1 className="font-display text-4xl font-bold text-[#0F3D66] leading-tight mb-2">¡Bienvenido a MDA Comercial!</h1>
         <p className="text-stone-500 mb-8">Por favor, inicia sesión</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
