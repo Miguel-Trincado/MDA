@@ -1,3 +1,5 @@
+import { esProyectoPilpilen } from "./helpers";
+
 const ESTADO_MAP = {
   DISPONIBLE: "Disponible",
   RESERVADO: "Reservada",
@@ -72,6 +74,10 @@ export function parseListaPrecios(text) {
     // cruzar automáticamente cada Opp promesada con su unidad real (ver
     // pestaña Comisiones), sin depender del N° de unidad "para mostrar".
     codigo: col("CODIGO", "CÓDIGO", "COD"),
+    // El listado puede traer unidades de varios proyectos juntas — si trae
+    // esta columna, se filtra igual que el Maestro Aval: solo entran las
+    // filas del proyecto Pilpilén (ver esProyectoPilpilen).
+    proyecto: col("PROYECTO", "NOMBRE PROYECTO", "PROYECTOS"),
   };
 
   const required = [
@@ -84,10 +90,15 @@ export function parseListaPrecios(text) {
   }
 
   const out = [];
+  let filasOtrosProyectos = 0;
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split("\t");
     const unidad = idx.unidad !== -1 ? (cols[idx.unidad] || "").trim() : "";
     if (!unidad) continue;
+    if (idx.proyecto !== -1 && !esProyectoPilpilen(cols[idx.proyecto])) {
+      filasOtrosProyectos++;
+      continue;
+    }
     const rawRow = originalHeaders.map((h, colIdx) => ({ h: h || `Col ${colIdx + 1}`, v: cols[colIdx] == null ? "" : String(cols[colIdx]) }));
     out.push({
       tipo: idx.tipo !== -1 ? (cols[idx.tipo] || "").trim() || "Departamento" : "Departamento",
@@ -103,5 +114,5 @@ export function parseListaPrecios(text) {
       raw: rawRow,
     });
   }
-  return out;
+  return { unidades: out, filasOtrosProyectos };
 }

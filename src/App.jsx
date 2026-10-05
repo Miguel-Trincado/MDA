@@ -118,10 +118,10 @@ export default function App() {
   }
 
   async function uploadListaPrecios(text) {
-    const unidades = parseListaPrecios(text);
+    const { unidades, filasOtrosProyectos } = parseListaPrecios(text);
     const listaPrecios = await uploadListaPreciosRemote(unidades);
     setDb((d) => ({ ...d, listaPrecios }));
-    return Object.values(listaPrecios);
+    return { unidades: Object.values(listaPrecios), filasOtrosProyectos };
   }
 
   async function resolveCambio(cambio, decision) {

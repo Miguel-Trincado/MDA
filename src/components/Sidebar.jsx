@@ -34,7 +34,7 @@ export default function Sidebar({ active, onChange, showComisiones, email, onLog
       }`}
     >
       <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
-        {!colapsado && <span className="font-display text-xl tracking-tight">Pilpilén</span>}
+        {!colapsado && <span className="font-display text-xl tracking-tight">MDA</span>}
         <button
           onClick={() => setColapsado((v) => !v)}
           className="text-white/50 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"

@@ -29,8 +29,12 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
       const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
-      const unidades = await onUpload(tsv);
-      setResult({ total: unidades.length, disponibles: unidades.filter((u) => u.estado === "Disponible").length });
+      const { unidades, filasOtrosProyectos } = await onUpload(tsv);
+      setResult({
+        total: unidades.length,
+        disponibles: unidades.filter((u) => u.estado === "Disponible").length,
+        filasOtrosProyectos,
+      });
     } catch (err) {
       setError(err.message || "No se pudo procesar el archivo. Verifica que tenga las columnas correctas.");
     } finally {
@@ -43,7 +47,8 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       <h3 className="font-display text-lg text-[#0F3D66] mb-2">Listado de precios</h3>
       <p className="text-stone-500 text-sm mb-4">
         Sube el Excel con las unidades disponibles (Unidad, Tipología, Orientación, m², Precio en UF, Descuento
-        máximo, Estado). Reemplaza por completo el listado anterior — es siempre la foto actual de lo disponible.
+        máximo, Estado). Reemplaza por completo el listado anterior — es siempre la foto actual de lo disponible. Si
+        el archivo trae varios proyectos juntos, solo se toman las filas de Pilpilén.
       </p>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
@@ -62,9 +67,16 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       {error && <div className="mt-4 border border-rose-300 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       {result && (
-        <div className="mt-5 border-t border-stone-200 pt-4 grid grid-cols-2 gap-4 text-sm">
-          <Stat label="Unidades cargadas" value={result.total} />
-          <Stat label="Disponibles" value={result.disponibles} accent="text-emerald-700" />
+        <div className="mt-5 border-t border-stone-200 pt-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <Stat label="Unidades cargadas" value={result.total} />
+            <Stat label="Disponibles" value={result.disponibles} accent="text-emerald-700" />
+          </div>
+          {result.filasOtrosProyectos > 0 && (
+            <p className="text-xs text-stone-400 mt-3">
+              Se ignoraron {result.filasOtrosProyectos} fila(s) de otros proyectos del listado.
+            </p>
+          )}
         </div>
       )}
     </div>
