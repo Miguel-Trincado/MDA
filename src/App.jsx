@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Sidebar from "./components/Sidebar";
+import SiteGate from "./components/SiteGate";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
@@ -14,7 +15,22 @@ import {
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
+// El sitio está público en el link de Vercel, así que antes de mostrar
+// cualquier pestaña se pide una clave de entrada compartida (ver
+// SiteGate). Si alguien entra ahí con su correo y contraseña reales de
+// administrador en vez de la clave general, la sesión de administrador
+// queda activa igual que si hubiera iniciado sesión desde Comisiones o
+// Carga — así se "reconoce" sin pedir el candado general aparte.
+function siteYaDesbloqueado() {
+  try {
+    return localStorage.getItem("pilpilen_gate_unlocked") === "1" || sessionStorage.getItem("pilpilen_gate_unlocked") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export default function App() {
+  const [desbloqueado, setDesbloqueado] = useState(siteYaDesbloqueado);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
@@ -42,8 +58,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    reload();
-  }, [reload]);
+    if (desbloqueado) reload();
+  }, [desbloqueado, reload]);
 
   // Si la sesión de administrador se cierra (o nunca existió) mientras se
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
@@ -108,6 +124,10 @@ export default function App() {
   async function setMetaMensual(mes, valor) {
     await setMetaMensualRemote(mes, valor);
     setDb((d) => ({ ...d, metas: { ...d.metas, [mes]: valor } }));
+  }
+
+  if (!desbloqueado) {
+    return <SiteGate onUnlock={() => setDesbloqueado(true)} />;
   }
 
   if (loading) {
