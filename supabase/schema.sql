@@ -130,6 +130,7 @@ create table if not exists cotizaciones (
   estado      text default '',
   lote        text default '',
   precio_lista numeric,
+  descuento_uni_principal numeric,
   created_at  timestamptz not null default now()
 );
 

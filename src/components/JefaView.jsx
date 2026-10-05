@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
-import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate } from "../lib/helpers";
+import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate, formatFechaCorta } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
 import { Stat, AlertGroup, Panel } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
@@ -89,8 +89,12 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
   // "Promesada" durante el mes elegido), no del campo Estado que el
   // ejecutivo edita a mano en la ficha — ese campo no tiene fecha y
   // puede no estar actualizado aunque la Opp ya haya sido promesada.
-  const promesados = useMemo(() => {
-    const oppsVistos = new Set();
+  // Lista (no solo el total) de Opp que pasaron a "Promesada" en el mes
+  // elegido — se usa tanto para el número del KPI como para el detalle
+  // desplegable de abajo, así la Jefa puede ver exactamente cuáles son
+  // (y detectar si falta alguna) sin tener que preguntar.
+  const promesadosDetalle = useMemo(() => {
+    const vistos = new Map(); // opp -> {opp, rut, fecha}
     (db.cambiosEstadoOpp || []).forEach((c) => {
       if (c.estadoNuevo !== "Promesada") return;
       // Solo cuenta si hay una fecha real de "Fecha Promesa" en el Aval.
@@ -100,10 +104,19 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
       const fechaReal = parseFechaCompleta(c.fechaPromesa);
       if (!fechaReal) return;
       if (fechaReal.toISOString().slice(0, 7) !== mesKpi) return;
-      oppsVistos.add(c.opp);
+      if (vistos.has(c.opp)) return;
+      vistos.set(c.opp, { opp: c.opp, rut: c.rut, fecha: fechaReal });
     });
-    return oppsVistos.size;
-  }, [db.cambiosEstadoOpp, mesKpi]);
+    return [...vistos.values()]
+      .map((v) => ({
+        ...v,
+        cliente: db.gestion[v.rut]?.cliente || "(cliente desconocido)",
+        ejecutivo: db.gestion[v.rut]?.ejecutivo || "(sin ejecutivo asignado)",
+      }))
+      .sort((a, b) => a.fecha - b.fecha);
+  }, [db.cambiosEstadoOpp, db.gestion, mesKpi]);
+  const promesados = promesadosDetalle.length;
+  const [verPromesados, setVerPromesados] = useState(false);
   const pipeline = clientes.filter((g) =>
     ["Negociación", "Pre-reserva", "Pre-reservado", "Reservado"].includes(g.etapaComercial)
   ).length;
@@ -297,7 +310,9 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
         )}
         {errorMeta && <p className="text-xs text-rose-600 -mt-2 mb-3">{errorMeta}</p>}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Stat label="Promesados del mes" value={promesados} />
+          <button type="button" onClick={() => setVerPromesados((v) => !v)} className="text-left hover:opacity-80 transition-opacity">
+            <Stat label={`Promesados del mes ${verPromesados ? "▲" : "▼"}`} value={promesados} />
+          </button>
           <Stat label="Faltan para meta" value={faltan} accent="text-amber-700" />
           <Stat label="Cumplimiento" value={`${cumplimiento}%`} accent={cumplimiento >= 100 ? "text-emerald-700" : "text-[#0F3D66]"} />
           <Stat label="Pipeline avanzado" value={pipeline} />
@@ -310,6 +325,30 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
           />
           <Stat label="Cambios de ejecutivo pendientes" value={cambiosPendientes.length} accent="text-violet-700" />
         </div>
+
+        {verPromesados && (
+          <div className="mt-4 border border-stone-200 rounded-xl overflow-hidden">
+            <div className="bg-stone-50 px-4 py-2 text-xs text-stone-500 uppercase tracking-wide font-medium">
+              Promesados de {mesLabel(mesKpi)} ({promesados})
+            </div>
+            {promesadosDetalle.length === 0 ? (
+              <p className="text-sm text-stone-400 px-4 py-4">No hay Opp promesadas con fecha real en {mesLabel(mesKpi)}.</p>
+            ) : (
+              <div className="divide-y divide-stone-100 bg-white">
+                {promesadosDetalle.map((p) => (
+                  <div key={p.opp} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+                    <span className="truncate">
+                      <span className="font-medium">{p.cliente}</span>{" "}
+                      <span className="text-xs text-stone-400">RUT {p.rut} · Opp {p.opp}</span>
+                    </span>
+                    <span className="text-xs text-stone-500 shrink-0">{p.ejecutivo}</span>
+                    <span className="text-xs text-stone-400 shrink-0">{formatFechaCorta(p.fecha)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </Panel>
 
       {cambiosPendientes.length > 0 && (

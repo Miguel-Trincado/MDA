@@ -289,6 +289,20 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     const prev = (currentCotizaciones || {})[r.opp];
     if (!prev) {
       cotizacionesNuevas.push(r);
+      // Si la Opp es nueva para el sistema pero el Aval ya la trae
+      // "Promesada" desde su primera aparición (se saltó los estados
+      // intermedios, o simplemente nunca se había subido un Aval antes),
+      // igual hay que dejar registrado ese evento en cambios_estado_opp —
+      // si no, Comisiones y "Promesados del mes" en Jefa nunca la cuentan,
+      // porque ambos dependen exclusivamente de esa tabla, no del Estado
+      // que quede guardado en la cotización.
+      if (r.estado === "Promesada" && r.fechaPromesa) {
+        cambiosEstadoLog.push({
+          opp: r.opp, rut: r.rut,
+          estadoAnterior: "", estadoNuevo: r.estado,
+          fechaPromesa: r.fechaPromesa,
+        });
+      }
       return;
     }
     const estadoCambio = r.estado && prev.estado !== r.estado;
