@@ -1,8 +1,9 @@
 import { useAuthSession } from "../lib/useAuthSession";
 import UploadMaestroPanel from "./UploadMaestroPanel";
 import UploadListaPreciosPanel from "./UploadListaPreciosPanel";
+import UploadDescuentosUnidadesPanel from "./UploadDescuentosUnidadesPanel";
 
-export default function CargaPage({ onUploadMaestro, onUploadListaPrecios }) {
+export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUploadDescuentosUnidades }) {
   // El logout vive centralizado en el menú de Cuenta del sidebar (cierra
   // sesión Y borra el candado general de entrada); acá solo se usa la
   // sesión para decidir si mostrar el login o el formulario de carga.
@@ -53,6 +54,7 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios }) {
           <div className="flex flex-col gap-4">
             <UploadMaestroPanel onUpload={onUploadMaestro} />
             <UploadListaPreciosPanel onUpload={onUploadListaPrecios} />
+            <UploadDescuentosUnidadesPanel onUpload={onUploadDescuentosUnidades} />
           </div>
         </>
       )}

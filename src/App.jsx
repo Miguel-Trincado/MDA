@@ -11,7 +11,7 @@ import { useAuthSession } from "./lib/useAuthSession";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote,
+  uploadListaPreciosRemote, guardarDescuentosUnidades,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -124,6 +124,10 @@ export default function App() {
     return { unidades: Object.values(listaPrecios), filasOtrosProyectos };
   }
 
+  async function uploadDescuentosUnidades(filas) {
+    await guardarDescuentosUnidades(filas);
+  }
+
   async function resolveCambio(cambio, decision) {
     const prevGestion = db.gestion[cambio.rut];
     const prevControl = db.control[cambio.rut];
@@ -179,7 +183,13 @@ export default function App() {
       <div className="flex-1 min-w-0">
         {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
-        {view === "carga" && <CargaPage onUploadMaestro={uploadMaestro} onUploadListaPrecios={uploadListaPrecios} />}
+        {view === "carga" && (
+          <CargaPage
+            onUploadMaestro={uploadMaestro}
+            onUploadListaPrecios={uploadListaPrecios}
+            onUploadDescuentosUnidades={uploadDescuentosUnidades}
+          />
+        )}
         {view === "cotizador" && <Cotizador db={db} />}
         {view === "comisiones" && authSession && <Comisiones db={db} />}
         {view === "jefa" && (

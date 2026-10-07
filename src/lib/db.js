@@ -489,12 +489,51 @@ export async function fetchListaPrecios() {
   return out;
 }
 
+// Referencia fija de descuento % por unidad (ver descuentos_unidades),
+// independiente del listado de precios que se sube — existe justamente
+// porque ese listado a veces se sube sin la columna de descuento, y sin
+// esto se perdería cada vez. fetchListaPrecios()/uploadListaPreciosRemote()
+// la usan para rellenar descuentoMax cuando la fila subida no trae uno.
+export async function fetchDescuentosUnidades() {
+  const { data, error } = await supabase.from("descuentos_unidades").select("*");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => {
+    out[String(row.unidad).trim()] = Number(row.descuento_pct);
+  });
+  return out;
+}
+
+// Guarda (o actualiza) el descuento % de una lista de unidades — upsert
+// por "unidad", nunca borra las que no vienen en la lista pegada, porque
+// esta tabla es la referencia fija que no se reemplaza entera como el
+// listado de precios.
+export async function guardarDescuentosUnidades(filas) {
+  const rows = filas.map((f) => ({
+    unidad: String(f.unidad).trim(),
+    descuento_pct: Number(f.descuentoPct) || 0,
+    updated_at: nowISO(),
+  }));
+  for (const part of chunk(rows, 400)) {
+    if (part.length === 0) continue;
+    const { error } = await supabase.from("descuentos_unidades").upsert(part, { onConflict: "unidad" });
+    if (error) throw error;
+  }
+  return fetchDescuentosUnidades();
+}
+
 // Reemplaza el listado de precios entero por el que se acaba de subir:
 // a diferencia del Aval (que se acumula por Opp), el listado de precios
 // es siempre "la foto actual" de lo disponible, así que si una unidad ya
 // no aparece en el archivo nuevo (se vendió y se sacó de la lista, etc.)
 // no debe quedar dando vueltas.
 export async function uploadListaPreciosRemote(unidades) {
+  // El listado real muchas veces no trae la columna de descuento — se
+  // rellena acá con la referencia fija de descuentos_unidades (por
+  // número de unidad) para no perderla en cada carga nueva. Si la fila
+  // subida SÍ trae su propio descuento, ese manda sobre la referencia.
+  const descuentosGuardados = await fetchDescuentosUnidades().catch(() => ({}));
+
   const { error: delError } = await supabase.from("lista_precios").delete().neq("unidad", "");
   if (delError) throw delError;
 
@@ -508,7 +547,7 @@ export async function uploadListaPreciosRemote(unidades) {
       orientacion: u.orientacion,
       area: u.area,
       precio: u.precio,
-      descuentoMax: u.descuentoMax,
+      descuentoMax: u.descuentoMax != null ? u.descuentoMax : descuentosGuardados[String(u.unidad).trim()] ?? null,
       codigo: u.codigo,
       estado: u.estado,
       rawData: u.raw,

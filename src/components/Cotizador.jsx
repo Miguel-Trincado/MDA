@@ -643,7 +643,7 @@ export default function Cotizador({ db }) {
                       checked={primeraCuotaDistinta}
                       onChange={(e) => setPrimeraCuotaDistinta(e.target.checked)}
                     />
-                    Primera cuota distinta
+                    Primera cuota
                   </label>
                   {primeraCuotaDistinta && (
                     <input
@@ -661,7 +661,7 @@ export default function Cotizador({ db }) {
                       checked={ultimaCuotaDistinta}
                       onChange={(e) => setUltimaCuotaDistinta(e.target.checked)}
                     />
-                    Última cuota distinta
+                    Última cuota
                   </label>
                   {ultimaCuotaDistinta && (
                     <input

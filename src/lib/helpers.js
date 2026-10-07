@@ -255,6 +255,42 @@ export function diasHabilesEntre(desdeISO, hastaISO) {
   return dias;
 }
 
+// Parsea una tabla pegada de "Unidad" + "% de descuento" (dos columnas,
+// separadas por tab o por espacios — la fila de encabezado, si viene, se
+// descarta sola porque su "% de descuento" no es un número). Se usa para
+// guardar en descuentos_unidades la referencia fija de descuento por
+// unidad, aparte del listado de precios (que a veces se sube sin esa
+// columna y la perdería en cada carga).
+export function parseDescuentosUnidades(text) {
+  const lines = (text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const filas = [];
+  let omitidas = 0;
+  for (const line of lines) {
+    let cols = line.split("\t").map((c) => c.trim()).filter((c) => c !== "");
+    if (cols.length < 2) cols = line.split(/\s+/).filter(Boolean);
+    if (cols.length < 2) {
+      omitidas++;
+      continue;
+    }
+    const unidad = cols[0];
+    const descTxt = cols[cols.length - 1].replace("%", "").replace(",", ".").trim();
+    const n = Number(descTxt);
+    if (!unidad || !Number.isFinite(n)) {
+      omitidas++;
+      continue;
+    }
+    filas.push({ unidad, descuentoPct: n });
+  }
+  if (filas.length === 0) {
+    throw new Error('No se reconoció ninguna fila con "Unidad" y "% de descuento". Pega las dos columnas, una fila por unidad.');
+  }
+  return { filas, omitidas };
+}
+
 // Reparte el monto de "Contra escritura" en cuotas, dejando la primera
 // y/o la última con un monto propio (normalmente mayor) y repartiendo el
 // resto en partes iguales entre las cuotas que quedan en el medio. Se usa
