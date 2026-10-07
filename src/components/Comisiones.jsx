@@ -303,7 +303,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v106</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v107</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -722,19 +722,23 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
             )}
           </span>
         )}
-        <Field label="Precio unidad (UF)">
-          <input type="number" step="0.01" value={precioUfInput} onChange={(e) => setPrecioUfInput(e.target.value)} className="ipt w-24" />
+        {/* El ancho se fija en el Field (el contenedor), no en el input: la
+            clase global ".ipt" ya trae width:100%, así que un w-24 puesto
+            directo en el input/div compite con eso y el tamaño termina
+            dependiendo del contenido de cada uno en vez de quedar parejo. */}
+        <Field label="Precio unidad (UF)" className="w-24">
+          <input type="number" step="0.01" value={precioUfInput} onChange={(e) => setPrecioUfInput(e.target.value)} className="ipt" />
         </Field>
-        <Field label="Descuento (UF)">
-          <input type="number" step="0.01" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} className="ipt w-24" />
+        <Field label="Descuento (UF)" className="w-24">
+          <input type="number" step="0.01" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} className="ipt" />
         </Field>
-        <Field label="Precio Final">
-          <div className="ipt w-24 bg-stone-100 text-stone-600 flex items-center">
+        <Field label="Precio Final" className="w-24">
+          <div className="ipt bg-stone-100 text-stone-600 flex items-center">
             {ufFmt((Number(precioUfInput) || 0) - (Number(descuentoInput) || 0))}
           </div>
         </Field>
-        <Field label="Tramo (%)">
-          <input type="number" step="0.01" value={tramoInput} onChange={(e) => setTramoInput(e.target.value)} className="ipt w-24" />
+        <Field label="Tramo (%)" className="w-24">
+          <input type="number" step="0.01" value={tramoInput} onChange={(e) => setTramoInput(e.target.value)} className="ipt" />
         </Field>
         <button
           onClick={guardar}
