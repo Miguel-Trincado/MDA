@@ -303,7 +303,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v108</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v109</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -542,7 +542,7 @@ function EjecutivoComisionPanel({
           esa Opp no aparece en el listado actual) — asígnala a mano abajo.
         </p>
       )}
-      <div className="hidden md:grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.5fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 px-3 py-2.5 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-50 border border-b-0 border-stone-200 rounded-t-xl">
+      <div className="hidden md:grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 px-3 py-2.5 text-[10px] text-stone-500 uppercase tracking-wide font-medium bg-stone-50 border border-b-0 border-stone-200 rounded-t-xl">
         <span>Cliente</span>
         <span>Unidad</span>
         <span className="flex justify-center">Orden</span>
@@ -637,7 +637,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
 
   if (!editando && f.venta) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.5fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 items-center px-3 py-2 text-sm">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.75fr)_minmax(0,0.9fr)_minmax(0,0.85fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] gap-2 items-center px-3 py-2 text-sm">
         <span className="truncate min-w-0">
           {f.cliente} <span className="text-xs text-stone-400">RUT {f.rut}</span>
         </span>
@@ -646,7 +646,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <span className="text-stone-500 flex justify-center">
           {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
         </span>
-        <span className="text-stone-500 flex justify-center">{ufFmt(f.venta.descuentoUf)} UF</span>
+        <span className="text-stone-500 flex justify-center whitespace-nowrap">{ufFmt(f.venta.descuentoUf)} UF</span>
         <span className="font-medium text-[#0F3D66] flex justify-end">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
         <span className="text-emerald-700 font-medium">${currencyDecimal(f.netoClp)}</span>
