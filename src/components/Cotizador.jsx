@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, FileText, Loader2, Check, ChevronLeft, Trash2 } from "lucide-react";
 import { buildQuotePdfDoc, currency, currencyDecimal, quoteNumber } from "../lib/quotePdf";
 import {
@@ -89,6 +89,7 @@ export default function Cotizador({ db }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const previewRef = useRef(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [historial, setHistorial] = useState([]);
   const [todasSimulaciones, setTodasSimulaciones] = useState([]);
@@ -115,6 +116,13 @@ export default function Cotizador({ db }) {
       .then((list) => setHistorial([...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))))
       .catch(() => setHistorial([]));
   }, [rutCliente]);
+
+  // La vista previa puede abrirse desde "Ver PDF" del historial o del
+  // listado general, bien abajo de la pantalla — sin esto quedaría fuera
+  // de la vista y parecería que el botón no hizo nada.
+  useEffect(() => {
+    if (previewUrl) previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [previewUrl]);
 
   // Listado general de todas las simulaciones (de cualquier cliente), se
   // carga una sola vez al entrar al Simulador y se actualiza localmente
@@ -577,7 +585,7 @@ export default function Cotizador({ db }) {
                 />
               </Field>
               <Field label="Bono pie (UF)">
-                <div className="ipt bg-emerald-50 text-emerald-700 font-medium">{currency(descuentoUF)}</div>
+                <div className="ipt bg-emerald-50 text-emerald-700 font-medium">{currencyDecimal(descuentoUF)}</div>
               </Field>
               <Field label="Precio lista (CLP)">
                 <div className="ipt bg-stone-50">{valorUF ? `$${currency(toCLP(precioListaUF))}` : "—"}</div>
@@ -601,27 +609,27 @@ export default function Cotizador({ db }) {
                     <span>{ROW_LABEL[key]}</span>
                     <input
                       type="number"
-                      value={row.modo === "%" ? row.valor : Math.round(pctValue * 10000) / 10000}
+                      value={row.modo === "%" ? row.valor : Math.round(pctValue * 100) / 100}
                       onChange={(e) => setRow(key, { modo: "%", valor: e.target.value })}
                       className="ipt text-xs"
-                      style={{ width: "80px" }}
+                      style={{ width: "104px" }}
                     />
                     <input
                       type="number"
                       value={row.modo === "UF" ? row.valor : Math.round(ufValue * 100) / 100}
                       onChange={(e) => setRow(key, { modo: "UF", valor: e.target.value })}
                       className="ipt text-xs"
-                      style={{ width: "80px" }}
+                      style={{ width: "104px" }}
                     />
                     {key === "contraEscritura" ? (
                       <select
                         value={cuotasContraEscritura}
                         onChange={(e) => setCuotasContraEscritura(Number(e.target.value))}
                         className="ipt text-xs"
-                        style={{ width: "90px" }}
+                        style={{ width: "104px" }}
                       >
                         {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>{n === 1 ? "Al contado" : `${n} cuotas`}</option>
+                          <option key={n} value={n}>{n === 1 ? "Contado" : `${n} cuotas`}</option>
                         ))}
                       </select>
                     ) : (
@@ -723,19 +731,25 @@ export default function Cotizador({ db }) {
               )}
             </div>
           </Panel>
-
-          {previewUrl && (
-            <Panel className="mb-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs text-stone-400 uppercase tracking-wide">Vista previa</div>
-                <a href={previewUrl} download={`Simulacion-${cliente?.cliente || "cliente"}.pdf`} className="text-xs text-[#0F3D66] underline">
-                  Descargar PDF
-                </a>
-              </div>
-              <iframe title="Vista previa simulación" src={previewUrl} className="w-full h-[600px] border border-stone-200 rounded-sm" />
-            </Panel>
-          )}
         </>
+      )}
+
+      {/* Vista previa del PDF — fuera del paso 4 a propósito: también se
+          usa para "Ver PDF" de una simulación del historial o del listado
+          general de abajo, donde puede no haber ninguna unidad elegida en
+          el paso 2 ahora mismo. */}
+      {previewUrl && (
+        <div ref={previewRef}>
+          <Panel className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs text-stone-400 uppercase tracking-wide">Vista previa</div>
+              <a href={previewUrl} download={`Simulacion-${cliente?.cliente || "cliente"}.pdf`} className="text-xs text-[#0F3D66] underline">
+                Descargar PDF
+              </a>
+            </div>
+            <iframe title="Vista previa simulación" src={previewUrl} className="w-full h-[600px] border border-stone-200 rounded-sm" />
+          </Panel>
+        </div>
       )}
 
       {/* Historial del cliente */}
