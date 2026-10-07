@@ -24,7 +24,19 @@ export default function UploadMaestroPanel({ onUpload }) {
     setBusy(true);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      // "raw: true" es crítico cuando el archivo es .csv (no .xlsx real):
+      // sin esto, la librería intenta "adivinar" qué celdas de texto son
+      // fechas y las reinterpreta como MM-DD-AAAA (formato EE.UU.) en vez
+      // de DD-MM-AAAA. Con fechas ambiguas (día ≤ 12, ej. "05-10-2026")
+      // eso cambiaba silenciosamente el mes de la cotización (Oct 5 pasaba
+      // a leerse como 10 de mayo), lo que hacía que esa Opp se contara en
+      // el mes equivocado en vez de desaparecer o fallar con un error.
+      // "raw: true" deja cada celda tal cual viene como texto, y las
+      // fechas se interpretan después con nuestro propio parser
+      // (parseAnyDate, en helpers.js), que sí aplica la convención
+      // chilena (día primero) correctamente. No afecta los .xlsx reales,
+      // donde las fechas ya vienen como un valor de Excel sin ambigüedad.
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];

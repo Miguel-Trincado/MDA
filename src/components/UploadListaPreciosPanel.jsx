@@ -24,7 +24,10 @@ export default function UploadListaPreciosPanel({ onUpload }) {
     setBusy(true);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+      // Ver el comentario en UploadMaestroPanel.jsx: "raw: true" evita que,
+      // si este archivo es .csv, la librería adivine mal las fechas de
+      // texto (las leería en formato EE.UU. en vez de chileno).
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true, raw: true });
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
