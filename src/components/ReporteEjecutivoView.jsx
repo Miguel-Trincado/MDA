@@ -315,6 +315,13 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr className="border-t border-stone-300 font-medium">
+                  <td className="py-1.5 pr-2">Total</td>
+                  <td className="py-1.5 pr-2 text-right">{data.total}</td>
+                  <td className="py-1.5 text-right text-stone-400">100%</td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>

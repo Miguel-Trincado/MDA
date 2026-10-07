@@ -63,7 +63,17 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="border-t border-stone-300 font-medium">
+                <td className="py-1.5 pr-3">Total</td>
+                <td className="py-1.5 pr-3">{rutPorTipologia.reduce((sum, [, count]) => sum + count, 0)}</td>
+              </tr>
+            </tfoot>
           </table>
+          <p className="text-[11px] text-stone-400 mt-2">
+            La suma puede superar "Clientes únicos (RUT)" del resumen: un mismo cliente que cotizó más de una
+            tipología se cuenta una vez en cada una.
+          </p>
         </div>
 
         <div className="bg-white border border-stone-200 p-5">
