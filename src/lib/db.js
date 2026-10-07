@@ -537,6 +537,20 @@ export async function fetchCotizacionesDeCliente(rut) {
   return (data || []).map(rowToObj);
 }
 
+// Todas las simulaciones generadas, de todos los clientes (no solo el
+// cliente seleccionado) — para el listado general debajo del Simulador.
+// Se limita a las 500 más recientes para no cargar de más; el buscador de
+// la UI filtra sobre ese set.
+export async function fetchTodasCotizacionesGeneradas() {
+  const { data, error } = await supabase
+    .from("cotizaciones_generadas")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data || []).map(rowToObj);
+}
+
 // Guarda una cotización generada. Se llama una sola vez por sesión del
 // Cotizador (si ya se guardó, se reutiliza la misma fila y su N°, en vez
 // de crear una nueva cada vez que se descarga o previsualiza el PDF).

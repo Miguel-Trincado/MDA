@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { Search, FileText, Loader2, Check, ChevronLeft } from "lucide-react";
 import { buildQuotePdfDoc, currency, currencyDecimal, quoteNumber } from "../lib/quotePdf";
-import { fetchCotizacionesDeCliente, guardarCotizacionGenerada } from "../lib/db";
-import { normalizarBusqueda } from "../lib/helpers";
+import { fetchCotizacionesDeCliente, fetchTodasCotizacionesGeneradas, guardarCotizacionGenerada } from "../lib/db";
+import { normalizarBusqueda, normalizeRut } from "../lib/helpers";
 import { Panel, Field } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
@@ -56,6 +56,15 @@ function useValorUF() {
 export default function Cotizador({ db }) {
   const [rutCliente, setRutCliente] = useState("");
   const [buscarCliente, setBuscarCliente] = useState("");
+  // Cliente "manual": prospecto que todavía no está en la cartera (gestion),
+  // o sea que no aparece en ningún Aval cargado. Se guarda aparte porque
+  // db.gestion no lo tiene — mismas tres propiedades que usa el resto del
+  // Simulador de un cliente de gestion (cliente, rut, telefono, ejecutivo).
+  const [clienteManual, setClienteManual] = useState(null);
+  const [mostrarClienteManual, setMostrarClienteManual] = useState(false);
+  const [nombreManual, setNombreManual] = useState("");
+  const [rutManualInput, setRutManualInput] = useState("");
+  const [errorManual, setErrorManual] = useState("");
   const [unidadId, setUnidadId] = useState("");
   const [buscarUnidad, setBuscarUnidad] = useState("");
   const [filtroTipologia, setFiltroTipologia] = useState("");
@@ -70,10 +79,17 @@ export default function Cotizador({ db }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [generatingPreview, setGeneratingPreview] = useState(false);
   const [historial, setHistorial] = useState([]);
+  const [todasSimulaciones, setTodasSimulaciones] = useState([]);
+  const [buscarTodas, setBuscarTodas] = useState("");
 
   const { valorUF, loadingUF } = useValorUF();
 
-  const cliente = rutCliente ? db.gestion[rutCliente] : null;
+  // El cliente puede venir de la cartera (gestion) o haber sido ingresado
+  // a mano porque todavía no cotiza por el Aval — en ambos casos queda
+  // con la misma forma (cliente, rut, telefono, ejecutivo) para que el
+  // resto del Simulador no tenga que distinguir el origen.
+  const clienteGestion = rutCliente ? db.gestion[rutCliente] : null;
+  const cliente = clienteGestion || clienteManual;
   const unidad = unidadId ? db.listaPrecios[unidadId] : null;
   const estacionamiento = estacionamientoId ? db.listaPrecios[estacionamientoId] : null;
 
@@ -86,6 +102,15 @@ export default function Cotizador({ db }) {
       .then((list) => setHistorial([...list].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))))
       .catch(() => setHistorial([]));
   }, [rutCliente]);
+
+  // Listado general de todas las simulaciones (de cualquier cliente), se
+  // carga una sola vez al entrar al Simulador y se actualiza localmente
+  // cada vez que se guarda una simulación nueva (sin tener que recargar).
+  useEffect(() => {
+    fetchTodasCotizacionesGeneradas()
+      .then(setTodasSimulaciones)
+      .catch(() => setTodasSimulaciones([]));
+  }, []);
 
   const clientesFiltrados = useMemo(() => {
     if (!buscarCliente) return [];
@@ -213,6 +238,7 @@ export default function Cotizador({ db }) {
       });
       setSavedCotizacion(saved);
       setHistorial((prev) => [saved, ...prev].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)));
+      setTodasSimulaciones((prev) => [saved, ...prev]);
       return saved;
     } catch (e) {
       setError(e.message || "No se pudo guardar la simulación.");
@@ -256,10 +282,42 @@ export default function Cotizador({ db }) {
   const seleccionarCliente = (g) => {
     setRutCliente(g.rut);
     setBuscarCliente("");
+    setClienteManual(null);
     setUnidadId("");
     setSavedCotizacion(null);
     closePreview();
   };
+
+  function confirmarClienteManual() {
+    const rut = normalizeRut(rutManualInput);
+    const nombre = nombreManual.trim();
+    if (!rut) {
+      setErrorManual("Ingresa el RUT del cliente.");
+      return;
+    }
+    if (!nombre) {
+      setErrorManual("Ingresa el nombre del cliente.");
+      return;
+    }
+    setErrorManual("");
+    setClienteManual({ rut, cliente: nombre, telefono: "", ejecutivo: "" });
+    setRutCliente(rut);
+    setMostrarClienteManual(false);
+    setNombreManual("");
+    setRutManualInput("");
+    setUnidadId("");
+    setSavedCotizacion(null);
+    closePreview();
+  }
+
+  function quitarCliente() {
+    setRutCliente("");
+    setClienteManual(null);
+    setUnidadId("");
+    setEstacionamientoId("");
+    setSavedCotizacion(null);
+    closePreview();
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-5 pt-4 pb-6">
@@ -279,14 +337,40 @@ export default function Cotizador({ db }) {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <span className="font-medium">{cliente.cliente}</span>
-              <span className="text-xs text-stone-400 ml-2">RUT {cliente.rut} · {cliente.ejecutivo || "sin ejecutivo"}</span>
+              <span className="text-xs text-stone-400 ml-2">
+                RUT {cliente.rut} · {cliente.ejecutivo || "sin ejecutivo"}
+                {!clienteGestion && <span className="ml-2 text-[10px] px-2 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-700">Cliente nuevo (no está en la cartera)</span>}
+              </span>
             </div>
-            <button
-              onClick={() => { setRutCliente(""); setUnidadId(""); setEstacionamientoId(""); setSavedCotizacion(null); closePreview(); }}
-              className="text-xs text-stone-500 hover:text-[#0F3D66] underline"
-            >
+            <button onClick={quitarCliente} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
               Elegir otro cliente
             </button>
+          </div>
+        ) : mostrarClienteManual ? (
+          <div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+              <Field label="Nombre del cliente">
+                <input value={nombreManual} onChange={(e) => setNombreManual(e.target.value)} className="ipt" placeholder="Nombre completo" />
+              </Field>
+              <Field label="RUT">
+                <input value={rutManualInput} onChange={(e) => setRutManualInput(e.target.value)} className="ipt" placeholder="12345678-9" />
+              </Field>
+            </div>
+            {errorManual && <p className="text-xs text-rose-600 mb-2">{errorManual}</p>}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={confirmarClienteManual}
+                className="bg-[#0F3D66] hover:bg-[#1E5AA8] text-white text-sm rounded-full px-4 py-1.5"
+              >
+                Usar este cliente
+              </button>
+              <button
+                onClick={() => { setMostrarClienteManual(false); setErrorManual(""); }}
+                className="text-xs text-stone-500 hover:text-[#0F3D66] underline"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         ) : (
           <div className="relative">
@@ -310,6 +394,12 @@ export default function Cotizador({ db }) {
                 ))}
               </div>
             )}
+            <p className="text-xs text-stone-400 mt-2">
+              ¿El cliente todavía no está en tu cartera?{" "}
+              <button onClick={() => setMostrarClienteManual(true)} className="text-[#0F3D66] underline">
+                Ingresarlo manualmente
+              </button>
+            </p>
           </div>
         )}
       </Panel>
@@ -545,7 +635,7 @@ export default function Cotizador({ db }) {
 
       {/* Historial del cliente */}
       {cliente && historial.length > 0 && (
-        <Panel title={`Simulaciones anteriores de ${cliente.cliente}`}>
+        <Panel title={`Simulaciones anteriores de ${cliente.cliente}`} className="mb-4">
           <div className="flex flex-col gap-1">
             {historial.map((c) => (
               <div key={c.id} className="flex items-center justify-between text-sm border-b border-stone-50 py-2 last:border-0">
@@ -561,6 +651,49 @@ export default function Cotizador({ db }) {
           </div>
         </Panel>
       )}
+
+      {/* Todas las simulaciones realizadas, de cualquier cliente */}
+      <Panel title="Todas las simulaciones">
+        <input
+          value={buscarTodas}
+          onChange={(e) => setBuscarTodas(e.target.value)}
+          placeholder="Buscar por cliente o RUT…"
+          className="w-full border border-stone-300 rounded-sm px-3 py-2 text-sm mb-3 focus:outline-none focus:border-[#1E5AA8]"
+        />
+        {(() => {
+          const q = normalizarBusqueda(buscarTodas);
+          const lista = !q
+            ? todasSimulaciones
+            : todasSimulaciones.filter(
+                (c) =>
+                  normalizarBusqueda(c.snapshot?.clientName || "").includes(q) ||
+                  (c.rutCliente || "").toLowerCase().includes(q)
+              );
+          if (lista.length === 0) {
+            return <p className="text-sm text-stone-400">Sin simulaciones{buscarTodas ? " para esa búsqueda" : " registradas todavía"}.</p>;
+          }
+          return (
+            <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+              {lista.slice(0, 200).map((c) => (
+                <div key={c.id} className="flex items-center justify-between text-sm border-b border-stone-50 py-2 last:border-0">
+                  <span className="min-w-0">
+                    N°{quoteNumber(c.displayId)} · {new Date(c.createdAt).toLocaleDateString("es-CL")} ·{" "}
+                    <span className="font-medium">{c.snapshot?.clientName || "(sin nombre)"}</span>{" "}
+                    <span className="text-xs text-stone-400">RUT {c.rutCliente}</span> ·{" "}
+                    {c.snapshot?.units?.[0]?.label || "—"} · {currency(c.precioFinal)} UF
+                  </span>
+                  <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1 shrink-0 ml-2">
+                    <ChevronLeft size={12} className="rotate-180" /> Ver PDF
+                  </button>
+                </div>
+              ))}
+              {lista.length > 200 && (
+                <p className="text-[11px] text-stone-400 mt-1">Mostrando las primeras 200 de {lista.length} simulaciones. Usa el buscador para acotar.</p>
+              )}
+            </div>
+          );
+        })()}
+      </Panel>
     </div>
   );
 }
