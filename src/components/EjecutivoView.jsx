@@ -73,7 +73,19 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
         const g = db.gestion[c.rut] || {};
         return { ...c, cliente: g.cliente || "", ejecutivo: g.ejecutivo || "", estadoCliente: g.estado || "" };
       })
-      .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+      // Ordenado por fecha real (la más reciente primero), no por el texto
+      // "DD-MM-AAAA" tal cual viene: comparar ese texto como string daba un
+      // orden incorrecto (ej. "05-10-2026" quedaba "antes" que
+      // "31-08-2026" porque "0" < "3"). Las que no tienen fecha
+      // interpretable quedan al final, en vez de desordenar el resto.
+      .sort((a, b) => {
+        const da = parseFechaCompleta(a.fecha);
+        const db_ = parseFechaCompleta(b.fecha);
+        if (!da && !db_) return 0;
+        if (!da) return 1;
+        if (!db_) return -1;
+        return db_ - da;
+      });
   }, [db.cotizaciones, db.gestion]);
   const oppFiltradas = useMemo(() => {
     if (!buscarTodos) return todasLasOpp;

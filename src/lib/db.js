@@ -323,10 +323,15 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     // El % de descuento de la unidad principal sigue la misma regla.
     const descuentoUniPrincipalNuevo =
       r.descuentoUniPrincipal != null && r.descuentoUniPrincipal !== prev.descuentoUniPrincipal;
+    // El descuento real en UF (suma de cupones/descuentos del Aval, ver
+    // parseMaestro.js) sigue la misma regla: puede no venir informado
+    // mientras la Opp está recién "Cotización".
+    const descuentoUfAvalNuevo =
+      r.descuentoUfAval != null && r.descuentoUfAval !== prev.descuentoUfAval;
     if (
       estadoCambio ||
-      (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo)) ||
-      loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo
+      (r.estado === "Promesada" && (fechaPromesaNueva || loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo || descuentoUfAvalNuevo)) ||
+      loteNuevo || precioListaNuevo || descuentoUniPrincipalNuevo || descuentoUfAvalNuevo
     ) {
       const payload = {
         opp: r.opp,
@@ -336,6 +341,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
         precioLista: r.precioLista != null ? r.precioLista : (prev.precioLista ?? null),
         descuentoUniPrincipal:
           r.descuentoUniPrincipal != null ? r.descuentoUniPrincipal : (prev.descuentoUniPrincipal ?? null),
+        descuentoUfAval: r.descuentoUfAval != null ? r.descuentoUfAval : (prev.descuentoUfAval ?? null),
       };
       cotizacionesEstadoActualizado.push(payload);
       if (estadoCambio || (r.estado === "Promesada" && fechaPromesaNueva)) {
@@ -375,6 +381,7 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
           lote: r.lote || prev.lote,
           precioLista: r.precioLista != null ? r.precioLista : prev.precioLista,
           descuentoUniPrincipal: r.descuentoUniPrincipal != null ? r.descuentoUniPrincipal : prev.descuentoUniPrincipal,
+          descuentoUfAval: r.descuentoUfAval != null ? r.descuentoUfAval : prev.descuentoUfAval,
         }
       : r;
   });

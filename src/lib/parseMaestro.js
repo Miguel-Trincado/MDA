@@ -94,13 +94,29 @@ export function parseMaestro(text) {
   // cualquier variante razonable del nombre de esta columna, nunca un
   // nombre único y exacto.
   const iPrecioLista = idxFlexible("Precio Lista Opp", "Precio Lista", "Precio de Lista");
-  // El "Descuento Uni. Principal" es el % de descuento real que se le
-  // aplicó a la unidad principal de esa Opp — se usa sobre el Precio
-  // Lista Opp para llegar al valor neto de la comisión, en vez del
-  // descuento genérico del listado de precios.
+  // "Descuento Uni. Principal" tal como viene del Aval, guardado tal cual
+  // (histórico; ya no se usa para calcular la comisión — ver
+  // descuentoUfAval más abajo, que es la fuente real desde v104).
   const iDescuentoUniPrincipal = idxFlexible(
     "Descuento Uni Principal", "Descuento Unidad Principal", "Descuento Principal", "Descuento Uni"
   );
+  // Descuento real de la Opp para el cálculo de Comisiones, en UF (no en
+  // %): la suma de todas las columnas del Aval donde puede venir un
+  // descuento o cupón aplicado a esa venta. Antes Comisiones usaba el %
+  // de descuento del listado de precios (genérico, por unidad); ahora usa
+  // el monto real que el Aval trae para esa Opp específica. Columnas
+  // ausentes o vacías cuentan como 0 — no todas las Opp traen las siete.
+  const iCuponUniPrincipal = idx("Cupon Uni. Principal");
+  const iCuponEstacionamiento = idx("Cupon Estacionamiento");
+  const iCuponBodega = idx("Cupon Bodega");
+  const iCuponAhorroPrevio = idx("Cupon Ahorro Previo");
+  const iCuponPagoContraEscritura = idx("Cupon Pago Contra Escritura");
+  const iDescuentoUniPrincipalUf = idx("Descuento Uni. Principal");
+  const iDescuentoEstacionamiento = idx("Descuento Estacionamiento");
+  const iColsDescuentoUf = [
+    iCuponUniPrincipal, iCuponEstacionamiento, iCuponBodega, iCuponAhorroPrevio,
+    iCuponPagoContraEscritura, iDescuentoUniPrincipalUf, iDescuentoEstacionamiento,
+  ];
 
   if (iRut === -1 || iEjec === -1) {
     throw new Error(
@@ -170,6 +186,14 @@ export function parseMaestro(text) {
     if (iFechaRes !== -1 && cols[iFechaRes] && cols[iFechaRes].trim()) rec.fechaReserva = cols[iFechaRes].trim();
     if (iFechaProm !== -1 && cols[iFechaProm] && cols[iFechaProm].trim()) rec.fechaPromesa = cols[iFechaProm].trim();
 
+    let descuentoUfAval = 0;
+    let algunaColDescuentoUf = false;
+    iColsDescuentoUf.forEach((i) => {
+      if (i === -1) return;
+      algunaColDescuentoUf = true;
+      descuentoUfAval += parseNumeroCL(cols[i]) || 0;
+    });
+
     filasDetalle.push({
       opp,
       rut,
@@ -183,6 +207,7 @@ export function parseMaestro(text) {
       lote: iLote !== -1 ? (cols[iLote] || "").trim() : "",
       precioLista: iPrecioLista !== -1 ? parseNumeroCL(cols[iPrecioLista]) : null,
       descuentoUniPrincipal: iDescuentoUniPrincipal !== -1 ? parseDescuentoPct(cols[iDescuentoUniPrincipal]) : null,
+      descuentoUfAval: algunaColDescuentoUf ? descuentoUfAval : null,
     });
   }
   return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };

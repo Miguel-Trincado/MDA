@@ -180,11 +180,11 @@ export default function Comisiones({ db }) {
     const pendientes = [];
     // Correcciones: Opp que ya tenían una comisión guardada con un precio
     // o descuento que no coincide con la fuente correcta de cada uno —
-    // precio: "Precio Lista Opp" del Aval; descuento: SIEMPRE el de la
-    // unidad principal en el listado de precios (el "Descuento Uni.
-    // Principal" del Aval es un dato manual poco confiable, se puede
-    // olvidar cargar, así que no se usa para el cálculo). Se corrige
-    // automáticamente al detectar el desajuste.
+    // precio: "Precio Lista Opp" del Aval; descuento: SIEMPRE la suma de
+    // cupones/descuentos de ESA Opp en el Aval, en UF (ver
+    // descuentoUfAval en parseMaestro.js) — ya no el % genérico del
+    // listado de precios. Se corrige automáticamente al detectar el
+    // desajuste.
     const correcciones = [];
     Object.entries(promesadasPorEjecutivo).forEach(([ejecutivo, opps]) => {
       opps.forEach((o) => {
@@ -193,11 +193,11 @@ export default function Comisiones({ db }) {
         if (!unidad) return;
         const cot = db.cotizaciones[o.opp];
         const precioEsperado = cot?.precioLista != null ? Number(cot.precioLista) : Number(unidad.precio) || 0;
-        const descuentoEsperado = Number(unidad.descuentoMax) || 0;
+        const descuentoUfEsperado = Number(cot?.descuentoUfAval) || 0;
         const ventaActual = ventas[o.opp];
         if (!ventaActual) {
           if (autoAsignadosRef.current.has(o.opp)) return;
-          pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad, precioEsperado, descuentoEsperado });
+          pendientes.push({ opp: o.opp, rut: o.rut, cliente: o.cliente, ejecutivo, unidad, precioEsperado, descuentoUfEsperado });
           return;
         }
         if (autoCorregidosRef.current.has(o.opp)) return;
@@ -205,11 +205,11 @@ export default function Comisiones({ db }) {
         if (Number(ventaActual.precioUf) === Number(unidad.precio) && Number(ventaActual.precioUf) !== precioEsperado) {
           cambios.precioUf = precioEsperado;
         }
-        // El descuento siempre debe ser el del listado — se corrige
-        // cualquier desajuste, sin excepción (a diferencia del precio, que
-        // solo se corrige si nadie lo editó a mano).
-        if (Number(ventaActual.descuentoPct) !== descuentoEsperado) {
-          cambios.descuentoPct = descuentoEsperado;
+        // El descuento siempre debe ser el del Aval — se corrige cualquier
+        // desajuste, sin excepción (a diferencia del precio, que solo se
+        // corrige si nadie lo editó a mano).
+        if (Number(ventaActual.descuentoUf) !== descuentoUfEsperado) {
+          cambios.descuentoUf = descuentoUfEsperado;
         }
         if (Object.keys(cambios).length > 0) correcciones.push({ opp: o.opp, ventaActual, cambios });
       });
@@ -225,7 +225,7 @@ export default function Comisiones({ db }) {
           // (estacionamiento, bodega, etc.). Si esa Opp todavía no trae ese
           // dato (Aval más antiguo o columna no encontrada), se cae de
           // respaldo al precio de la unidad en el listado, como antes. El
-          // descuento SIEMPRE sale del listado de precios.
+          // descuento SIEMPRE sale del Aval (en UF).
           const saved = await guardarComisionVentaRemote({
             opp: p.opp,
             rut: p.rut,
@@ -234,7 +234,7 @@ export default function Comisiones({ db }) {
             mes,
             unidadLabel: `${p.unidad.unidad}${p.unidad.modelo ? ` (${p.unidad.modelo})` : ""}`,
             precioUf: p.precioEsperado,
-            descuentoPct: p.descuentoEsperado,
+            descuentoUf: p.descuentoUfEsperado,
           });
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
         } catch (e) {
@@ -303,7 +303,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v102</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v104</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -418,7 +418,9 @@ function EjecutivoComisionPanel({
     const pct = venta?.tramoPct != null ? Number(venta.tramoPct) : pctAuto;
     let comisionUf = null, brutoClp = null, netoClp = null, precioNetoUf = null;
     if (venta) {
-      precioNetoUf = Number(venta.precioUf) * (1 - (Number(venta.descuentoPct) || 0) / 100);
+      // El descuento ahora es un monto en UF (suma de cupones/descuentos
+      // de esa Opp en el Aval), no un %: se resta directo del precio.
+      precioNetoUf = Number(venta.precioUf) - (Number(venta.descuentoUf) || 0);
       comisionUf = precioNetoUf * (pct / 100);
       brutoClp = comisionUf * valorUfMes;
       netoClp = brutoClp * (1 - retencionPct / 100);
@@ -565,7 +567,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
   const [buscarUnidad, setBuscarUnidad] = useState("");
   const [unidadElegida, setUnidadElegida] = useState(null);
   const [precioUfInput, setPrecioUfInput] = useState(f.venta ? String(f.venta.precioUf) : "");
-  const [descuentoInput, setDescuentoInput] = useState(f.venta ? String(f.venta.descuentoPct) : "0");
+  const [descuentoInput, setDescuentoInput] = useState(f.venta ? String(f.venta.descuentoUf) : "0");
   const [tramoInput, setTramoInput] = useState(String(f.pct));
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState("");
@@ -581,17 +583,20 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
   // Precio real de esa Opp según el Aval ("Precio Lista Opp") — puede
   // venir sumado con otras unidades del mismo cliente. Si no está
   // disponible, se usa el precio de la unidad en el listado como respaldo
-  // (comportamiento anterior). El descuento SIEMPRE sale del listado de
-  // precios — el "Descuento Uni. Principal" del Aval es un dato manual
-  // poco confiable (se puede olvidar cargar), así que no se usa.
+  // (comportamiento anterior). El descuento SIEMPRE sale del Aval, en UF:
+  // la suma de los cupones/descuentos de esa Opp (Cupón Uni. Principal,
+  // Cupón Estacionamiento, Cupón Bodega, Cupón Ahorro Previo, Cupón Pago
+  // Contra Escritura, Descuento Uni. Principal, Descuento Estacionamiento)
+  // — ya no el % genérico del listado de precios.
   const precioListaAval = db.cotizaciones?.[f.opp]?.precioLista;
+  const descuentoUfAval = db.cotizaciones?.[f.opp]?.descuentoUfAval;
 
   function elegirUnidad(u) {
     setUnidadElegida(u);
     setBuscarUnidad("");
     const precioBase = precioListaAval != null ? precioListaAval : u.precio;
     setPrecioUfInput(precioBase != null ? String(precioBase) : "");
-    setDescuentoInput(u.descuentoMax != null ? String(u.descuentoMax) : "0");
+    setDescuentoInput(descuentoUfAval != null ? String(descuentoUfAval) : "0");
   }
 
   async function guardar() {
@@ -619,7 +624,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         mes,
         unidadLabel,
         precioUf: Number(precioUfInput) || 0,
-        descuentoPct: Number(descuentoInput) || 0,
+        descuentoUf: Number(descuentoInput) || 0,
         tramoPct: tramoOverride,
       });
       setEditando(false);
@@ -641,7 +646,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <span className="text-stone-500 flex justify-center">
           {f.pct}%{f.venta.tramoPct != null && <span className="text-amber-600" title="Corregido a mano"> *</span>}
         </span>
-        <span className="text-stone-500 flex justify-center">{f.venta.descuentoPct}%</span>
+        <span className="text-stone-500 flex justify-center">{ufFmt(f.venta.descuentoUf)} UF</span>
         <span className="font-medium text-[#0F3D66] flex justify-end">{ufFmt(f.comisionUf)} UF</span>
         <span>${currencyDecimal(f.brutoClp)}</span>
         <span className="text-emerald-700 font-medium">${currencyDecimal(f.netoClp)}</span>
@@ -675,7 +680,8 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <p className="text-xs text-stone-500 mb-2">
           Precio Lista del Aval para esta Opp: <span className="font-medium">{ufFmt(precioListaAval)} UF</span> — se
           usa como base del cálculo en vez del precio del listado (puede venir sumado con otras unidades del mismo
-          cliente). El % de descuento se toma siempre del listado de precios.
+          cliente). El descuento se toma siempre del Aval, en UF
+          {descuentoUfAval != null && <>: <span className="font-medium">{ufFmt(descuentoUfAval)} UF</span></>}.
         </p>
       )}
       {!unidadElegida && !f.venta && (
@@ -719,7 +725,7 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
         <Field label="Precio unidad (UF)">
           <input type="number" step="0.01" value={precioUfInput} onChange={(e) => setPrecioUfInput(e.target.value)} className="ipt w-32" />
         </Field>
-        <Field label="Descuento (%)">
+        <Field label="Descuento (UF)">
           <input type="number" step="0.01" value={descuentoInput} onChange={(e) => setDescuentoInput(e.target.value)} className="ipt w-24" />
         </Field>
         <Field label="Tramo (%)">
