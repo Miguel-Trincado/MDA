@@ -551,6 +551,11 @@ export async function fetchTodasCotizacionesGeneradas() {
   return (data || []).map(rowToObj);
 }
 
+export async function eliminarCotizacionGenerada(id) {
+  const { error } = await supabase.from("cotizaciones_generadas").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // Guarda una cotización generada. Se llama una sola vez por sesión del
 // Cotizador (si ya se guardó, se reutiliza la misma fila y su N°, en vez
 // de crear una nueva cada vez que se descarga o previsualiza el PDF).

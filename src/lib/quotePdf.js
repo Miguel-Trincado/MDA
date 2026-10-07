@@ -19,7 +19,7 @@ export const buildQuotePdfDoc = (data) => {
     clientName, clientRut, clientPhone,
     units, // [{ label, tipologia, area, priceUF }]
     subtotal, discount, descuentoPct, precioFinalUF, valorUF,
-    reservaUF, pieUF, contraEscrituraUF, cuotasContraEscritura, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
+    reservaUF, pieUF, contraEscrituraUF, cuotasContraEscritura, cuotasPlan, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
     observaciones,
     agentName,
     displayId,
@@ -325,11 +325,26 @@ export const buildQuotePdfDoc = (data) => {
     doc.setFont(undefined, "normal");
     y2 += 8;
 
-    const montoPorCuotaUF = contraEscrituraUF / cuotasContraEscritura;
+    // Si la cotización trae un plan de cuotas propio (primera y/o última
+    // cuota con monto distinto, calculado en el Simulador), se usa tal
+    // cual; si no (cotizaciones guardadas antes de que existiera esta
+    // opción), se recalcula el reparto en partes iguales como siempre.
+    const plan =
+      Array.isArray(cuotasPlan) && cuotasPlan.length === cuotasContraEscritura
+        ? cuotasPlan
+        : Array.from({ length: cuotasContraEscritura }, (_, i) => ({
+            numero: i + 1,
+            montoUF: contraEscrituraUF / cuotasContraEscritura,
+            especial: false,
+          }));
+    const tieneCuotasEspeciales = plan.some((c) => c.especial);
+
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
     doc.text(
-      `${cuotasContraEscritura} cuotas de ${currencyDecimal(montoPorCuotaUF)} UF cada una (total ${currency(contraEscrituraUF)} UF).`,
+      tieneCuotasEspeciales
+        ? `${cuotasContraEscritura} cuotas, primera y/o última con monto propio (total ${currency(contraEscrituraUF)} UF).`
+        : `${cuotasContraEscritura} cuotas de ${currencyDecimal(contraEscrituraUF / cuotasContraEscritura)} UF cada una (total ${currency(contraEscrituraUF)} UF).`,
       contentX,
       y2
     );
@@ -347,7 +362,8 @@ export const buildQuotePdfDoc = (data) => {
     doc.setFont(undefined, "normal");
     y2 += 8;
 
-    for (let i = 1; i <= cuotasContraEscritura; i++) {
+    for (const cuota of plan) {
+      const i = cuota.numero;
       if (y2 + 8 > pageHeight - 20) {
         doc.addPage();
         drawSideBand();
@@ -360,20 +376,20 @@ export const buildQuotePdfDoc = (data) => {
       }
       doc.setFontSize(8.5);
       doc.setTextColor(...INK);
-      doc.text(`Cuota ${i} de ${cuotasContraEscritura}`, contentX + 5, y2 + 5.2);
+      doc.text(`Cuota ${i} de ${cuotasContraEscritura}${cuota.especial ? " *" : ""}`, contentX + 5, y2 + 5.2);
       doc.text(`Mes ${i}`, contentX + contentW * 0.3, y2 + 5.2);
-      doc.text(`${currencyDecimal(montoPorCuotaUF)} UF`, contentX + contentW * 0.62, y2 + 5.2);
-      doc.text(`$${currency(toCLP(montoPorCuotaUF))}`, pageWidth - margin - 5, y2 + 5.2, { align: "right" });
+      doc.text(`${currencyDecimal(cuota.montoUF)} UF`, contentX + contentW * 0.62, y2 + 5.2);
+      doc.text(`$${currency(toCLP(cuota.montoUF))}`, pageWidth - margin - 5, y2 + 5.2, { align: "right" });
       y2 += rowH;
     }
 
     y2 += 6;
     doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    const notaLines = doc.splitTextToSize(
-      "El vencimiento de cada cuota se cuenta en meses a partir de la firma de la promesa de compraventa; las fechas exactas se confirman en ese momento. Máximo 24 cuotas.",
-      contentW
-    );
+    const notaTexto = tieneCuotasEspeciales
+      ? "El vencimiento de cada cuota se cuenta en meses a partir de la firma de la promesa de compraventa; las fechas exactas se confirman en ese momento. Máximo 24 cuotas. (*) Cuota con monto propio, distinto al resto."
+      : "El vencimiento de cada cuota se cuenta en meses a partir de la firma de la promesa de compraventa; las fechas exactas se confirman en ese momento. Máximo 24 cuotas.";
+    const notaLines = doc.splitTextToSize(notaTexto, contentW);
     doc.text(notaLines, contentX, y2);
   }
 

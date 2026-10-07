@@ -1,8 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { Search, FileText, Loader2, Check, ChevronLeft } from "lucide-react";
+import { Search, FileText, Loader2, Check, ChevronLeft, Trash2 } from "lucide-react";
 import { buildQuotePdfDoc, currency, currencyDecimal, quoteNumber } from "../lib/quotePdf";
-import { fetchCotizacionesDeCliente, fetchTodasCotizacionesGeneradas, guardarCotizacionGenerada } from "../lib/db";
-import { normalizarBusqueda, normalizeRut } from "../lib/helpers";
+import {
+  fetchCotizacionesDeCliente,
+  fetchTodasCotizacionesGeneradas,
+  guardarCotizacionGenerada,
+  eliminarCotizacionGenerada,
+} from "../lib/db";
+import { normalizarBusqueda, normalizeRut, calcularPlanCuotas } from "../lib/helpers";
 import { Panel, Field } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
@@ -72,6 +77,13 @@ export default function Cotizador({ db }) {
   const [descuentoPct, setDescuentoPct] = useState("0");
   const [rows, setRows] = useState(FINANCIAMIENTO_ROWS_DEFAULT);
   const [cuotasContraEscritura, setCuotasContraEscritura] = useState(1);
+  // Permite que la primera y/o la última cuota de la Contra escritura
+  // tengan un monto propio (normalmente mayor), repartiendo el resto en
+  // partes iguales entre las cuotas del medio — ver calcularPlanCuotas().
+  const [primeraCuotaDistinta, setPrimeraCuotaDistinta] = useState(false);
+  const [primeraCuotaMonto, setPrimeraCuotaMonto] = useState("");
+  const [ultimaCuotaDistinta, setUltimaCuotaDistinta] = useState(false);
+  const [ultimaCuotaMonto, setUltimaCuotaMonto] = useState("");
   const [observaciones, setObservaciones] = useState("");
   const [savedCotizacion, setSavedCotizacion] = useState(null);
   const [error, setError] = useState("");
@@ -81,6 +93,7 @@ export default function Cotizador({ db }) {
   const [historial, setHistorial] = useState([]);
   const [todasSimulaciones, setTodasSimulaciones] = useState([]);
   const [buscarTodas, setBuscarTodas] = useState("");
+  const [eliminandoId, setEliminandoId] = useState(null);
 
   const { valorUF, loadingUF } = useValorUF();
 
@@ -151,6 +164,10 @@ export default function Cotizador({ db }) {
     closePreview();
     setDescuentoPct(u.descuentoMax != null ? String(u.descuentoMax) : "0");
     setCuotasContraEscritura(1);
+    setPrimeraCuotaDistinta(false);
+    setPrimeraCuotaMonto("");
+    setUltimaCuotaDistinta(false);
+    setUltimaCuotaMonto("");
   }
 
   function elegirEstacionamiento(id) {
@@ -190,6 +207,17 @@ export default function Cotizador({ db }) {
   const distribucionValidada = Math.abs(faltanteUF) < 0.01;
   const toCLP = (uf) => (valorUF ? uf * valorUF : 0);
 
+  const cuotasPlan = useMemo(
+    () =>
+      calcularPlanCuotas(
+        contraEscrituraUF,
+        cuotasContraEscritura,
+        { activa: primeraCuotaDistinta, monto: primeraCuotaMonto },
+        { activa: ultimaCuotaDistinta, monto: ultimaCuotaMonto }
+      ),
+    [contraEscrituraUF, cuotasContraEscritura, primeraCuotaDistinta, primeraCuotaMonto, ultimaCuotaDistinta, ultimaCuotaMonto]
+  );
+
   const quoteSnapshot = () => ({
     clientName: cliente?.cliente || null,
     clientRut: cliente?.rut || null,
@@ -212,6 +240,7 @@ export default function Cotizador({ db }) {
     pieUF,
     contraEscrituraUF,
     cuotasContraEscritura,
+    cuotasPlan,
     hipotecarioRowUF: hipotecarioUF,
     totalDistribuidoUF,
     faltanteUF,
@@ -277,6 +306,24 @@ export default function Cotizador({ db }) {
     const doc = buildQuotePdfDoc({ ...cot.snapshot, displayId: cot.displayId });
     closePreview();
     setPreviewUrl(doc.output("bloburl"));
+  }
+
+  async function eliminarSimulacion(cot) {
+    if (!window.confirm(`¿Eliminar la simulación N°${quoteNumber(cot.displayId)}? Esta acción no se puede deshacer.`)) return;
+    setEliminandoId(cot.id);
+    try {
+      await eliminarCotizacionGenerada(cot.id);
+      setHistorial((prev) => prev.filter((c) => c.id !== cot.id));
+      setTodasSimulaciones((prev) => prev.filter((c) => c.id !== cot.id));
+      if (savedCotizacion?.id === cot.id) {
+        setSavedCotizacion(null);
+        closePreview();
+      }
+    } catch (e) {
+      setError(e.message || "No se pudo eliminar la simulación.");
+    } finally {
+      setEliminandoId(null);
+    }
   }
 
   const seleccionarCliente = (g) => {
@@ -585,10 +632,68 @@ export default function Cotizador({ db }) {
               })}
             </div>
             {cuotasContraEscritura > 1 && (
-              <p className="text-xs text-stone-500 mt-2">
-                Contra escritura en {cuotasContraEscritura} cuotas de {currency(contraEscrituraUF / cuotasContraEscritura)} UF cada una
-                (el plan de pago va en la segunda hoja del PDF).
-              </p>
+              <div className="mt-3 border border-stone-200 rounded-sm p-3 bg-stone-50/60">
+                <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">
+                  Primera y/o última cuota con monto distinto (opcional)
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={primeraCuotaDistinta}
+                      onChange={(e) => setPrimeraCuotaDistinta(e.target.checked)}
+                    />
+                    Primera cuota distinta
+                  </label>
+                  {primeraCuotaDistinta && (
+                    <input
+                      type="number"
+                      value={primeraCuotaMonto}
+                      onChange={(e) => setPrimeraCuotaMonto(e.target.value)}
+                      placeholder="Monto UF"
+                      className="ipt text-xs"
+                      style={{ width: "100px" }}
+                    />
+                  )}
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={ultimaCuotaDistinta}
+                      onChange={(e) => setUltimaCuotaDistinta(e.target.checked)}
+                    />
+                    Última cuota distinta
+                  </label>
+                  {ultimaCuotaDistinta && (
+                    <input
+                      type="number"
+                      value={ultimaCuotaMonto}
+                      onChange={(e) => setUltimaCuotaMonto(e.target.value)}
+                      placeholder="Monto UF"
+                      className="ipt text-xs"
+                      style={{ width: "100px" }}
+                    />
+                  )}
+                </div>
+                <p className="text-xs text-stone-500 mt-3">
+                  {cuotasPlan.length > 0 && (cuotasPlan[0].especial || cuotasPlan[cuotasPlan.length - 1].especial) ? (
+                    <>
+                      Cuota 1: {currencyDecimal(cuotasPlan[0].montoUF)} UF
+                      {cuotasPlan.length > 1 && (
+                        <>
+                          {" "}· Cuotas del medio ({cuotasPlan.filter((c, i) => !c.especial && i !== 0 && i !== cuotasPlan.length - 1).length}):{" "}
+                          {currencyDecimal(cuotasPlan.find((c) => !c.especial)?.montoUF || 0)} UF cada una
+                        </>
+                      )}
+                      {" "}· Cuota {cuotasPlan.length}: {currencyDecimal(cuotasPlan[cuotasPlan.length - 1].montoUF)} UF
+                    </>
+                  ) : (
+                    <>
+                      Contra escritura en {cuotasContraEscritura} cuotas de {currency(contraEscrituraUF / cuotasContraEscritura)} UF cada una
+                    </>
+                  )}{" "}
+                  (el plan de pago va en la segunda hoja del PDF).
+                </p>
+              </div>
             )}
             <div className={`mt-3 text-xs font-medium ${distribucionValidada ? "text-emerald-700" : "text-amber-700"}`}>
               {distribucionValidada
@@ -643,9 +748,18 @@ export default function Cotizador({ db }) {
                   N°{quoteNumber(c.displayId)} · {new Date(c.createdAt).toLocaleDateString("es-CL")} ·{" "}
                   {c.snapshot?.units?.[0]?.label || "—"} · {c.snapshot?.units?.[0]?.tipologia || "—"} · {currency(c.precioFinal)} UF
                 </span>
-                <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
-                  <ChevronLeft size={12} className="rotate-180" /> Ver PDF
-                </button>
+                <span className="flex items-center gap-3 shrink-0 ml-2">
+                  <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
+                    <ChevronLeft size={12} className="rotate-180" /> Ver PDF
+                  </button>
+                  <button
+                    onClick={() => eliminarSimulacion(c)}
+                    disabled={eliminandoId === c.id}
+                    className="text-xs text-rose-600 hover:text-rose-800 underline flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {eliminandoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Eliminar
+                  </button>
+                </span>
               </div>
             ))}
           </div>
@@ -682,9 +796,18 @@ export default function Cotizador({ db }) {
                     <span className="text-xs text-stone-400">RUT {c.rutCliente}</span> ·{" "}
                     {c.snapshot?.units?.[0]?.label || "—"} · {currency(c.precioFinal)} UF
                   </span>
-                  <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1 shrink-0 ml-2">
-                    <ChevronLeft size={12} className="rotate-180" /> Ver PDF
-                  </button>
+                  <span className="flex items-center gap-3 shrink-0 ml-2">
+                    <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
+                      <ChevronLeft size={12} className="rotate-180" /> Ver PDF
+                    </button>
+                    <button
+                      onClick={() => eliminarSimulacion(c)}
+                      disabled={eliminandoId === c.id}
+                      className="text-xs text-rose-600 hover:text-rose-800 underline flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {eliminandoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Eliminar
+                    </button>
+                  </span>
                 </div>
               ))}
               {lista.length > 200 && (

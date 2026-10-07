@@ -254,3 +254,51 @@ export function diasHabilesEntre(desdeISO, hastaISO) {
   }
   return dias;
 }
+
+// Reparte el monto de "Contra escritura" en cuotas, dejando la primera
+// y/o la última con un monto propio (normalmente mayor) y repartiendo el
+// resto en partes iguales entre las cuotas que quedan en el medio. Se usa
+// en el Simulador y en el PDF de la cotización, para que ambos calculen
+// exactamente lo mismo.
+// - totalUF: monto total de Contra escritura.
+// - nCuotas: cantidad total de cuotas (1 a 24).
+// - primera / ultima: { activa: boolean, monto: number } — monto propio
+//   de esa cuota cuando "activa" es true.
+// Devuelve [{ numero, montoUF, especial }], uno por cuota.
+export function calcularPlanCuotas(totalUF, nCuotas, primera, ultima) {
+  const total = Number(totalUF) || 0;
+  const n = Number(nCuotas) || 0;
+  if (n < 1) return [];
+  if (n === 1) return [{ numero: 1, montoUF: total, especial: false }];
+
+  const primeraActiva = !!primera?.activa;
+  // La última solo puede ser "distinta" aparte de la primera si queda al
+  // menos una cuota de diferencia entre ambas (si no, serían la misma).
+  const ultimaActiva = !!ultima?.activa && (!primeraActiva || n >= 2);
+
+  let especiales = 0;
+  let montoEspeciales = 0;
+  if (primeraActiva) {
+    especiales++;
+    montoEspeciales += Number(primera.monto) || 0;
+  }
+  if (ultimaActiva) {
+    especiales++;
+    montoEspeciales += Number(ultima.monto) || 0;
+  }
+  const cuotasRestantes = n - especiales;
+  const montoRestante = total - montoEspeciales;
+  const montoPorCuotaRestante = cuotasRestantes > 0 ? montoRestante / cuotasRestantes : 0;
+
+  const plan = [];
+  for (let i = 1; i <= n; i++) {
+    if (i === 1 && primeraActiva) {
+      plan.push({ numero: i, montoUF: Number(primera.monto) || 0, especial: true });
+    } else if (i === n && ultimaActiva) {
+      plan.push({ numero: i, montoUF: Number(ultima.monto) || 0, especial: true });
+    } else {
+      plan.push({ numero: i, montoUF: montoPorCuotaRestante, especial: false });
+    }
+  }
+  return plan;
+}
