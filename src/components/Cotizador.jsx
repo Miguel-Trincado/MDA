@@ -8,6 +8,7 @@ import {
   eliminarCotizacionGenerada,
 } from "../lib/db";
 import { normalizarBusqueda, normalizeRut, calcularPlanCuotas } from "../lib/helpers";
+import { useValorUFHoy } from "../lib/uf";
 import { Panel, Field } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
@@ -36,26 +37,6 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
     contraEscritura: { modo: "UF", valor: contraEscrituraUF },
     hipotecario: { modo: "%", valor: 80 },
   };
-}
-
-function useValorUF() {
-  const [valorUF, setValorUF] = useState(null);
-  const [loadingUF, setLoadingUF] = useState(true);
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("https://mindicador.cl/api/uf");
-        const data = await res.json();
-        const v = data?.serie?.[0]?.valor;
-        if (v) setValorUF(v);
-      } catch (e) {
-        console.error("No se pudo obtener el valor de la UF", e);
-      } finally {
-        setLoadingUF(false);
-      }
-    })();
-  }, []);
-  return { valorUF, loadingUF };
 }
 
 export default function Cotizador({ db }) {
@@ -96,7 +77,7 @@ export default function Cotizador({ db }) {
   const [buscarTodas, setBuscarTodas] = useState("");
   const [eliminandoId, setEliminandoId] = useState(null);
 
-  const { valorUF, loadingUF } = useValorUF();
+  const { valorUF, loading: loadingUF } = useValorUFHoy();
 
   // El cliente puede venir de la cartera (gestion) o haber sido ingresado
   // a mano porque todavía no cotiza por el Aval — en ambos casos queda

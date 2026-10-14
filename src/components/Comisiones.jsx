@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Building2, Layers, Receipt, Pencil, Calendar } from "lucide-react";
 import { useAuthSession } from "../lib/useAuthSession";
+import { useValorUFHoy } from "../lib/uf";
 import {
   fetchComisionesValidacion, setComisionesValidacionRemote,
   fetchComisionesVentas, guardarComisionVentaRemote, eliminarComisionVentaRemote,
@@ -58,26 +59,6 @@ function tramoPctPorTotal(totalUnidades) {
   return 0.75;
 }
 
-function useValorUFHoy() {
-  const [valorUF, setValorUF] = useState(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("https://mindicador.cl/api/uf");
-        const data = await res.json();
-        const v = data?.serie?.[0]?.valor;
-        if (v) setValorUF(v);
-      } catch (e) {
-        console.error("No se pudo obtener el valor de la UF", e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-  return { valorUF, loading };
-}
-
 export default function Comisiones({ db }) {
   const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin } = useAuthSession();
 
@@ -91,7 +72,7 @@ export default function Comisiones({ db }) {
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState("");
 
-  const { valorUF: valorUFHoy, loading: loadingUFHoy } = useValorUFHoy();
+  const { valorUF: valorUFHoy, loading: loadingUFHoy, error: errorUFHoy } = useValorUFHoy();
 
   useEffect(() => {
     if (!session) return;
@@ -303,7 +284,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v112</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v115</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -339,6 +320,7 @@ export default function Comisiones({ db }) {
               db={db}
               mes={mes}
               valorUFHoy={valorUFHoy}
+              errorUFHoy={errorUFHoy}
               loadingUFHoy={loadingUFHoy}
               validacion={validaciones[`${mes}__${ejecutivo}`]}
               onGuardarValidacion={(datos) => guardarValidacionEjecutivo(ejecutivo, datos)}
@@ -363,7 +345,7 @@ export default function Comisiones({ db }) {
 }
 
 function EjecutivoComisionPanel({
-  ejecutivo, opps, ventas, db, mes, valorUFHoy, loadingUFHoy, validacion,
+  ejecutivo, opps, ventas, db, mes, valorUFHoy, loadingUFHoy, errorUFHoy, validacion,
   onGuardarValidacion, onGuardarVenta, onQuitarVenta,
 }) {
   const anioDelMes = Number((mes || "").split("-")[0]) || new Date().getFullYear();
@@ -461,7 +443,7 @@ function EjecutivoComisionPanel({
                 className="ipt w-32"
               />
               <span className="text-[10px] text-stone-400 block mt-0.5">
-                {loadingUFHoy ? "Consultando UF oficial…" : valorUFHoy != null ? `UF oficial hoy: ${ufFmt(valorUFHoy)}` : " "}
+                {loadingUFHoy ? "Consultando UF oficial…" : valorUFHoy != null ? `UF oficial hoy: ${ufFmt(valorUFHoy)}` : errorUFHoy ? "No se pudo consultar la UF oficial — ingrésala a mano" : " "}
               </span>
             </Field>
             <Field label="Retención boleta honorarios (%)">
