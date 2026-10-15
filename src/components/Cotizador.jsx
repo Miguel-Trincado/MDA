@@ -30,7 +30,9 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
   const reservaUF = 5;
   const hipotecarioUF = precioBaseUF * 0.8;
   const pieUF = (precioBaseUF * (Number(descuentoPctVal) || 0)) / 100;
-  const contraEscrituraUF = Math.max(0, precioBaseUF - reservaUF - hipotecarioUF - pieUF);
+  // La reserva NO se resta: es un fondo de administración que se cobra
+  // aparte y no forma parte del precio de la unidad.
+  const contraEscrituraUF = Math.max(0, precioBaseUF - hipotecarioUF - pieUF);
   return {
     reserva: { modo: "UF", valor: reservaUF },
     pie: { modo: "%", valor: Number(descuentoPctVal) || 0 },
@@ -175,7 +177,7 @@ export default function Cotizador({ db }) {
   // tocarlo a mano salvo que ese 1% de los casos lo requiera.
   useEffect(() => {
     if (!unidad) return;
-    setRows(calcularDefaults(precioListaUF, descuentoPct));
+    setRows((prev) => ({ ...calcularDefaults(precioListaUF, descuentoPct), reserva: prev.reserva }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unidadId, estacionamientoId, descuentoPct]);
 
@@ -191,7 +193,9 @@ export default function Cotizador({ db }) {
   const pieUF = rowValueUF(rows.pie, precioFinalUF);
   const contraEscrituraUF = rowValueUF(rows.contraEscritura, precioFinalUF);
   const hipotecarioUF = rowValueUF(rows.hipotecario, precioFinalUF);
-  const totalDistribuidoUF = reservaUF + pieUF + contraEscrituraUF + hipotecarioUF;
+  // La reserva queda fuera: lo que debe sumar el precio es Pie + Contra
+  // escritura + Crédito hipotecario.
+  const totalDistribuidoUF = pieUF + contraEscrituraUF + hipotecarioUF;
   const faltanteUF = precioFinalUF - totalDistribuidoUF;
   const distribucionValidada = Math.abs(faltanteUF) < 0.01;
   const toCLP = (uf) => (valorUF ? uf * valorUF : 0);
@@ -226,6 +230,7 @@ export default function Cotizador({ db }) {
     precioFinalUF,
     valorUF,
     reservaUF,
+    reservaFueraDelPrecio: true,
     pieUF,
     contraEscrituraUF,
     cuotasContraEscritura,
@@ -581,7 +586,7 @@ export default function Cotizador({ db }) {
                 <span>UF</span>
                 <span>Cuotas</span>
               </div>
-              {Object.keys(rows).map((key) => {
+              {Object.keys(rows).filter((key) => key !== "reserva").map((key) => {
                 const row = rows[key];
                 const ufValue = rowValueUF(row, precioFinalUF);
                 const pctValue = precioFinalUF > 0 ? (ufValue / precioFinalUF) * 100 : 0;
@@ -619,6 +624,23 @@ export default function Cotizador({ db }) {
                   </div>
                 );
               })}
+            </div>
+            {/* La reserva va aparte de la distribución: es un fondo de
+                administración que se cobra además del precio, no parte de él. */}
+            <div className="mt-3 border border-stone-200 rounded-sm px-3 py-2 flex items-center gap-3 flex-wrap bg-stone-50/60">
+              <div className="text-sm">
+                Reserva <span className="text-xs text-stone-400">— fondo de administración, se cobra aparte (no forma parte del precio)</span>
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <input
+                  type="number"
+                  value={rows.reserva.valor}
+                  onChange={(e) => setRow("reserva", { modo: "UF", valor: e.target.value })}
+                  className="ipt text-xs"
+                  style={{ width: "104px" }}
+                />
+                <span className="text-xs text-stone-500">UF{valorUF ? ` · $${currency(toCLP(reservaUF))}` : ""}</span>
+              </div>
             </div>
             {cuotasContraEscritura > 1 && (
               <div className="mt-3 border border-stone-200 rounded-sm p-3 bg-stone-50/60">

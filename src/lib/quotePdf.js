@@ -19,7 +19,7 @@ export const buildQuotePdfDoc = (data) => {
     clientName, clientRut, clientPhone,
     units, // [{ label, tipologia, area, priceUF }]
     subtotal, discount, descuentoPct, precioFinalUF, valorUF,
-    reservaUF, pieUF, contraEscrituraUF, cuotasContraEscritura, cuotasPlan, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
+    reservaUF, reservaFueraDelPrecio, pieUF, contraEscrituraUF, cuotasContraEscritura, cuotasPlan, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
     observaciones,
     agentName,
     displayId,
@@ -160,8 +160,12 @@ export const buildQuotePdfDoc = (data) => {
   doc.setFont(undefined, "normal");
   y += 6.5;
 
+  // Desde que la reserva se cobra aparte (fondo de administración), el
+  // desglose del precio es solo Pie + Contra escritura + Crédito hipotecario
+  // y la reserva se muestra en su propia línea. Las simulaciones guardadas
+  // antes de ese cambio no traen la marca y se siguen viendo como antes.
   const financData = [
-    { label: "Reserva", uf: reservaUF, color: PURPLE },
+    ...(reservaFueraDelPrecio ? [] : [{ label: "Reserva", uf: reservaUF, color: PURPLE }]),
     { label: "Pie", uf: pieUF, color: BLUE },
     { label: "Contra escritura", uf: contraEscrituraUF, color: PINK },
     { label: "Crédito hipotecario", uf: hipotecarioRowUF, color: [200, 210, 225] },
@@ -234,7 +238,23 @@ export const buildQuotePdfDoc = (data) => {
     y,
     { align: "right" }
   );
-  y += 10;
+  y += 7;
+
+  if (reservaFueraDelPrecio) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.setFont(undefined, "bold");
+    doc.text("Reserva", contentX, y);
+    doc.setFont(undefined, "normal");
+    doc.setTextColor(...MUTED);
+    doc.setFontSize(7.5);
+    doc.text("fondo de administración, se cobra aparte (no forma parte del precio)", contentX + 16, y);
+    doc.setFontSize(8.5);
+    doc.setTextColor(...INK);
+    doc.text(`${currency(reservaUF)} UF · $${currency(toCLP(reservaUF))}`, pageWidth - margin, y, { align: "right" });
+    y += 7;
+  }
+  y += 3;
 
   // ---- Precio ----
   ensureSpace(24);
