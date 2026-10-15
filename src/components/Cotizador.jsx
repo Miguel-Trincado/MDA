@@ -41,6 +41,54 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
   };
 }
 
+// Monto de una cuota que se puede escribir en UF o en pesos dentro del
+// mismo recuadro: un campo numérico con su selector de moneda pegado. Al
+// cambiar de moneda se convierte el valor ya escrito (con la UF de hoy)
+// para que el monto no cambie, solo cómo se expresa. Los dos recuadros
+// (primera y última) usan este mismo componente, así quedan idénticos.
+function MontoCuotaInput({ value, moneda, onValue, onMoneda, valorUF }) {
+  const num = Number(value) || 0;
+  const equivalente =
+    num > 0 && valorUF
+      ? moneda === "UF"
+        ? `≈ $${currency(num * valorUF)}`
+        : `≈ ${currencyDecimal(num / valorUF)} UF`
+      : "";
+
+  function cambiarMoneda(nueva) {
+    if (nueva === moneda) return;
+    if (num > 0 && valorUF) {
+      onValue(nueva === "CLP" ? String(Math.round(num * valorUF)) : String(Math.round((num / valorUF) * 100) / 100));
+    }
+    onMoneda(nueva);
+  }
+
+  return (
+    <div>
+      <div className="flex items-stretch">
+        <input
+          type="number"
+          value={value}
+          onChange={(e) => onValue(e.target.value)}
+          placeholder={moneda === "UF" ? "Monto UF" : "Monto $"}
+          className="ipt text-xs"
+          style={{ width: "112px", borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+        />
+        <select
+          value={moneda}
+          onChange={(e) => cambiarMoneda(e.target.value)}
+          className="ipt text-xs"
+          style={{ width: "64px", marginLeft: "-1px", borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
+        >
+          <option value="UF">UF</option>
+          <option value="CLP" disabled={!valorUF}>$</option>
+        </select>
+      </div>
+      <div className="text-[10px] text-stone-400 mt-0.5 h-3">{equivalente}</div>
+    </div>
+  );
+}
+
 export default function Cotizador({ db }) {
   const [rutCliente, setRutCliente] = useState("");
   const [buscarCliente, setBuscarCliente] = useState("");
@@ -68,6 +116,8 @@ export default function Cotizador({ db }) {
   const [primeraCuotaMonto, setPrimeraCuotaMonto] = useState("");
   const [ultimaCuotaDistinta, setUltimaCuotaDistinta] = useState(false);
   const [ultimaCuotaMonto, setUltimaCuotaMonto] = useState("");
+  const [primeraCuotaMoneda, setPrimeraCuotaMoneda] = useState("UF");
+  const [ultimaCuotaMoneda, setUltimaCuotaMoneda] = useState("UF");
   const [observaciones, setObservaciones] = useState("");
   const [savedCotizacion, setSavedCotizacion] = useState(null);
   const [error, setError] = useState("");
@@ -160,6 +210,8 @@ export default function Cotizador({ db }) {
     setPrimeraCuotaMonto("");
     setUltimaCuotaDistinta(false);
     setUltimaCuotaMonto("");
+    setPrimeraCuotaMoneda("UF");
+    setUltimaCuotaMoneda("UF");
   }
 
   function elegirEstacionamiento(id) {
@@ -201,15 +253,22 @@ export default function Cotizador({ db }) {
   const distribucionValidada = Math.abs(faltanteUF) < 0.01;
   const toCLP = (uf) => (valorUF ? uf * valorUF : 0);
 
+  // Monto escrito en UF o en pesos -> UF (con la UF de hoy si viene en $).
+  const aUF = (monto, moneda) => {
+    const n = Number(monto) || 0;
+    if (moneda === "CLP") return valorUF ? n / valorUF : 0;
+    return n;
+  };
+
   const cuotasPlan = useMemo(
     () =>
       calcularPlanCuotas(
         pieUF,
         cuotasPie,
-        { activa: primeraCuotaDistinta, monto: primeraCuotaMonto },
-        { activa: ultimaCuotaDistinta, monto: ultimaCuotaMonto }
+        { activa: primeraCuotaDistinta, monto: aUF(primeraCuotaMonto, primeraCuotaMoneda) },
+        { activa: ultimaCuotaDistinta, monto: aUF(ultimaCuotaMonto, ultimaCuotaMoneda) }
       ),
-    [pieUF, cuotasPie, primeraCuotaDistinta, primeraCuotaMonto, ultimaCuotaDistinta, ultimaCuotaMonto]
+    [pieUF, cuotasPie, primeraCuotaDistinta, primeraCuotaMonto, primeraCuotaMoneda, ultimaCuotaDistinta, ultimaCuotaMonto, ultimaCuotaMoneda, valorUF]
   );
 
   const quoteSnapshot = () => ({
@@ -662,13 +721,12 @@ export default function Cotizador({ db }) {
                     Primera cuota
                   </label>
                   {primeraCuotaDistinta && (
-                    <input
-                      type="number"
+                    <MontoCuotaInput
                       value={primeraCuotaMonto}
-                      onChange={(e) => setPrimeraCuotaMonto(e.target.value)}
-                      placeholder="Monto UF"
-                      className="ipt text-xs"
-                      style={{ width: "100px" }}
+                      moneda={primeraCuotaMoneda}
+                      onValue={setPrimeraCuotaMonto}
+                      onMoneda={setPrimeraCuotaMoneda}
+                      valorUF={valorUF}
                     />
                   )}
                   <label className="flex items-center gap-2 text-sm">
@@ -680,13 +738,12 @@ export default function Cotizador({ db }) {
                     Última cuota
                   </label>
                   {ultimaCuotaDistinta && (
-                    <input
-                      type="number"
+                    <MontoCuotaInput
                       value={ultimaCuotaMonto}
-                      onChange={(e) => setUltimaCuotaMonto(e.target.value)}
-                      placeholder="Monto UF"
-                      className="ipt text-xs"
-                      style={{ width: "100px" }}
+                      moneda={ultimaCuotaMoneda}
+                      onValue={setUltimaCuotaMonto}
+                      onMoneda={setUltimaCuotaMoneda}
+                      valorUF={valorUF}
                     />
                   )}
                 </div>
