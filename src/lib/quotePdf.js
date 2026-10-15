@@ -19,7 +19,7 @@ export const buildQuotePdfDoc = (data) => {
     clientName, clientRut, clientPhone,
     units, // [{ label, tipologia, area, priceUF }]
     subtotal, discount, descuentoPct, precioFinalUF, valorUF,
-    reservaUF, reservaFueraDelPrecio, pieUF, contraEscrituraUF, cuotasContraEscritura, cuotasPlan, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
+    reservaUF, reservaFueraDelPrecio, pieUF, contraEscrituraUF, cuotasContraEscritura, cuotasEnPie, cuotasPie, cuotasPlan, hipotecarioRowUF, totalDistribuidoUF, faltanteUF, distribucionValidada,
     observaciones,
     agentName,
     displayId,
@@ -332,8 +332,14 @@ export const buildQuotePdfDoc = (data) => {
     doc.text(`Preparado por ${agentName} · MDA Inmobiliaria`, contentX, footerY + 11);
   }
 
-  // ---- Segunda hoja: plan de pago de la Contra escritura en cuotas ----
-  if (cuotasContraEscritura && cuotasContraEscritura > 1 && contraEscrituraUF > 0) {
+  // ---- Segunda hoja: plan de pago en cuotas ----
+  // Las cuotas son del Pie en las simulaciones nuevas (cuotasEnPie); las
+  // guardadas antes tenían las cuotas en Contra escritura y se siguen
+  // mostrando así.
+  const nCuotas = cuotasEnPie ? cuotasPie : cuotasContraEscritura;
+  const montoCuotasUF = cuotasEnPie ? pieUF : contraEscrituraUF;
+  const conceptoCuotas = cuotasEnPie ? "PIE" : "CONTRA ESCRITURA";
+  if (nCuotas && nCuotas > 1 && montoCuotasUF > 0) {
     doc.addPage();
     drawSideBand();
     let y2 = 20;
@@ -341,7 +347,7 @@ export const buildQuotePdfDoc = (data) => {
     doc.setFontSize(13);
     doc.setFont(undefined, "bold");
     doc.setTextColor(...PURPLE);
-    doc.text("PLAN DE PAGO — CONTRA ESCRITURA EN CUOTAS", contentX, y2);
+    doc.text(`PLAN DE PAGO — ${conceptoCuotas} EN CUOTAS`, contentX, y2);
     doc.setFont(undefined, "normal");
     y2 += 8;
 
@@ -350,11 +356,11 @@ export const buildQuotePdfDoc = (data) => {
     // cual; si no (cotizaciones guardadas antes de que existiera esta
     // opción), se recalcula el reparto en partes iguales como siempre.
     const plan =
-      Array.isArray(cuotasPlan) && cuotasPlan.length === cuotasContraEscritura
+      Array.isArray(cuotasPlan) && cuotasPlan.length === nCuotas
         ? cuotasPlan
-        : Array.from({ length: cuotasContraEscritura }, (_, i) => ({
+        : Array.from({ length: nCuotas }, (_, i) => ({
             numero: i + 1,
-            montoUF: contraEscrituraUF / cuotasContraEscritura,
+            montoUF: montoCuotasUF / nCuotas,
             especial: false,
           }));
     const tieneCuotasEspeciales = plan.some((c) => c.especial);
@@ -363,8 +369,8 @@ export const buildQuotePdfDoc = (data) => {
     doc.setTextColor(...MUTED);
     doc.text(
       tieneCuotasEspeciales
-        ? `${cuotasContraEscritura} cuotas, primera y/o última con monto propio (total ${currency(contraEscrituraUF)} UF).`
-        : `${cuotasContraEscritura} cuotas de ${currencyDecimal(contraEscrituraUF / cuotasContraEscritura)} UF cada una (total ${currency(contraEscrituraUF)} UF).`,
+        ? `${nCuotas} cuotas, primera y/o última con monto propio (total ${currency(montoCuotasUF)} UF).`
+        : `${nCuotas} cuotas de ${currencyDecimal(montoCuotasUF / nCuotas)} UF cada una (total ${currency(montoCuotasUF)} UF).`,
       contentX,
       y2
     );
@@ -396,7 +402,7 @@ export const buildQuotePdfDoc = (data) => {
       }
       doc.setFontSize(8.5);
       doc.setTextColor(...INK);
-      doc.text(`Cuota ${i} de ${cuotasContraEscritura}${cuota.especial ? " *" : ""}`, contentX + 5, y2 + 5.2);
+      doc.text(`Cuota ${i} de ${nCuotas}${cuota.especial ? " *" : ""}`, contentX + 5, y2 + 5.2);
       doc.text(`Mes ${i}`, contentX + contentW * 0.3, y2 + 5.2);
       doc.text(`${currencyDecimal(cuota.montoUF)} UF`, contentX + contentW * 0.62, y2 + 5.2);
       doc.text(`$${currency(toCLP(cuota.montoUF))}`, pageWidth - margin - 5, y2 + 5.2, { align: "right" });

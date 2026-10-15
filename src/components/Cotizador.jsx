@@ -59,8 +59,9 @@ export default function Cotizador({ db }) {
   const [estacionamientoId, setEstacionamientoId] = useState("");
   const [descuentoPct, setDescuentoPct] = useState("0");
   const [rows, setRows] = useState(FINANCIAMIENTO_ROWS_DEFAULT);
-  const [cuotasContraEscritura, setCuotasContraEscritura] = useState(1);
-  // Permite que la primera y/o la última cuota de la Contra escritura
+  // Las cuotas son del PIE (no de la Contra escritura, que se paga de una vez).
+  const [cuotasPie, setCuotasPie] = useState(1);
+  // Permite que la primera y/o la última cuota del Pie
   // tengan un monto propio (normalmente mayor), repartiendo el resto en
   // partes iguales entre las cuotas del medio — ver calcularPlanCuotas().
   const [primeraCuotaDistinta, setPrimeraCuotaDistinta] = useState(false);
@@ -154,7 +155,7 @@ export default function Cotizador({ db }) {
     setSavedCotizacion(null);
     closePreview();
     setDescuentoPct(u.descuentoMax != null ? String(u.descuentoMax) : "0");
-    setCuotasContraEscritura(1);
+    setCuotasPie(1);
     setPrimeraCuotaDistinta(false);
     setPrimeraCuotaMonto("");
     setUltimaCuotaDistinta(false);
@@ -203,12 +204,12 @@ export default function Cotizador({ db }) {
   const cuotasPlan = useMemo(
     () =>
       calcularPlanCuotas(
-        contraEscrituraUF,
-        cuotasContraEscritura,
+        pieUF,
+        cuotasPie,
         { activa: primeraCuotaDistinta, monto: primeraCuotaMonto },
         { activa: ultimaCuotaDistinta, monto: ultimaCuotaMonto }
       ),
-    [contraEscrituraUF, cuotasContraEscritura, primeraCuotaDistinta, primeraCuotaMonto, ultimaCuotaDistinta, ultimaCuotaMonto]
+    [pieUF, cuotasPie, primeraCuotaDistinta, primeraCuotaMonto, ultimaCuotaDistinta, ultimaCuotaMonto]
   );
 
   const quoteSnapshot = () => ({
@@ -233,7 +234,11 @@ export default function Cotizador({ db }) {
     reservaFueraDelPrecio: true,
     pieUF,
     contraEscrituraUF,
-    cuotasContraEscritura,
+    // Las cuotas son del Pie; el PDF distingue esto de las simulaciones
+    // antiguas (cuotas en Contra escritura) por la marca cuotasEnPie.
+    cuotasEnPie: true,
+    cuotasPie,
+    cuotasContraEscritura: 1,
     cuotasPlan,
     hipotecarioRowUF: hipotecarioUF,
     totalDistribuidoUF,
@@ -607,10 +612,10 @@ export default function Cotizador({ db }) {
                       className="ipt text-xs"
                       style={{ width: "104px" }}
                     />
-                    {key === "contraEscritura" ? (
+                    {key === "pie" ? (
                       <select
-                        value={cuotasContraEscritura}
-                        onChange={(e) => setCuotasContraEscritura(Number(e.target.value))}
+                        value={cuotasPie}
+                        onChange={(e) => setCuotasPie(Number(e.target.value))}
                         className="ipt text-xs"
                         style={{ width: "104px" }}
                       >
@@ -642,7 +647,7 @@ export default function Cotizador({ db }) {
                 <span className="text-xs text-stone-500">UF{valorUF ? ` · $${currency(toCLP(reservaUF))}` : ""}</span>
               </div>
             </div>
-            {cuotasContraEscritura > 1 && (
+            {cuotasPie > 1 && (
               <div className="mt-3 border border-stone-200 rounded-sm p-3 bg-stone-50/60">
                 <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">
                   Primera y/o última cuota con monto distinto (opcional)
@@ -699,7 +704,7 @@ export default function Cotizador({ db }) {
                     </>
                   ) : (
                     <>
-                      Contra escritura en {cuotasContraEscritura} cuotas de {currency(contraEscrituraUF / cuotasContraEscritura)} UF cada una
+                      Pie en {cuotasPie} cuotas de {currencyDecimal(pieUF / cuotasPie)} UF cada una
                     </>
                   )}{" "}
                   (el plan de pago va en la segunda hoja del PDF).
