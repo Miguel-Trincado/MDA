@@ -71,6 +71,7 @@ export default function Comisiones({ db }) {
   const [ventas, setVentas] = useState({});
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState("");
+  const [errorGuardado, setErrorGuardado] = useState("");
 
   const { valorUF: valorUFHoy, loading: loadingUFHoy, error: errorUFHoy } = useValorUFHoy();
 
@@ -220,6 +221,7 @@ export default function Comisiones({ db }) {
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
         } catch (e) {
           console.error("No se pudo auto-asignar la comisión de la Opp", p.opp, e);
+          setErrorGuardado(e.message || "No se pudo guardar");
           autoAsignadosRef.current.delete(p.opp); // permite reintentar en el próximo render
         }
       }
@@ -229,6 +231,7 @@ export default function Comisiones({ db }) {
           setVentas((v) => ({ ...v, [saved.opp]: saved }));
         } catch (e) {
           console.error("No se pudo corregir la comisión de la Opp", c.opp, e);
+          setErrorGuardado(e.message || "No se pudo guardar");
           autoCorregidosRef.current.delete(c.opp);
         }
       }
@@ -284,7 +287,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v129</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v130</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -301,6 +304,12 @@ export default function Comisiones({ db }) {
 
       {errorDatos && (
         <div className="border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-3 rounded-xl mb-4">{errorDatos}</div>
+      )}
+      {errorGuardado && (
+        <div className="border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-3 rounded-xl mb-4">
+          No se pudieron guardar las comisiones: {errorGuardado}. Si tu usuario es jefe de ventas, falta correr la migración
+          v130 en Supabase.
+        </div>
       )}
 
       {loadingDatos ? (
@@ -666,8 +675,15 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
             const parecidos = cola
               ? [...new Set(lista.map((u) => u.codigo).filter((c) => c && String(c).replace(/\D/g, "").endsWith(cola)))].slice(0, 3)
               : [];
+            const codigoEnListado = loteOpp && lista.some((u) => normalizarCodigo(u.codigo) === normalizarCodigo(loteOpp));
             return (
               <span className="block mt-1 text-stone-400">
+                {codigoEnListado && (
+                  <span className="block text-rose-600">
+                    Ese código SÍ está en el listado: la asignación automática no se pudo guardar. Probable falta de permiso
+                    de tu usuario en la base (migración v130) o un error de conexión.
+                  </span>
+                )}
                 Listado cargado: {lista.length} unidades
                 {lista.length === 0 && " — el listado está vacío en esta sesión"}
                 {parecidos.length > 0 && <> · códigos parecidos: {parecidos.join(", ")}</>}

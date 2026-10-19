@@ -55,7 +55,8 @@ export default function App() {
   // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
   // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
   const logueadoSinAdmin = !!authSession && !cargandoPerfil && !esAdmin;
-  const sinCarga = logueadoSinAdmin;
+  // Carga de Aval y listado de precios: administrador y jefe de ventas.
+  const sinCarga = logueadoSinAdmin && !esJefe;
   const sinJefa = logueadoSinAdmin && !esJefe;
 
   // Una ejecutiva con su propia cuenta solo ve SUS leads y clientes: se
@@ -175,8 +176,9 @@ export default function App() {
     if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
     if (view === "jefa" && sinJefa) setView("dashboard");
-    if ((view === "carga" || view === "usuarios") && logueadoSinAdmin) setView("dashboard");
-  }, [view, authSession, cargandoPerfil, esAdmin, puedeComisiones, esEjecutiva, sinJefa, logueadoSinAdmin]);
+    if (view === "usuarios" && logueadoSinAdmin) setView("dashboard");
+    if (view === "carga" && sinCarga) setView("dashboard");
+  }, [view, authSession, cargandoPerfil, esAdmin, puedeComisiones, esEjecutiva, sinJefa, sinCarga, logueadoSinAdmin]);
 
   async function saveGestion(rut, updates) {
     const prev = db.gestion[rut];
