@@ -60,7 +60,7 @@ export default function UploadMaestroPanel({ onUpload }) {
       });
 
       const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
-      const summary = await onUpload(tsv);
+      const summary = await onUpload(tsv, file.name);
       setResult(summary);
     } catch (err) {
       setError(err.message || "No se pudo procesar el archivo. Verifica que sea el Maestro Aval exportado desde Excel.");

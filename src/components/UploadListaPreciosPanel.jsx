@@ -32,7 +32,7 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
       const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
-      const { unidades, filasOtrosProyectos } = await onUpload(tsv);
+      const { unidades, filasOtrosProyectos } = await onUpload(tsv, file.name);
       setResult({
         total: unidades.length,
         disponibles: unidades.filter((u) => u.estado === "Disponible").length,

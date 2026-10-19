@@ -284,7 +284,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v127</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v129</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -656,6 +656,24 @@ function FilaComision({ f, db, mes, ejecutivo, onGuardarVenta, onQuitarVenta }) 
             {loteOpp || "(vacío — no vino informado en el Aval)"}
           </span>{" "}
           — revisa que exista exactamente ese código en la columna "Codigo" del listado de precios.
+          {(() => {
+            // Diagnóstico: cuántas unidades tiene el listado en ESTA sesión
+            // y, si hay, códigos parecidos (mismo número final) para ver si
+            // es un problema de formato del código o de que la unidad ya
+            // no está en el listado.
+            const lista = Object.values(db.listaPrecios || {});
+            const cola = String(loteOpp || "").replace(/\D/g, "").slice(-4);
+            const parecidos = cola
+              ? [...new Set(lista.map((u) => u.codigo).filter((c) => c && String(c).replace(/\D/g, "").endsWith(cola)))].slice(0, 3)
+              : [];
+            return (
+              <span className="block mt-1 text-stone-400">
+                Listado cargado: {lista.length} unidades
+                {lista.length === 0 && " — el listado está vacío en esta sesión"}
+                {parecidos.length > 0 && <> · códigos parecidos: {parecidos.join(", ")}</>}
+              </span>
+            );
+          })()}
         </p>
       )}
       {precioListaAval != null && (

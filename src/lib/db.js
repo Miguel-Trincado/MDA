@@ -41,7 +41,7 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
 export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes] = await Promise.all([
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
@@ -50,6 +50,7 @@ export async function fetchAllData() {
     supabase.from("lista_precios").select("*").order("unidad"),
     supabase.from("metas_mensuales").select("*"),
     supabase.from("cambios_estado_opp").select("*").order("fecha_deteccion", { ascending: false }),
+    supabase.from("cargas_archivos").select("*").order("created_at", { ascending: false }).limit(60),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
@@ -92,7 +93,13 @@ export async function fetchAllData() {
   const cambios = (cambiosRes.data || []).map(rowToObj);
   const historial = (historialRes.data || []).map(rowToObj);
 
-  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp };
+  // Última carga por tipo (opcional: si la tabla aún no existe, queda vacío).
+  const cargas = {};
+  (cargasRes.data || []).forEach((row) => {
+    if (!cargas[row.tipo]) cargas[row.tipo] = rowToObj(row);
+  });
+
+  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas };
 }
 
 /* ---------------------------------------------------------------------
@@ -733,4 +740,15 @@ export async function resetearClaveUsuarioRemote(userId, password) {
 export async function eliminarUsuarioRemote(userId) {
   const { error } = await supabase.rpc("eliminar_usuario", { p_user_id: userId });
   if (error) throw error;
+}
+
+// ---------- Registro de cargas — migración v128 ----------
+export async function registrarCargaRemote({ tipo, archivo, usuario, resumen }) {
+  const { data, error } = await supabase
+    .from("cargas_archivos")
+    .insert({ tipo, archivo: archivo || null, usuario: usuario || null, resumen: resumen || null })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToObj(data);
 }

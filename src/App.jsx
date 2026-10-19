@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { normalizarBusqueda } from "./lib/helpers";
 import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
@@ -16,7 +16,7 @@ import { useAuthSession } from "./lib/useAuthSession";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote, guardarDescuentosUnidades,
+  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -138,6 +138,36 @@ export default function App() {
     if (desbloqueado) reload();
   }, [desbloqueado, reload]);
 
+  // Los datos son compartidos (viven en la base), pero cada navegador los
+  // lee al abrir: si otra persona carga un archivo después, esta pantalla
+  // quedaba desactualizada hasta recargar. Se refresca sola, sin pantalla
+  // de carga, al volver a la pestaña (si pasó más de 1 min) y cada 5 min.
+  const ultimaLectura = useRef(Date.now());
+  useEffect(() => {
+    if (!desbloqueado) return undefined;
+    ultimaLectura.current = Date.now();
+    async function refrescar() {
+      try {
+        const data = await fetchAllData();
+        ultimaLectura.current = Date.now();
+        setDb(data);
+      } catch (e) {
+        console.warn("No se pudo actualizar en segundo plano", e);
+      }
+    }
+    function alVolver() {
+      if (document.visibilityState === "visible" && Date.now() - ultimaLectura.current > 60000) refrescar();
+    }
+    document.addEventListener("visibilitychange", alVolver);
+    const t = setInterval(() => {
+      if (document.visibilityState === "visible") refrescar();
+    }, 300000);
+    return () => {
+      document.removeEventListener("visibilitychange", alVolver);
+      clearInterval(t);
+    };
+  }, [desbloqueado]);
+
   // Si la sesión de administrador se cierra (o nunca existió) mientras se
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
@@ -168,7 +198,17 @@ export default function App() {
     }));
   }
 
-  async function uploadMaestro(text) {
+  // Deja constancia (para todos los usuarios) de quién cargó qué y cuándo.
+  async function anotarCarga(tipo, archivo, resumen) {
+    try {
+      const reg = await registrarCargaRemote({ tipo, archivo, usuario: authSession?.user?.email, resumen });
+      setDb((d) => ({ ...d, cargas: { ...(d.cargas || {}), [tipo]: reg } }));
+    } catch (e) {
+      console.warn("No se pudo registrar la carga (¿migración v128?):", e.message);
+    }
+  }
+
+  async function uploadMaestro(text, archivo) {
     const { gestion, control, cotizaciones, cambiosNuevos, summary } = await uploadMaestroRemote(
       text, db.gestion, db.control, db.cotizaciones
     );
@@ -179,13 +219,15 @@ export default function App() {
       cotizaciones,
       cambios: [...cambiosNuevos, ...d.cambios],
     }));
+    anotarCarga("aval", archivo, null);
     return summary;
   }
 
-  async function uploadListaPrecios(text) {
+  async function uploadListaPrecios(text, archivo) {
     const { unidades, filasOtrosProyectos } = parseListaPrecios(text);
     const listaPrecios = await uploadListaPreciosRemote(unidades);
     setDb((d) => ({ ...d, listaPrecios }));
+    anotarCarga("lista_precios", archivo, `${Object.keys(listaPrecios).length} unidades`);
     return { unidades: Object.values(listaPrecios), filasOtrosProyectos };
   }
 
@@ -249,6 +291,7 @@ export default function App() {
         email={authSession?.user?.email}
         perfilLabel={esAdmin ? "Administrador" : esJefe ? "Jefe de ventas" : esEjecutiva ? `Ejecutivo${miEjecutivo ? " · " + miEjecutivo : ""}` : ""}
         onLogout={handleLogoutCompleto}
+        cargas={db.cargas}
       />
       <div className="flex-1 min-w-0">
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
