@@ -3,6 +3,7 @@ import {
   listarPerfilesRemote, crearUsuarioRemote, cambiarPerfilUsuarioRemote,
   resetearClaveUsuarioRemote, eliminarUsuarioRemote,
 } from "../lib/db";
+import { normalizarBusqueda } from "../lib/helpers";
 import { Panel, Field, PageHeader } from "./Shared";
 
 const PERFILES = [
@@ -15,7 +16,18 @@ const etiquetaPerfil = (rol) => PERFILES.find((p) => p.value === rol)?.label || 
 // Panel de administrador: alta y mantención de usuarios sin entrar a
 // Supabase. Las operaciones corren como funciones seguras en la base
 // (migración v121) que solo acepta si quien llama es administrador.
-export default function UsuariosPanel({ ejecutivos, miUserId }) {
+export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
+  // Cruce usuario ↔ operaciones: se cuenta, por nombre de ejecutivo (el de la
+  // columna "Ejecutivo" del Aval), cuántos clientes y cotizaciones tiene.
+  const cruce = (nombre) => {
+    const k = normalizarBusqueda(nombre);
+    const ruts = new Set(
+      Object.values(db?.gestion || {}).filter((g) => normalizarBusqueda(g.ejecutivo) === k).map((g) => g.rut)
+    );
+    const cots = Object.values(db?.cotizaciones || {}).filter((c) => ruts.has(c.rut)).length;
+    return { clientes: ruts.size, cotizaciones: cots };
+  };
+
   const [usuarios, setUsuarios] = useState([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -105,7 +117,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId }) {
             </select>
           </Field>
           {rol === "ejecutiva" ? (
-            <Field label="Ejecutiva (para sus comisiones)">
+            <Field label="Ejecutivo (nombre de la columna Ejecutivo)">
               <select className="ipt" required value={ejecutivo} onChange={(e) => setEjecutivo(e.target.value)}>
                 <option value="">Selecciona…</option>
                 {ejecutivos.map((n) => (
@@ -148,6 +160,14 @@ export default function UsuariosPanel({ ejecutivos, miUserId }) {
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
                 </select>
+                {u.rol === "ejecutiva" && u.ejecutivo && (() => {
+                  const c = cruce(u.ejecutivo);
+                  return c.clientes === 0 ? (
+                    <span className="text-xs text-rose-600">Sin cruce: ningún cliente con ese nombre</span>
+                  ) : (
+                    <span className="text-xs text-emerald-700">{c.clientes} clientes · {c.cotizaciones} cotizaciones</span>
+                  );
+                })()}
                 {u.rol === "ejecutiva" && (
                   <select
                     className="ipt !w-44"

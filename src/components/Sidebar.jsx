@@ -15,7 +15,7 @@ const ICONS = {
   usuarios: UserCog,
 };
 
-export default function Sidebar({ active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, onLogout }) {
+export default function Sidebar({ active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, perfilLabel, onLogout }) {
   const [colapsado, setColapsado] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
   // "Carga" (subir Maestro Aval / listado de precios) ya no es una pestaña
@@ -28,7 +28,6 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
     ...(sinJefa ? [] : [{ key: "jefa", label: "Jefa de Ventas" }]),
     ...(showComisiones ? [{ key: "comisiones", label: "Comisiones" }] : []),
     ...(esEjecutiva ? [{ key: "miscomisiones", label: "Mis comisiones" }] : []),
-    ...(esAdmin ? [{ key: "usuarios", label: "Usuarios" }] : []),
   ];
 
   return (
@@ -77,10 +76,27 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
             <div className="fixed inset-0 z-10" onClick={() => setCuentaAbierta(false)} />
             <div className="absolute left-2.5 right-2.5 bottom-full mb-2 z-20 bg-white border border-stone-200 rounded-lg shadow-lg py-1 text-stone-700 overflow-hidden">
               {email && (
-                <div className="flex items-center gap-2.5 px-3 py-2.5 border-b border-stone-100">
-                  <Avatar name={email} />
-                  <span className="text-xs text-stone-600 truncate">{email}</span>
+                <div className="px-3 py-2.5 border-b border-stone-100">
+                  <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">Mi cuenta</div>
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={email} />
+                    <div className="min-w-0">
+                      <div className="text-xs text-stone-700 truncate">{email}</div>
+                      {perfilLabel && <div className="text-[11px] text-stone-400">{perfilLabel}</div>}
+                    </div>
+                  </div>
                 </div>
+              )}
+              {esAdmin && (
+                <button
+                  onClick={() => {
+                    setCuentaAbierta(false);
+                    onChange("usuarios");
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
+                >
+                  <UserCog size={14} /> Usuarios
+                </button>
               )}
               {!sinCarga && (
                 <button
@@ -107,13 +123,13 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
         )}
         <button
           onClick={() => setCuentaAbierta((v) => !v)}
-          title={colapsado ? "Cuenta" : undefined}
+          title={colapsado ? "Configuración" : undefined}
           className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors ${
             colapsado ? "justify-center" : ""
           }`}
         >
-          {email ? <Avatar name={email} /> : <Settings size={18} className="shrink-0" />}
-          {!colapsado && <span className="truncate">{email || "Cuenta"}</span>}
+          <Settings size={18} className="shrink-0" />
+          {!colapsado && <span className="truncate">Configuración</span>}
         </button>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { normalizarBusqueda } from "./lib/helpers";
+import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
 import SiteGate from "./components/SiteGate";
 import EjecutivoView from "./components/EjecutivoView";
@@ -60,6 +61,20 @@ export default function App() {
   // Una ejecutiva con su propia cuenta solo ve SUS leads y clientes: se
   // recorta la base en memoria por el nombre de ejecutivo de su perfil
   // (el mismo que trae el Maestro Aval). Admin y jefe ven todo.
+  // Nombres de ejecutivo disponibles para vincular usuarios: los que ya
+  // aparecen en la columna Ejecutivo del Aval + la lista fija del sistema,
+  // sin duplicar por tildes/mayúsculas (se prefiere la grafía del Aval).
+  const nombresEjecutivos = useMemo(() => {
+    const mapa = new Map();
+    Object.values(db.gestion || {}).forEach((g) => {
+      if (g.ejecutivo) mapa.set(normalizarBusqueda(g.ejecutivo), g.ejecutivo);
+    });
+    EJECUTIVOS.forEach((n) => {
+      if (!mapa.has(normalizarBusqueda(n))) mapa.set(normalizarBusqueda(n), n);
+    });
+    return [...mapa.values()].sort((a, b) => a.localeCompare(b));
+  }, [db.gestion]);
+
   const dbVista = useMemo(() => {
     if (!esEjecutiva || !miEjecutivo) return db;
     const mio = normalizarBusqueda(miEjecutivo);
@@ -232,6 +247,7 @@ export default function App() {
         sinJefa={sinJefa}
         sinCarga={sinCarga}
         email={authSession?.user?.email}
+        perfilLabel={esAdmin ? "Administrador" : esJefe ? "Jefe de ventas" : esEjecutiva ? `Ejecutivo${miEjecutivo ? " · " + miEjecutivo : ""}` : ""}
         onLogout={handleLogoutCompleto}
       />
       <div className="flex-1 min-w-0">
@@ -249,7 +265,8 @@ export default function App() {
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}
-            ejecutivos={[...new Set(Object.values(db.gestion || {}).map((g) => g.ejecutivo).filter(Boolean))].sort()}
+            db={db}
+            ejecutivos={nombresEjecutivos}
           />
         )}
         {view === "miscomisiones" && esEjecutiva && <MisComisiones ejecutivo={miEjecutivo} />}
