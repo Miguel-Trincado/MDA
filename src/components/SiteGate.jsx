@@ -62,7 +62,8 @@ export default function SiteGate({ onUnlock }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F4F8FA] via-[#EEF3F6] to-[#DCE9ED] px-6 py-10">
+    <div className="min-h-screen flex bg-gradient-to-br from-[#F4F8FA] via-[#EEF3F6] to-[#DCE9ED]">
+     <div className="flex-1 flex items-center justify-center px-6 py-10">
       <div className="max-w-md w-full mx-auto">
         {/* Logo: reemplaza este comentario por <img src="/logo.png" alt="MDA"
             className="h-16 mb-8" /> cuando tengas el archivo de la imagen —
@@ -154,6 +155,12 @@ export default function SiteGate({ onUnlock }) {
           <span className="uppercase tracking-wide">Gestión comercial inmobiliaria</span>
         </div>
       </div>
+     </div>
+     {/* Panel de marca: el fondo es el mismo azul del logo para que se
+         funda con la imagen en cualquier tamaño de pantalla. */}
+     <div className="hidden md:flex w-[40%] max-w-[720px] bg-[#002F7B] items-center justify-center">
+       <img src="/logo-mda.jpg" alt="MDA Inmobiliaria" className="w-full h-full object-contain" />
+     </div>
     </div>
   );
 }

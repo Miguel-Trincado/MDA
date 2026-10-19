@@ -49,6 +49,8 @@ export default function App() {
   const esAdmin = rol === "admin";
   const esEjecutiva = rol === "ejecutiva";
   const esJefe = rol === "jefe";
+  // Comisiones (editar, aceptar/validar): solo administrador y jefe de ventas.
+  const puedeComisiones = esAdmin || esJefe;
   // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
   // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
   const logueadoSinAdmin = !!authSession && !cargandoPerfil && !esAdmin;
@@ -125,11 +127,11 @@ export default function App() {
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
-    if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !esAdmin))) setView("dashboard");
+    if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
     if (view === "jefa" && sinJefa) setView("dashboard");
     if ((view === "carga" || view === "usuarios") && logueadoSinAdmin) setView("dashboard");
-  }, [view, authSession, cargandoPerfil, esAdmin, esEjecutiva, sinJefa, logueadoSinAdmin]);
+  }, [view, authSession, cargandoPerfil, esAdmin, puedeComisiones, esEjecutiva, sinJefa, logueadoSinAdmin]);
 
   async function saveGestion(rut, updates) {
     const prev = db.gestion[rut];
@@ -224,7 +226,7 @@ export default function App() {
       <Sidebar
         active={view}
         onChange={setView}
-        showComisiones={esAdmin}
+        showComisiones={puedeComisiones}
         esEjecutiva={esEjecutiva}
         esAdmin={esAdmin}
         sinJefa={sinJefa}
@@ -242,8 +244,8 @@ export default function App() {
             onUploadDescuentosUnidades={uploadDescuentosUnidades}
           />
         )}
-        {view === "cotizador" && <Cotizador db={dbParaVista} />}
-        {view === "comisiones" && authSession && esAdmin && <Comisiones db={db} />}
+        {view === "cotizador" && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
+        {view === "comisiones" && authSession && puedeComisiones && <Comisiones db={db} />}
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}

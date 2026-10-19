@@ -109,7 +109,7 @@ function MontoCuotaInput({ value, moneda, onValue, onMoneda, valorUF }) {
   );
 }
 
-export default function Cotizador({ db }) {
+export default function Cotizador({ db, puedeEliminar = true }) {
   const [rutCliente, setRutCliente] = useState("");
   const [buscarCliente, setBuscarCliente] = useState("");
   // Cliente "manual": prospecto que todavía no está en la cartera (gestion),
@@ -871,13 +871,15 @@ export default function Cotizador({ db }) {
                   <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
                     <ChevronLeft size={12} className="rotate-180" /> Ver PDF
                   </button>
-                  <button
+                  {puedeEliminar && (
+                    <button
                     onClick={() => eliminarSimulacion(c)}
                     disabled={eliminandoId === c.id}
                     className="text-xs text-rose-600 hover:text-rose-800 underline flex items-center gap-1 disabled:opacity-50"
                   >
                     {eliminandoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Eliminar
                   </button>
+                    )}
                 </span>
               </div>
             ))}
@@ -919,13 +921,15 @@ export default function Cotizador({ db }) {
                     <button onClick={() => verCotizacionAnterior(c)} className="text-xs text-[#0F3D66] underline flex items-center gap-1">
                       <ChevronLeft size={12} className="rotate-180" /> Ver PDF
                     </button>
-                    <button
+                    {puedeEliminar && (
+                      <button
                       onClick={() => eliminarSimulacion(c)}
                       disabled={eliminandoId === c.id}
                       className="text-xs text-rose-600 hover:text-rose-800 underline flex items-center gap-1 disabled:opacity-50"
                     >
                       {eliminandoId === c.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />} Eliminar
                     </button>
+                      )}
                   </span>
                 </div>
               ))}
