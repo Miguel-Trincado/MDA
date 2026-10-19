@@ -11,9 +11,11 @@ const ICONS = {
   cotizador: Calculator,
   jefa: UserCog,
   comisiones: Database,
+  miscomisiones: Database,
+  usuarios: UserCog,
 };
 
-export default function Sidebar({ active, onChange, showComisiones, email, onLogout }) {
+export default function Sidebar({ active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, onLogout }) {
   const [colapsado, setColapsado] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
   // "Carga" (subir Maestro Aval / listado de precios) ya no es una pestaña
@@ -23,8 +25,10 @@ export default function Sidebar({ active, onChange, showComisiones, email, onLog
     { key: "dashboard", label: "Dashboard" },
     { key: "ejecutivo", label: "Ejecutivo" },
     { key: "cotizador", label: "Simulador" },
-    { key: "jefa", label: "Jefa de Ventas" },
+    ...(sinJefa ? [] : [{ key: "jefa", label: "Jefa de Ventas" }]),
     ...(showComisiones ? [{ key: "comisiones", label: "Comisiones" }] : []),
+    ...(esEjecutiva ? [{ key: "miscomisiones", label: "Mis comisiones" }] : []),
+    ...(esAdmin ? [{ key: "usuarios", label: "Usuarios" }] : []),
   ];
 
   return (
@@ -78,15 +82,17 @@ export default function Sidebar({ active, onChange, showComisiones, email, onLog
                   <span className="text-xs text-stone-600 truncate">{email}</span>
                 </div>
               )}
-              <button
-                onClick={() => {
-                  setCuentaAbierta(false);
-                  onChange("carga");
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
-              >
-                <FileUp size={14} /> Cargar archivo
-              </button>
+              {!sinCarga && (
+                <button
+                  onClick={() => {
+                    setCuentaAbierta(false);
+                    onChange("carga");
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
+                >
+                  <FileUp size={14} /> Cargar archivo
+                </button>
+              )}
               <button
                 onClick={() => {
                   setCuentaAbierta(false);

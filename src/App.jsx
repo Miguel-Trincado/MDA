@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { normalizarBusqueda } from "./lib/helpers";
 import Sidebar from "./components/Sidebar";
 import SiteGate from "./components/SiteGate";
 import EjecutivoView from "./components/EjecutivoView";
@@ -7,6 +8,9 @@ import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
 import CargaPage from "./components/CargaPage";
 import Cotizador from "./components/Cotizador";
 import Comisiones from "./components/Comisiones";
+import MisComisiones from "./components/MisComisiones";
+import UsuariosPanel from "./components/UsuariosPanel";
+import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
@@ -39,6 +43,47 @@ export default function App() {
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
   const { session: authSession, handleLogout } = useAuthSession();
+  // Rol: "admin" ve todo; "ejecutiva" solo ve sus comisiones (y no Jefa ni
+  // Carga); "sinperfil" (usuario creado pero sin vincular) queda limitado.
+  const { rol, ejecutivo: miEjecutivo, cargando: cargandoPerfil } = useMiPerfil(authSession);
+  const esAdmin = rol === "admin";
+  const esEjecutiva = rol === "ejecutiva";
+  const esJefe = rol === "jefe";
+  // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
+  // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
+  const logueadoSinAdmin = !!authSession && !cargandoPerfil && !esAdmin;
+  const sinCarga = logueadoSinAdmin;
+  const sinJefa = logueadoSinAdmin && !esJefe;
+
+  // Una ejecutiva con su propia cuenta solo ve SUS leads y clientes: se
+  // recorta la base en memoria por el nombre de ejecutivo de su perfil
+  // (el mismo que trae el Maestro Aval). Admin y jefe ven todo.
+  const dbVista = useMemo(() => {
+    if (!esEjecutiva || !miEjecutivo) return db;
+    const mio = normalizarBusqueda(miEjecutivo);
+    const gestion = {};
+    Object.entries(db.gestion || {}).forEach(([rut, g]) => {
+      if (normalizarBusqueda(g.ejecutivo) === mio) gestion[rut] = g;
+    });
+    const filtrarPorRut = (obj) => Object.fromEntries(Object.entries(obj || {}).filter(([rut]) => gestion[rut]));
+    const cotizaciones = Object.fromEntries(
+      Object.entries(db.cotizaciones || {}).filter(([, c]) => gestion[c.rut])
+    );
+    return {
+      ...db,
+      gestion,
+      control: filtrarPorRut(db.control),
+      cotizaciones,
+      cambios: (db.cambios || []).filter((c) => gestion[c.rut]),
+      historial: (db.historial || []).filter((h) => gestion[h.rut]),
+      cambiosEstadoOpp: (db.cambiosEstadoOpp || []).filter((c) => gestion[c.rut]),
+    };
+  }, [db, esEjecutiva, miEjecutivo]);
+  // Ejecutiva sin ejecutiva asignada en su perfil: no se le muestra nada
+  // en vez de mostrarle todo.
+  const dbParaVista = esEjecutiva && !miEjecutivo
+    ? { ...db, gestion: {}, control: {}, cotizaciones: {}, cambios: [], historial: [], cambiosEstadoOpp: [] }
+    : dbVista;
 
   // "Cerrar sesión" debe expulsar de verdad, no solo ocultar Comisiones:
   // además de cerrar la sesión de Supabase, se borra el candado general
@@ -80,8 +125,11 @@ export default function App() {
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
-    if (view === "comisiones" && authSession === null) setView("dashboard");
-  }, [view, authSession]);
+    if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !esAdmin))) setView("dashboard");
+    if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
+    if (view === "jefa" && sinJefa) setView("dashboard");
+    if ((view === "carga" || view === "usuarios") && logueadoSinAdmin) setView("dashboard");
+  }, [view, authSession, cargandoPerfil, esAdmin, esEjecutiva, sinJefa, logueadoSinAdmin]);
 
   async function saveGestion(rut, updates) {
     const prev = db.gestion[rut];
@@ -176,23 +224,34 @@ export default function App() {
       <Sidebar
         active={view}
         onChange={setView}
-        showComisiones={!!authSession}
+        showComisiones={esAdmin}
+        esEjecutiva={esEjecutiva}
+        esAdmin={esAdmin}
+        sinJefa={sinJefa}
+        sinCarga={sinCarga}
         email={authSession?.user?.email}
         onLogout={handleLogoutCompleto}
       />
       <div className="flex-1 min-w-0">
-        {view === "dashboard" && <ReporteEjecutivoView db={db} onUpload={uploadMaestro} />}
-        {view === "ejecutivo" && <EjecutivoView db={db} onSave={saveGestion} onRevisado={markRevisado} />}
-        {view === "carga" && (
+        {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
+        {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
+        {view === "carga" && !sinCarga && (
           <CargaPage
             onUploadMaestro={uploadMaestro}
             onUploadListaPrecios={uploadListaPrecios}
             onUploadDescuentosUnidades={uploadDescuentosUnidades}
           />
         )}
-        {view === "cotizador" && <Cotizador db={db} />}
-        {view === "comisiones" && authSession && <Comisiones db={db} />}
-        {view === "jefa" && (
+        {view === "cotizador" && <Cotizador db={dbParaVista} />}
+        {view === "comisiones" && authSession && esAdmin && <Comisiones db={db} />}
+        {view === "usuarios" && esAdmin && (
+          <UsuariosPanel
+            miUserId={authSession?.user?.id}
+            ejecutivos={[...new Set(Object.values(db.gestion || {}).map((g) => g.ejecutivo).filter(Boolean))].sort()}
+          />
+        )}
+        {view === "miscomisiones" && esEjecutiva && <MisComisiones ejecutivo={miEjecutivo} />}
+        {view === "jefa" && !sinJefa && (
           <JefaView
             db={db}
             onResolveCambio={resolveCambio}

@@ -682,3 +682,55 @@ export async function setComisionesValidacionRemote(mes, ejecutivo, { valorUf, r
   return rowToObj(data);
 }
 
+
+// ---------- Perfiles (admin / ejecutiva) — migración v120 ----------
+export async function fetchMiPerfil(userId) {
+  const { data, error } = await supabase
+    .from("perfiles_ejecutivas")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToObj(data) : null;
+}
+
+export async function listarPerfilesRemote() {
+  const { data, error } = await supabase.rpc("listar_perfiles");
+  if (error) throw error;
+  return (data || []).map(rowToObj);
+}
+
+export async function vincularEjecutivaRemote(email, ejecutivo) {
+  const { error } = await supabase.rpc("vincular_ejecutiva", { p_email: email, p_ejecutivo: ejecutivo });
+  if (error) throw error;
+}
+
+export async function desvincularEjecutivaRemote(userId) {
+  const { error } = await supabase.rpc("desvincular_ejecutiva", { p_user_id: userId });
+  if (error) throw error;
+}
+
+// ---------- Gestión de usuarios — migración v121 ----------
+export async function crearUsuarioRemote({ email, password, rol, ejecutivo }) {
+  const { error } = await supabase.rpc("crear_usuario", {
+    p_email: email, p_password: password, p_rol: rol, p_ejecutivo: ejecutivo || null,
+  });
+  if (error) throw error;
+}
+
+export async function cambiarPerfilUsuarioRemote(userId, rol, ejecutivo) {
+  const { error } = await supabase.rpc("cambiar_perfil_usuario", {
+    p_user_id: userId, p_rol: rol, p_ejecutivo: ejecutivo || null,
+  });
+  if (error) throw error;
+}
+
+export async function resetearClaveUsuarioRemote(userId, password) {
+  const { error } = await supabase.rpc("resetear_clave_usuario", { p_user_id: userId, p_password: password });
+  if (error) throw error;
+}
+
+export async function eliminarUsuarioRemote(userId) {
+  const { error } = await supabase.rpc("eliminar_usuario", { p_user_id: userId });
+  if (error) throw error;
+}

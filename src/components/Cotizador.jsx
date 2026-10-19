@@ -17,6 +17,9 @@ const FINANCIAMIENTO_ROWS_DEFAULT = {
   contraEscritura: { modo: "UF", valor: 0 },
   hipotecario: { modo: "%", valor: 80 },
 };
+// Columnas de la tabla "Distribución del pie" (encabezado y filas deben
+// usar la misma): Concepto, %, UF, $ (CLP), Cuotas.
+const GRID_DISTRIBUCION = "grid-cols-[1.1fr_1fr_1fr_1.2fr_0.7fr]";
 const ROW_LABEL = { reserva: "Reserva", pie: "Pie", contraEscritura: "Contra escritura", hipotecario: "Crédito hipotecario" };
 
 // Valores por defecto de la distribución cuando se elige una unidad o
@@ -32,7 +35,7 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
   const pieUF = (precioBaseUF * (Number(descuentoPctVal) || 0)) / 100;
   // La reserva NO se resta: es un fondo de administración que se cobra
   // aparte y no forma parte del precio de la unidad.
-  const contraEscrituraUF = Math.max(0, precioBaseUF - hipotecarioUF - pieUF);
+  const contraEscrituraUF = Math.round(Math.max(0, precioBaseUF - hipotecarioUF - pieUF) * 100) / 100;
   return {
     reserva: { modo: "UF", valor: reservaUF },
     pie: { modo: "%", valor: Number(descuentoPctVal) || 0 },
@@ -40,6 +43,11 @@ function calcularDefaults(precioBaseUF, descuentoPctVal) {
     hipotecario: { modo: "%", valor: 80 },
   };
 }
+
+// Pesos con puntos de miles automáticos: se guarda solo los dígitos y se
+// muestra con puntos (2000000 -> "2.000.000") mientras se escribe.
+const soloDigitos = (v) => String(v ?? "").replace(/\D/g, "");
+const miles = (digits) => (digits === "" ? "" : new Intl.NumberFormat("es-CL").format(Number(digits)));
 
 // Monto de una cuota que se puede escribir en UF o en pesos dentro del
 // mismo recuadro: un campo numérico con su selector de moneda pegado. Al
@@ -66,14 +74,26 @@ function MontoCuotaInput({ value, moneda, onValue, onMoneda, valorUF }) {
   return (
     <div>
       <div className="flex items-stretch">
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => onValue(e.target.value)}
-          placeholder={moneda === "UF" ? "Monto UF" : "Monto $"}
-          className="ipt text-xs"
-          style={{ width: "112px", borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-        />
+        {moneda === "CLP" ? (
+          <input
+            type="text"
+            inputMode="numeric"
+            value={miles(soloDigitos(value))}
+            onChange={(e) => onValue(soloDigitos(e.target.value))}
+            placeholder="Monto $"
+            className="ipt text-xs"
+            style={{ width: "112px", borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+          />
+        ) : (
+          <input
+            type="number"
+            value={value}
+            onChange={(e) => onValue(e.target.value)}
+            placeholder="Monto UF"
+            className="ipt text-xs"
+            style={{ width: "112px", borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+          />
+        )}
         <select
           value={moneda}
           onChange={(e) => cambiarMoneda(e.target.value)}
@@ -241,7 +261,12 @@ export default function Cotizador({ db }) {
   // precio de lista completo.
   const precioFinalUF = precioListaUF;
 
-  const rowValueUF = (row, baseUF) => (row.modo === "%" ? (baseUF * (Number(row.valor) || 0)) / 100 : Number(row.valor) || 0);
+  const rowValueUF = (row, baseUF) =>
+    row.modo === "%"
+      ? (baseUF * (Number(row.valor) || 0)) / 100
+      : row.modo === "CLP"
+      ? (valorUF ? (Number(row.valor) || 0) / valorUF : 0)
+      : Number(row.valor) || 0;
   const reservaUF = rowValueUF(rows.reserva, precioFinalUF);
   const pieUF = rowValueUF(rows.pie, precioFinalUF);
   const contraEscrituraUF = rowValueUF(rows.contraEscritura, precioFinalUF);
@@ -644,10 +669,11 @@ export default function Cotizador({ db }) {
 
             <div className="text-xs text-stone-400 uppercase tracking-wide mb-2">Distribución del pie</div>
             <div className="border border-stone-200 rounded-sm overflow-hidden">
-              <div className="grid grid-cols-[1.3fr_1fr_1fr_0.9fr] gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50">
+              <div className={`grid ${GRID_DISTRIBUCION} gap-2 px-3 py-2 text-[10px] text-stone-400 uppercase bg-stone-50`}>
                 <span>Concepto</span>
                 <span>%</span>
                 <span>UF</span>
+                <span>$ (CLP)</span>
                 <span>Cuotas</span>
               </div>
               {Object.keys(rows).filter((key) => key !== "reserva").map((key) => {
@@ -655,7 +681,7 @@ export default function Cotizador({ db }) {
                 const ufValue = rowValueUF(row, precioFinalUF);
                 const pctValue = precioFinalUF > 0 ? (ufValue / precioFinalUF) * 100 : 0;
                 return (
-                  <div key={key} className="grid grid-cols-[1.3fr_1fr_1fr_0.9fr] gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm">
+                  <div key={key} className={`grid ${GRID_DISTRIBUCION} gap-2 px-3 py-2 items-center border-t border-stone-100 text-sm`}>
                     <span>{ROW_LABEL[key]}</span>
                     <input
                       type="number"
@@ -671,15 +697,29 @@ export default function Cotizador({ db }) {
                       className="ipt text-xs"
                       style={{ width: "104px" }}
                     />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={
+                        valorUF
+                          ? miles(row.modo === "CLP" ? soloDigitos(row.valor) : String(Math.round(ufValue * valorUF)))
+                          : ""
+                      }
+                      onChange={(e) => setRow(key, { modo: "CLP", valor: soloDigitos(e.target.value) })}
+                      disabled={!valorUF}
+                      placeholder={valorUF ? "" : "UF no disponible"}
+                      className="ipt text-xs"
+                      style={{ width: "128px" }}
+                    />
                     {key === "pie" ? (
                       <select
                         value={cuotasPie}
                         onChange={(e) => setCuotasPie(Number(e.target.value))}
                         className="ipt text-xs"
-                        style={{ width: "104px" }}
+                        style={{ width: "80px" }}
                       >
                         {Array.from({ length: 24 }, (_, i) => i + 1).map((n) => (
-                          <option key={n} value={n}>{n === 1 ? "Contado" : `${n} cuotas`}</option>
+                          <option key={n} value={n}>{n}</option>
                         ))}
                       </select>
                     ) : (

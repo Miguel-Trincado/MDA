@@ -20,8 +20,10 @@ function mesLabel(key) {
   return `${MESES_ES[Number(m) - 1]} ${y}`;
 }
 
-export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
-  const [nombre, setNombre] = useState("");
+// ejecutivoFijo: cuando entra una ejecutiva con su propia cuenta, su cartera
+// queda fija (no ve selector ni puede abrir la de otras).
+export default function EjecutivoView({ db, onSave, onRevisado, embedded, ejecutivoFijo }) {
+  const [nombre, setNombre] = useState(ejecutivoFijo || "");
   const [filtro, setFiltro] = useState("Activo");
   const [busqueda, setBusqueda] = useState("");
   const [expandido, setExpandido] = useState(null);
@@ -172,7 +174,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
     );
   }
 
-  const clientes = Object.values(db.gestion).filter((g) => g.ejecutivo === nombre);
+  const clientes = Object.values(db.gestion).filter((g) => normalizarBusqueda(g.ejecutivo) === normalizarBusqueda(nombre));
   const tareas = getTareas(clientes);
 
   const filtrados = clientes
@@ -216,9 +218,11 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded }) {
           >
             <CalendarDays size={14} /> Calendario
           </button>
-          <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
-            No soy {nombre}
-          </button>
+          {!ejecutivoFijo && (
+            <button onClick={() => setNombre("")} className="text-xs text-stone-500 hover:text-[#0F3D66] underline">
+              No soy {nombre}
+            </button>
+          )}
         </div>
       </div>
 
