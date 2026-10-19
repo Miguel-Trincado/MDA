@@ -13,6 +13,8 @@ import MisComisiones from "./components/MisComisiones";
 import UsuariosPanel from "./components/UsuariosPanel";
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
+import { UfProvider } from "./lib/uf";
+import UfChip from "./components/UfChip";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
@@ -34,7 +36,7 @@ function siteYaDesbloqueado() {
   }
 }
 
-export default function App() {
+function AppInner() {
   const [desbloqueado, setDesbloqueado] = useState(siteYaDesbloqueado);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -296,6 +298,7 @@ export default function App() {
         cargas={db.cargas}
       />
       <div className="flex-1 min-w-0">
+        <UfChip />
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
         {view === "carga" && !sinCarga && (
@@ -326,5 +329,15 @@ export default function App() {
         )}
       </div>
     </div>
+  );
+}
+
+// El valor de la UF se carga una sola vez al abrir la app (aun antes del
+// login) y queda disponible para todas las pantallas.
+export default function App() {
+  return (
+    <UfProvider>
+      <AppInner />
+    </UfProvider>
   );
 }
