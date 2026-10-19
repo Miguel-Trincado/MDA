@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck } from "lucide-react";
+import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Bot } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 // Clave compartida para acceder al CRM en general (no es una cuenta real,
@@ -39,7 +39,7 @@ export default function SiteGate({ onUnlock }) {
     e.preventDefault();
     setError("");
     if (!soyHumano) {
-      setError("Confirma que \"Soy un humano\" para continuar.");
+      setError("Confirma la casilla para continuar.");
       return;
     }
     const u = usuario.trim();
@@ -70,7 +70,7 @@ export default function SiteGate({ onUnlock }) {
             ponla en la carpeta "public" del proyecto como "logo.png" (o el
             nombre que uses, ajustando el src). */}
 
-        <h1 className="font-display text-4xl font-bold text-[#0F3D66] leading-tight mb-2">¡Bienvenido a MDA Comercial!</h1>
+        <h1 className="font-display text-4xl font-bold text-[#0F3D66] leading-tight mb-2">¡Bienvenido a MDA Gestión Comercial!</h1>
         <p className="text-stone-500 mb-8">Por favor, inicia sesión</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -131,7 +131,9 @@ export default function SiteGate({ onUnlock }) {
               onChange={(e) => setSoyHumano(e.target.checked)}
               className="w-4 h-4 rounded border-stone-300 text-[#0F3D66] focus:ring-[#1E5AA8]"
             />
-            Soy un humano
+            <span className="flex items-center gap-1.5">
+              Soy un humano y a veces un Bot <Bot size={16} className="text-[#0F3D66]" />
+            </span>
           </label>
 
           {error && <p className="text-xs text-rose-600">{error}</p>}
@@ -151,7 +153,7 @@ export default function SiteGate({ onUnlock }) {
         </form>
 
         <div className="flex items-center justify-between text-[11px] text-stone-400 mt-10">
-          <span>© {new Date().getFullYear()} Pilpilén</span>
+          <span>© {new Date().getFullYear()} ByMats</span>
           <span className="uppercase tracking-wide">Gestión comercial inmobiliaria</span>
         </div>
       </div>
