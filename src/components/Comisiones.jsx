@@ -59,6 +59,8 @@ function tramoPctPorTotal(totalUnidades) {
   return 0.75;
 }
 
+const normalizarCodigo = (s) => String(s || "").trim().toUpperCase();
+
 export default function Comisiones({ db }) {
   const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin } = useAuthSession();
 
@@ -133,7 +135,6 @@ export default function Comisiones({ db }) {
   // comparar, porque el Aval y el listado de precios se escriben a mano en
   // Excel por personas distintas y un espacio de más o una mayúscula
   // distinta no debería impedir el cruce.
-  const normalizarCodigo = (s) => String(s || "").trim().toUpperCase();
 
   // El listado real trae códigos repetidos (ej. estacionamientos listados
   // más de una vez). Si un código aparece varias veces, se prioriza la
@@ -287,7 +288,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v130</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v131</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
