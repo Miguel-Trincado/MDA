@@ -2,38 +2,16 @@ import { useState } from "react";
 import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Bot } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
-// Clave compartida para acceder al CRM en general (no es una cuenta real,
-// solo un candado de entrada porque el sitio está público en el link de
-// Vercel). Si en vez de esto se ingresa un correo y contraseña reales de
-// Supabase, se intenta un login de administrador: si funciona, la sesión
-// de administrador queda activa igual que si se hubiera iniciado sesión
-// desde Comisiones o Carga (misma sesión de Supabase para toda la app), y
-// de paso desbloquea el candado general.
-const USUARIO_GENERAL = "MDA";
-const CLAVE_GENERAL = "MDA1234";
-
-export default function SiteGate({ onUnlock }) {
+// Pantalla de acceso: solo entra quien tenga un usuario real (correo y
+// contraseña) creado por el administrador en la pestaña Usuarios. La app
+// detecta la sesión sola, así que aquí no hace falta avisar nada al entrar.
+export default function SiteGate() {
   const [usuario, setUsuario] = useState("");
   const [clave, setClave] = useState("");
   const [verClave, setVerClave] = useState(false);
-  const [recordar, setRecordar] = useState(false);
   const [soyHumano, setSoyHumano] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState("");
-
-  function desbloquear() {
-    try {
-      if (recordar) {
-        localStorage.setItem("pilpilen_gate_unlocked", "1");
-      } else {
-        sessionStorage.setItem("pilpilen_gate_unlocked", "1");
-      }
-    } catch {
-      // Si el navegador bloquea el almacenamiento, no es grave: solo
-      // tendrá que volver a ingresar la clave en la próxima visita.
-    }
-    onUnlock();
-  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -43,19 +21,12 @@ export default function SiteGate({ onUnlock }) {
       return;
     }
     const u = usuario.trim();
-    if (u.toUpperCase() === USUARIO_GENERAL && clave === CLAVE_GENERAL) {
-      desbloquear();
-      return;
-    }
-    // No coincide con la clave general: puede ser un correo real de
-    // administrador, así que se intenta como login de Supabase.
     setEnviando(true);
     try {
       const { error: authError } = await supabase.auth.signInWithPassword({ email: u, password: clave });
       if (authError) throw authError;
-      desbloquear();
     } catch {
-      setError("Usuario o contraseña incorrectos.");
+      setError("Correo o contraseña incorrectos.");
     } finally {
       setEnviando(false);
     }
@@ -75,14 +46,15 @@ export default function SiteGate({ onUnlock }) {
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1.5">Usuario</label>
+            <label className="block text-sm font-semibold text-stone-700 mb-1.5">Correo</label>
             <div className="relative">
               <User size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
               <input
                 value={usuario}
                 onChange={(e) => setUsuario(e.target.value)}
-                placeholder="MDA"
+                placeholder="correo@mdai.cl"
                 autoFocus
+                type="email"
                 required
                 className="w-full bg-[#EEF2FB] border border-transparent rounded-lg pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:border-[#1E5AA8] focus:bg-white transition-colors"
               />
@@ -114,15 +86,6 @@ export default function SiteGate({ onUnlock }) {
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-stone-600 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={recordar}
-              onChange={(e) => setRecordar(e.target.checked)}
-              className="w-4 h-4 rounded border-stone-300 text-[#0F3D66] focus:ring-[#1E5AA8]"
-            />
-            Recuérdame
-          </label>
 
           <label className="flex items-center gap-2 text-sm text-stone-600 border border-stone-300 rounded-lg px-4 py-3 cursor-pointer select-none bg-white/60">
             <input
