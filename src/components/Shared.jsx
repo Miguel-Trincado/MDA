@@ -73,6 +73,10 @@ export function Panel({ title, children, className = "" }) {
   );
 }
 
+// Contenedor estándar de toda pantalla de menú: mismo ancho y mismos márgenes
+// para que el título quede siempre en el mismo lugar.
+export const PAGE_CLASS = "max-w-6xl mx-auto px-5 pt-4 pb-6";
+
 // Encabezado de página estándar: título grande + subtítulo, con espacio a
 // la derecha para un control propio de la vista (ej. el selector de Mes en
 // Comisiones), para que todas las pantallas compartan la misma jerarquía.
@@ -80,7 +84,7 @@ export function PageHeader({ title, subtitle, children }) {
   return (
     <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
       <div>
-        <h1 className="font-display text-3xl font-semibold text-[#0F3D66]">{title}</h1>
+        <h1 className="font-display text-3xl text-[#0F3D66]">{title}</h1>
         {subtitle && <p className="text-sm text-stone-500 mt-1">{subtitle}</p>}
       </div>
       {children}

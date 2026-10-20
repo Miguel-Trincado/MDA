@@ -287,8 +287,8 @@ export default function Comisiones({ db }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v133</span></>} subtitle="Gestión y validación de comisiones">
+    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal">build v134</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">

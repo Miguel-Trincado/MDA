@@ -98,7 +98,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
+    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
       <PageHeader title="Usuarios" subtitle="Crea usuarios y asígnales un perfil" />
 
       <Panel title="Nuevo usuario">

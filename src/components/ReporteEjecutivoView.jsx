@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo } from "../lib/helpers";
-import { KpiCard } from "./Shared";
+import { KpiCard, PageHeader, PAGE_CLASS } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
 
@@ -149,7 +149,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
   if (filasTotales.length === 0) {
     return (
-      <div className="max-w-2xl mx-auto px-5 py-16 text-center">
+      <div className={PAGE_CLASS + " text-center"}>
         <div className="font-display text-xl text-[#0F3D66] mb-2">Sin cotizaciones cargadas todavía</div>
         <p className="text-stone-500 text-sm">
           El dashboard se arma solo apenas subas la plantilla del Maestro Aval, en la pestaña "Carga".
@@ -163,26 +163,12 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const header = (
     <>
-      <div className="bg-white border border-stone-200 p-5 flex items-center justify-between flex-wrap gap-4 mb-4">
-        <div className="flex items-center gap-4">
-          <div className="bg-[#0F3D66] text-white w-16 h-16 flex flex-col items-center justify-center leading-none shrink-0">
-            <span className="font-display font-bold text-lg">MDA</span>
-            <span className="text-[7px] tracking-wider mt-1">INMOBILIARIA</span>
-          </div>
-          <div>
-            <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#0F3D66] leading-tight">
-              REPORTE EJECUTIVO DE COTIZACIONES
-            </h2>
-            <div className="text-xs tracking-widest text-stone-500 font-medium">PROYECTO PILPILÉN</div>
-          </div>
+      <PageHeader title="Dashboard" subtitle="Reporte ejecutivo de cotizaciones · Proyecto Pilpilén">
+        <div className="border border-stone-200 bg-white rounded-xl px-4 py-2 text-right">
+          <div className="text-[11px] text-stone-400">Fecha de extracción</div>
+          <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="border border-stone-200 px-4 py-2 text-right">
-            <div className="text-[11px] text-stone-400">Fecha de extracción</div>
-            <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
-          </div>
-        </div>
-      </div>
+      </PageHeader>
 
       <FilterBar filtros={filtros} onChange={setFiltros} opciones={opciones} />
     </>
@@ -191,7 +177,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // Hay datos en el sistema, pero el filtro elegido no deja ninguna fila.
   if (data.total === 0) {
     return (
-      <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
+      <div className={PAGE_CLASS}>
         {header}
         <div className="bg-white border border-stone-200 p-10 text-center">
           <div className="text-stone-500 text-sm mb-3">No hay cotizaciones para esta combinación de filtros.</div>
@@ -261,7 +247,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   ].filter(Boolean);
 
   return (
-    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
+    <div className={PAGE_CLASS}>
       {header}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">

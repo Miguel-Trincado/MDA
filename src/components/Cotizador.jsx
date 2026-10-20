@@ -9,7 +9,7 @@ import {
 } from "../lib/db";
 import { normalizarBusqueda, normalizeRut, calcularPlanCuotas } from "../lib/helpers";
 import { useValorUFHoy } from "../lib/uf";
-import { Panel, Field } from "./Shared";
+import { Panel, Field, PAGE_CLASS } from "./Shared";
 
 const FINANCIAMIENTO_ROWS_DEFAULT = {
   reserva: { modo: "UF", valor: 5 },
@@ -450,12 +450,12 @@ export default function Cotizador({ db, puedeEliminar = true }) {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-5 pt-4 pb-6">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h2 className="font-display text-3xl font-semibold text-[#0F3D66]">Simulador</h2>
-        <span className="text-xs font-mono px-3 py-1.5 rounded-full border border-stone-300 text-stone-500">
-          {loadingUF ? "Valor UF: obteniendo…" : valorUF ? `Valor UF hoy: $${currency(valorUF)}` : "Valor UF no disponible"}
-        </span>
+    <div className={PAGE_CLASS}>
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+        <div>
+          <h1 className="font-display text-3xl text-[#0F3D66]">Simulador</h1>
+          <p className="text-sm text-stone-500 mt-1">Cotiza y simula el financiamiento de una unidad</p>
+        </div>
       </div>
 
       {error && <div className="mb-4 border border-rose-300 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}

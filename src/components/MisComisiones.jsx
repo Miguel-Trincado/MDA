@@ -64,7 +64,7 @@ export default function MisComisiones({ ejecutivo }) {
   const totNeto = filas.reduce((s, f) => s + (f.neto || 0), 0);
 
   return (
-    <div className="max-w-5xl mx-auto px-5 pt-4 pb-6">
+    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
       <PageHeader title="Mis comisiones" subtitle={ejecutivo ? `Ejecutiva: ${ejecutivo}` : "Tu perfil no tiene ejecutiva asignada"}>
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>

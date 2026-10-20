@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate, formatFechaCorta } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
-import { Stat, AlertGroup, Panel } from "./Shared";
+import { Stat, AlertGroup, Panel, PAGE_CLASS } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
@@ -243,9 +243,12 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     : [];
 
   return (
-    <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h2 className="font-display text-3xl font-semibold text-[#0F3D66]">Panel Jefa de Ventas</h2>
+    <div className={PAGE_CLASS}>
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+        <div>
+          <h1 className="font-display text-3xl text-[#0F3D66]">Jefa de Ventas</h1>
+          <p className="text-sm text-stone-500 mt-1">Panel de seguimiento del equipo comercial</p>
+        </div>
         <div className="flex items-center gap-3">
           <NotificationBell
             tareas={tareas}

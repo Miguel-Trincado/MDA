@@ -1,4 +1,5 @@
 import { useAuthSession } from "../lib/useAuthSession";
+import { PageHeader, PAGE_CLASS } from "./Shared";
 import UploadMaestroPanel from "./UploadMaestroPanel";
 import UploadListaPreciosPanel from "./UploadListaPreciosPanel";
 import UploadDescuentosUnidadesPanel from "./UploadDescuentosUnidadesPanel";
@@ -10,8 +11,8 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUpl
   const { session, email, setEmail, password, setPassword, loginError, loggingIn, handleLogin } = useAuthSession();
 
   return (
-    <div className="max-w-3xl mx-auto px-5 pt-4 pb-8">
-      <h2 className="font-display text-3xl font-semibold text-[#0F3D66] mb-5">Carga</h2>
+    <div className={PAGE_CLASS}>
+      <PageHeader title="Carga" subtitle="Sube el Maestro Aval y el listado de precios" />
 
       {session === undefined ? (
         <p className="text-stone-400 text-sm">Verificando sesión…</p>

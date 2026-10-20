@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { EJECUTIVOS, ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, normalizarBusqueda, fmtDate } from "../lib/helpers";
 import { getTareas } from "../lib/reminders";
-import { Panel } from "./Shared";
+import { Panel, PageHeader, PAGE_CLASS } from "./Shared";
 import ClientEditForm from "./ClientEditForm";
 import NotificationBell from "./NotificationBell";
 import CalendarioTareas from "./CalendarioTareas";
@@ -30,7 +30,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded, ejecut
   const [periodo, setPeriodo] = useState(""); // "" = Todo, o "YYYY-MM"
   const [verCalendario, setVerCalendario] = useState(false);
 
-  const wrapperClass = embedded ? "" : "max-w-4xl mx-auto px-5 pt-4 pb-6";
+  const wrapperClass = embedded ? "" : PAGE_CLASS;
 
   const fechasPorRut = useMemo(() => {
     const map = {};
@@ -103,7 +103,8 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded, ejecut
 
   if (!nombre) {
     return (
-      <div className={embedded ? "" : "max-w-4xl mx-auto px-5 py-16"}>
+      <div className={embedded ? "" : PAGE_CLASS}>
+        {!embedded && <PageHeader title="Ejecutivo" subtitle="Gestión de cartera" />}
         <Panel>
           <div className="text-xs text-stone-400 uppercase tracking-wide mb-3">Gestión de cartera</div>
           <div className="flex flex-wrap items-center gap-2">
@@ -194,11 +195,11 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded, ejecut
 
   return (
     <div className={wrapperClass}>
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
         <div>
-          <h2 className="font-display text-3xl font-semibold text-[#0F3D66]">Cartera de {nombre}</h2>
-          <p className="text-stone-500 text-sm">
-            {filtrados.length} {filtro === "Todos" ? "clientes en total" : `en "${filtro}"`}
+          <h1 className="font-display text-3xl text-[#0F3D66]">Ejecutivo</h1>
+          <p className="text-sm text-stone-500 mt-1">
+            Cartera de {nombre} · {filtrados.length} {filtro === "Todos" ? "clientes en total" : `en "${filtro}"`}
           </p>
         </div>
         <div className="flex items-center gap-3">
