@@ -22,22 +22,11 @@ import {
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
-// El sitio está público en el link de Vercel, así que antes de mostrar
-// cualquier pestaña se pide una clave de entrada compartida (ver
-// SiteGate). Si alguien entra ahí con su correo y contraseña reales de
-// administrador en vez de la clave general, la sesión de administrador
-// queda activa igual que si hubiera iniciado sesión desde Comisiones o
-// Carga — así se "reconoce" sin pedir el candado general aparte.
-function siteYaDesbloqueado() {
-  try {
-    return localStorage.getItem("pilpilen_gate_unlocked") === "1" || sessionStorage.getItem("pilpilen_gate_unlocked") === "1";
-  } catch {
-    return false;
-  }
-}
+// El sitio está público en el link de Vercel, así que no se muestra nada
+// sin una sesión real de usuario (correo y contraseña creados en la
+// pestaña Usuarios). Ya no existe una clave compartida.
 
 function AppInner() {
-  const [desbloqueado, setDesbloqueado] = useState(siteYaDesbloqueado);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
@@ -46,6 +35,7 @@ function AppInner() {
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
   const { session: authSession, handleLogout } = useAuthSession();
+  const desbloqueado = !!authSession;
   // Rol: "admin" ve todo; "ejecutiva" solo ve sus comisiones (y no Jefa ni
   // Carga); "sinperfil" (usuario creado pero sin vincular) queda limitado.
   const { rol, ejecutivo: miEjecutivo, cargando: cargandoPerfil } = useMiPerfil(authSession);
@@ -110,14 +100,7 @@ function AppInner() {
   // (pilpilen_gate_unlocked) para que la próxima vez vuelva a pedir
   // usuario y contraseña en vez de dejar pasar directo al Dashboard.
   async function handleLogoutCompleto() {
-    try {
-      localStorage.removeItem("pilpilen_gate_unlocked");
-      sessionStorage.removeItem("pilpilen_gate_unlocked");
-    } catch {
-      // Si el navegador bloquea el almacenamiento, no es grave.
-    }
     await handleLogout();
-    setDesbloqueado(false);
   }
 
   const reload = useCallback(async () => {
@@ -256,8 +239,16 @@ function AppInner() {
     setDb((d) => ({ ...d, metas: { ...d.metas, [mes]: valor } }));
   }
 
+  if (authSession === undefined) {
+    return (
+      <div className="min-h-screen bg-white font-body flex items-center justify-center">
+        <div className="text-stone-500">Cargando…</div>
+      </div>
+    );
+  }
+
   if (!desbloqueado) {
-    return <SiteGate onUnlock={() => setDesbloqueado(true)} />;
+    return <SiteGate />;
   }
 
   if (loading) {
