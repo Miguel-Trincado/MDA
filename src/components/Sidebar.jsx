@@ -1,9 +1,10 @@
 import { useState } from "react";
 import {
   BarChart3, Users, Calculator, UserCog, Database,
-  ChevronsLeft, ChevronsRight, Settings, FileUp, LogOut,
+  ChevronsLeft, ChevronsRight, Settings, FileUp, LogOut, LayoutDashboard,
 } from "lucide-react";
 import { Avatar } from "./Shared";
+import { useLayout } from "../lib/layout";
 
 const ICONS = {
   dashboard: BarChart3,
@@ -16,6 +17,7 @@ const ICONS = {
 };
 
 export default function Sidebar({ active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, perfilLabel, cargas, onLogout }) {
+  const diseno = useLayout();
   const [colapsado, setColapsado] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
   // "Carga" (subir Maestro Aval / listado de precios) ya no es una pestaña
@@ -108,6 +110,17 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
                 >
                   <UserCog size={14} /> Usuarios
+                </button>
+              )}
+              {esAdmin && (
+                <button
+                  onClick={() => {
+                    setCuentaAbierta(false);
+                    diseno.setEditando(!diseno.editando);
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
+                >
+                  <LayoutDashboard size={14} /> {diseno.editando ? "Terminar edición de diseño" : "Editar diseño"}
                 </button>
               )}
               {!sinCarga && (

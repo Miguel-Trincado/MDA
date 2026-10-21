@@ -2,7 +2,7 @@
 // editar títulos y ajustar la tarjeta de la UF. Lo que guarda el admin queda
 // en la tabla `ui_layout` y lo ven todos los usuarios.
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { GripVertical, Minus, Pencil, Plus, RotateCcw, Check } from "lucide-react";
+import { GripVertical, Minus, Plus, RotateCcw, Check } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 const KEY = "mda_layout_v1";
@@ -363,16 +363,7 @@ export function EditorDiseno({ puedeEditar }) {
   const L = useLayout();
   useEffect(() => { L.setPuedeEditar(!!puedeEditar); }, [puedeEditar]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!puedeEditar) return null;
-  if (!L.editando) {
-    return (
-      <button
-        onClick={() => L.setEditando(true)}
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-[#13234A] text-white text-sm px-4 py-2.5 shadow-lg hover:bg-[#1b3270]"
-      >
-        <Pencil size={15} /> Editar diseño
-      </button>
-    );
-  }
+  if (!L.editando) return null;
   const msg = { guardando: "Guardando…", guardado: "Guardado ✓", error: "No se pudo guardar (¿corriste el SQL v138?)" }[L.estado] || "";
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
