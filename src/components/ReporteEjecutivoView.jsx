@@ -290,8 +290,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     <div className={PAGE_CLASS}>
       {header}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
-        <KpiCard
+      <div className="grid-60 gap-4 mb-5">
+        <KpiCard bid="kpi1" orden={0}
           tone="blue"
           icon={FileText}
           label="Cotizaciones mes actual"
@@ -300,8 +300,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           delta={deltaMes}
           serie={serieCot}
         />
-        <KpiCard tone="purple" icon={User} label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" serie={serieRut} />
-        <KpiCard
+        <KpiCard bid="kpi2" orden={1} tone="purple" icon={User} label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" serie={serieRut} />
+        <KpiCard bid="kpi3" orden={2}
           tone="pink"
           icon={LayoutGrid}
           label="Tipología con más clientes"
@@ -310,7 +310,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           small
           serie={serieTip}
         />
-        <KpiCard
+        <KpiCard bid="kpi4" orden={3}
           tone="green"
           icon={MapPin}
           label="Región con mayor cotización"
@@ -319,11 +319,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           small
           serie={serieReg}
         />
-        <KpiCard tone="amber" icon={FileText} label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo" serie={serieTotal} />
+        <KpiCard bid="kpi5" orden={4} tone="amber" icon={FileText} label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo" serie={serieTotal} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <Panel>
+      <div className="grid-60 gap-5 mb-5">
+        <Panel bid="fila1-tipologia" grupo="dash-f1" orden={0}>
           <CardTitle icon={Layers}>Cotizaciones por tipología</CardTitle>
           <div className="flex flex-col sm:flex-row items-center gap-4">
             <div className="relative w-full sm:w-1/2 h-56">
@@ -373,7 +373,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           </div>
         </Panel>
 
-        <Panel>
+        <Panel bid="fila1-mes" grupo="dash-f1" orden={1}>
           <CardTitle
             icon={BarChart3}
             right={
@@ -427,8 +427,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
       <RutAnalysisSection filas={filas} gestion={db.gestion} tipologiaOrdenada={data.tipologiaOrdenada} />
 
-      <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <Panel>
+      <div className="grid-60 gap-5 mb-5">
+        <Panel bid="fila3-hallazgos" grupo="dash-f3" orden={0}>
           <CardTitle icon={Lightbulb}>Principales hallazgos</CardTitle>
           <ul className="flex flex-col gap-2 text-sm text-stone-700">
             {hallazgos.map((h, i) => (
@@ -439,7 +439,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
             ))}
           </ul>
         </Panel>
-        <Panel>
+        <Panel bid="fila3-recomendaciones" grupo="dash-f3" orden={1}>
           <CardTitle icon={ListChecks}>Recomendaciones</CardTitle>
           <ul className="flex flex-col gap-2 text-sm text-stone-700">
             {recomendaciones.map((r, i) => (

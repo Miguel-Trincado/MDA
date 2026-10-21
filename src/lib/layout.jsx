@@ -1,0 +1,262 @@
+// Diseño editable (solo administrador): mover y redimensionar tarjetas,
+// editar títulos y ajustar la tarjeta de la UF. Lo que guarda el admin queda
+// en la tabla `ui_layout` y lo ven todos los usuarios.
+import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { GripVertical, Minus, Pencil, Plus, RotateCcw, Check } from "lucide-react";
+import { supabase } from "../supabaseClient";
+
+const KEY = "mda_layout_v1";
+const VACIO = { bloques: {}, textos: {}, uf: { escala: 1, pos: "der" } };
+const Ctx = createContext(null);
+
+const slug = (s) =>
+  String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+function normalizar(d) {
+  return { ...VACIO, ...(d || {}), uf: { ...VACIO.uf, ...((d && d.uf) || {}) }, bloques: (d && d.bloques) || {}, textos: (d && d.textos) || {} };
+}
+function leerLocal() {
+  try {
+    return normalizar(JSON.parse(localStorage.getItem(KEY)));
+  } catch {
+    return normalizar();
+  }
+}
+
+export function LayoutProvider({ children }) {
+  const [cfg, setCfg] = useState(leerLocal);
+  const [editando, setEditando] = useState(false);
+  const [puedeEditar, setPuedeEditar] = useState(false);
+  const [estado, setEstado] = useState("");
+  const cfgRef = useRef(cfg);
+  const timer = useRef(null);
+
+  useEffect(() => {
+    let vivo = true;
+    supabase
+      .from("ui_layout")
+      .select("data")
+      .eq("id", "global")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!vivo || !data || !data.data) return;
+        const c = normalizar(data.data);
+        cfgRef.current = c;
+        setCfg(c);
+        try { localStorage.setItem(KEY, JSON.stringify(c)); } catch { /* sin storage */ }
+      });
+    return () => { vivo = false; };
+  }, []);
+
+  const aplicar = (fn) => {
+    const n = fn(cfgRef.current);
+    cfgRef.current = n;
+    setCfg(n);
+    try { localStorage.setItem(KEY, JSON.stringify(n)); } catch { /* sin storage */ }
+    setEstado("guardando");
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      const { error } = await supabase.from("ui_layout").upsert({ id: "global", data: cfgRef.current, updated_at: new Date().toISOString() });
+      setEstado(error ? "error" : "guardado");
+    }, 700);
+  };
+
+  const api = {
+    cfg,
+    editando: editando && puedeEditar,
+    setEditando,
+    puedeEditar,
+    setPuedeEditar,
+    estado,
+    setBloque: (id, patch) => aplicar((c) => ({ ...c, bloques: { ...c.bloques, [id]: { ...(c.bloques[id] || {}), ...patch } } })),
+    quitarBloque: (id) =>
+      aplicar((c) => {
+        const b = { ...c.bloques };
+        delete b[id];
+        return { ...c, bloques: b };
+      }),
+    intercambiar: (a, ordA, b, ordB) =>
+      aplicar((c) => ({ ...c, bloques: { ...c.bloques, [a]: { ...(c.bloques[a] || {}), orden: ordB }, [b]: { ...(c.bloques[b] || {}), orden: ordA } } })),
+    setTexto: (key, def, valor) =>
+      aplicar((c) => {
+        const t = { ...c.textos };
+        const v = String(valor || "").trim();
+        if (!v || v === def) delete t[key];
+        else t[key] = v;
+        return { ...c, textos: t };
+      }),
+    setUf: (patch) => aplicar((c) => ({ ...c, uf: { ...c.uf, ...patch } })),
+    restablecer: () => aplicar(() => normalizar()),
+  };
+  return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
+}
+
+const SIN_PROVIDER = {
+  cfg: VACIO, editando: false, puedeEditar: false, estado: "",
+  setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
+};
+export const useLayout = () => useContext(Ctx) || SIN_PROVIDER;
+
+// Texto editable: el admin, en modo edición, lo modifica con un clic.
+export function T({ id, children }) {
+  const L = useLayout();
+  const def = String(children ?? "");
+  const key = id || "t:" + slug(def);
+  const val = L.cfg.textos[key] ?? def;
+  if (!L.editando) return <>{val}</>;
+  return (
+    <span
+      key={val}
+      contentEditable
+      suppressContentEditableWarning
+      spellCheck={false}
+      title="Clic para editar el texto"
+      className="outline-dashed outline-1 outline-[#2563EB] outline-offset-2 rounded cursor-text"
+      onBlur={(e) => L.setTexto(key, def, e.currentTarget.textContent)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+      }}
+    >
+      {val}
+    </span>
+  );
+}
+
+// Tarjeta movible y redimensionable dentro de un contenedor `.grid-60`
+// (grilla de 60 columnas). `orden`, `span` y la altura mínima se guardan.
+export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }) {
+  const L = useLayout();
+  const ref = useRef(null);
+  const b = L.cfg.bloques[id] || {};
+  const ord = b.orden ?? orden;
+  const sp = b.span ?? span;
+  const style = { order: ord, "--span": sp, "--span-m": spanM };
+  if (b.h) style.minHeight = b.h;
+
+  if (!L.editando) {
+    return <div className="bloque [&>*]:h-full" style={style}>{children}</div>;
+  }
+
+  const iniciarResize = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = ref.current;
+    const padre = el.parentElement.clientWidth;
+    const sx = e.clientX, sy = e.clientY, w0 = el.offsetWidth, h0 = el.offsetHeight;
+    const mover = (ev) => {
+      const s = Math.max(12, Math.min(60, Math.round(((w0 + ev.clientX - sx) / padre) * 30) * 2));
+      const h = Math.max(80, Math.round((h0 + ev.clientY - sy) / 8) * 8);
+      L.setBloque(id, { span: s, h });
+    };
+    const fin = () => {
+      window.removeEventListener("pointermove", mover);
+      window.removeEventListener("pointerup", fin);
+    };
+    window.addEventListener("pointermove", mover);
+    window.addEventListener("pointerup", fin);
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="bloque relative [&>*]:h-full rounded-2xl outline-dashed outline-2 outline-[#2563EB]/40 outline-offset-2"
+      style={style}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        try {
+          const o = JSON.parse(e.dataTransfer.getData("text/plain"));
+          if (o.grupo === grupo && o.id !== id) L.intercambiar(o.id, o.ord, id, ord);
+        } catch { /* arrastre ajeno */ }
+      }}
+    >
+      {children}
+      <div className="absolute -top-3 left-4 z-20 flex items-center gap-0.5 bg-[#2563EB] text-white rounded-full px-1.5 py-0.5 shadow">
+        <span
+          draggable
+          title="Arrastrar para mover"
+          className="cursor-grab active:cursor-grabbing p-0.5"
+          onDragStart={(e) => {
+            e.dataTransfer.setData("text/plain", JSON.stringify({ id, grupo, ord }));
+            e.dataTransfer.effectAllowed = "move";
+            if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
+          }}
+        >
+          <GripVertical size={14} />
+        </span>
+        <button title="Volver al tamaño y lugar originales" onClick={() => L.quitarBloque(id)} className="p-0.5 hover:text-amber-200">
+          <RotateCcw size={12} />
+        </button>
+      </div>
+      <span
+        title="Arrastrar para cambiar ancho y alto"
+        onPointerDown={iniciarResize}
+        className="absolute -bottom-2 -right-2 z-20 w-5 h-5 rounded-full bg-[#2563EB] border-2 border-white shadow cursor-nwse-resize touch-none"
+      />
+    </div>
+  );
+}
+
+// Posición y tamaño de la tarjeta de la UF; vale para todos los menús.
+export function UfSlot({ children }) {
+  const L = useLayout();
+  const { escala, pos } = L.cfg.uf;
+  const cls = pos === "der" ? "relative" : `relative basis-full order-first flex ${pos === "centro" ? "justify-center" : "justify-start"}`;
+  const btn = "px-2 py-1 rounded hover:bg-stone-100 text-xs";
+  return (
+    <div className={cls}>
+      <div style={{ zoom: escala }} className={L.editando ? "outline-dashed outline-2 outline-[#2563EB]/50 outline-offset-2 rounded-2xl" : ""}>
+        {children}
+      </div>
+      {L.editando && (
+        <div className={`absolute top-full mt-2 z-30 bg-white shadow-card border border-stone-200 rounded-lg p-1 flex items-center gap-0.5 text-[#13234A] ${pos === "der" ? "right-0" : pos === "centro" ? "left-1/2 -translate-x-1/2" : "left-0"}`}>
+          <button className={btn} title="Más chica" onClick={() => L.setUf({ escala: Math.max(0.6, +(escala - 0.1).toFixed(2)) })}><Minus size={13} /></button>
+          <span className="text-xs w-9 text-center">{Math.round(escala * 100)}%</span>
+          <button className={btn} title="Más grande" onClick={() => L.setUf({ escala: Math.min(1.6, +(escala + 0.1).toFixed(2)) })}><Plus size={13} /></button>
+          <span className="w-px h-5 bg-stone-200 mx-1" />
+          {[["izq", "Izq."], ["centro", "Centro"], ["der", "Der."]].map(([p, t]) => (
+            <button key={p} className={`${btn} ${pos === p ? "bg-[#EEF3FF] text-[#2563EB] font-semibold" : ""}`} onClick={() => L.setUf({ pos: p })}>{t}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Botón flotante (solo admin) para entrar y salir del modo edición.
+export function EditorDiseno({ puedeEditar }) {
+  const L = useLayout();
+  useEffect(() => { L.setPuedeEditar(!!puedeEditar); }, [puedeEditar]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!puedeEditar) return null;
+  if (!L.editando) {
+    return (
+      <button
+        onClick={() => L.setEditando(true)}
+        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-[#13234A] text-white text-sm px-4 py-2.5 shadow-lg hover:bg-[#1b3270]"
+      >
+        <Pencil size={15} /> Editar diseño
+      </button>
+    );
+  }
+  const msg = { guardando: "Guardando…", guardado: "Guardado ✓", error: "No se pudo guardar (¿corriste el SQL v138?)" }[L.estado] || "";
+  return (
+    <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
+      <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div className="flex items-center justify-between gap-2">
+        <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
+        <span className="flex gap-2">
+          <button
+            onClick={() => { if (window.confirm("¿Restablecer todo el diseño (tarjetas, títulos y UF) al original?")) L.restablecer(); }}
+            className="px-2.5 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50"
+          >
+            Restablecer todo
+          </button>
+          <button onClick={() => L.setEditando(false)} className="px-3 py-1.5 rounded-lg bg-[#2563EB] text-white flex items-center gap-1">
+            <Check size={13} /> Listo
+          </button>
+        </span>
+      </div>
+    </div>
+  );
+}

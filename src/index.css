@@ -49,3 +49,10 @@ html {
   border-color: #1e5aa8;
   box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.12);
 }
+
+/* Grilla de 60 columnas para tarjetas movibles (ver src/lib/layout.jsx) */
+.grid-60 { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); }
+.bloque { grid-column: span var(--span-m, 60); min-width: 0; }
+@media (min-width: 1024px) {
+  .bloque { grid-column: span var(--span, 60); }
+}

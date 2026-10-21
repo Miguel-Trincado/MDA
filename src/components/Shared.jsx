@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import UfChip from "./UfChip";
+import { T, Bloque, UfSlot } from "../lib/layout";
 import { ALERT_STYLE } from "../lib/constants";
 
 // Círculo con las iniciales de un nombre o correo — usado en el header de
@@ -85,10 +86,10 @@ function Spark({ data, color, id }) {
 
 // Tarjeta de indicador: ícono en burbuja, valor grande y, si hay datos,
 // una mini-curva de fondo y una variación (delta, en %).
-export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, serie }) {
+export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, serie, bid, orden }) {
   const t = TONOS[tone] || TONOS.blue;
   const idGrad = `spark-${tone}-${String(label).replace(/\W/g, "")}`;
-  return (
+  const card = (
     <div
       className="relative overflow-hidden rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1 min-h-[184px]"
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
@@ -115,15 +116,21 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
       {serie && serie.length > 1 && <Spark data={serie} color={t.fg} id={idGrad} />}
     </div>
   );
+  return bid ? (
+    <Bloque id={bid} grupo="dash-kpi" orden={orden} span={12} spanM={30}>{card}</Bloque>
+  ) : card;
 }
 
-export function Panel({ title, children, className = "" }) {
-  return (
+export function Panel({ title, children, className = "", bid, grupo, orden, span = 30 }) {
+  const panel = (
     <div className={`bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-5 ${className}`}>
-      {title && <div className="font-display text-lg text-[#13234A] mb-3">{title}</div>}
+      {title && <div className="font-display text-lg text-[#13234A] mb-3">{typeof title === "string" ? <T>{title}</T> : title}</div>}
       {children}
     </div>
   );
+  return bid ? (
+    <Bloque id={bid} grupo={grupo} orden={orden} span={span}>{panel}</Bloque>
+  ) : panel;
 }
 
 // Título de tarjeta con ícono azul y, a la derecha, un control opcional.
@@ -132,7 +139,7 @@ export function CardTitle({ icon: Icon, children, right }) {
     <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-stone-100 flex-wrap">
       <div className="flex items-center gap-2.5">
         {Icon && <Icon size={22} className="text-[#2563EB] shrink-0" />}
-        <span className="font-display text-lg text-[#13234A]">{children}</span>
+        <span className="font-display text-lg text-[#13234A]">{typeof children === "string" ? <T>{children}</T> : children}</span>
       </div>
       {right}
     </div>
@@ -150,11 +157,13 @@ export function PageHeader({ title, subtitle, children }) {
   return (
     <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
       <div className="flex-1 min-w-[200px]">
-        <h1 className="font-display text-3xl text-[#13234A]">{title}</h1>
+        <h1 className="font-display text-3xl text-[#13234A]">{typeof title === "string" ? <T>{title}</T> : title}</h1>
         {subtitle && <p className="text-sm text-stone-500 mt-1">{subtitle}</p>}
       </div>
       {children}
-      <UfChip />
+      <UfSlot>
+        <UfChip />
+      </UfSlot>
     </div>
   );
 }

@@ -48,8 +48,8 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
 
   return (
     <div className="mb-5">
-      <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <Panel>
+      <div className="grid-60 gap-5 mb-5">
+        <Panel bid="fila2-clientes-tipologia" grupo="dash-f2" orden={0}>
           <CardTitle icon={User}>Clientes únicos (RUT) por tipología</CardTitle>
           <div className="flex flex-col gap-2.5">
             {rutPorTipologia.map(([tip, count], i) => (
@@ -75,7 +75,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
           </p>
         </Panel>
 
-        <Panel>
+        <Panel bid="fila2-rut" grupo="dash-f2" orden={1}>
           <CardTitle icon={FileText}>Total de cotizaciones por RUT</CardTitle>
           <div className="flex flex-wrap gap-2 mb-3">
             <input

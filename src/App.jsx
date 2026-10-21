@@ -14,6 +14,7 @@ import UsuariosPanel from "./components/UsuariosPanel";
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
+import { LayoutProvider, EditorDiseno } from "./lib/layout";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
@@ -317,6 +318,7 @@ function AppInner() {
           />
         )}
       </div>
+      <EditorDiseno puedeEditar={esAdmin} />
     </div>
   );
 }
@@ -326,7 +328,9 @@ function AppInner() {
 export default function App() {
   return (
     <UfProvider>
-      <AppInner />
+      <LayoutProvider>
+        <AppInner />
+      </LayoutProvider>
     </UfProvider>
   );
 }
