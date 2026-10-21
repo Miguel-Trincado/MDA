@@ -222,6 +222,15 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   }, [filas]);
 
   // El sistema recién arrancó: nunca se ha cargado el Maestro Aval.
+  if (db.cargandoAval && !usaAvalCompleto) {
+    return (
+      <div className={PAGE_CLASS}>
+        <PageHeader title="Dashboard" subtitle="Cargando el Aval completo…" />
+        <Panel className="p-10 text-center text-sm text-stone-500">Cargando datos del Dashboard…</Panel>
+      </div>
+    );
+  }
+
   if (base.length === 0) {
     return (
       <div className={PAGE_CLASS + " text-center"}>
@@ -241,12 +250,12 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       <PageHeader title="Dashboard" subtitle={`Reporte ejecutivo de ${sust} · ${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · Extracción: ${fechaExtraccion}`} />
 
       <FilterBar filtros={filtrosEf} onChange={setFiltros} opciones={opciones} />
-      {Object.keys(tiposUnidadPorCodigo).length === 0 && (
+      {!db.cargandoAval && Object.keys(tiposUnidadPorCodigo).length === 0 && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
           El filtro "Tipo Unidad" se llena con el listado de precios: corre la migración v158 y vuelve a cargar el listado (pestaña Carga).
         </p>
       )}
-      {!usaAvalCompleto && (
+      {!db.cargandoAval && !usaAvalCompleto && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
           Aún no hay Aval completo guardado: se muestran solo las Opp de Pilpilén. Corre la migración v147 y vuelve a cargar el Aval (pestaña Carga) para ver todos los proyectos y las Escrituradas y Desistidas.
         </p>

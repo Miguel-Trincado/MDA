@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { normalizarBusqueda } from "./lib/helpers";
 import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
@@ -6,17 +6,18 @@ import SiteGate from "./components/SiteGate";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
-import CargaPage from "./components/CargaPage";
-import Cotizador from "./components/Cotizador";
-import Comisiones from "./components/Comisiones";
-import MisComisiones from "./components/MisComisiones";
-import UsuariosPanel from "./components/UsuariosPanel";
+const CargaPage = lazy(() => import("./components/CargaPage"));
+const Cotizador = lazy(() => import("./components/Cotizador"));
+const Comisiones = lazy(() => import("./components/Comisiones"));
+const MisComisiones = lazy(() => import("./components/MisComisiones"));
+const UsuariosPanel = lazy(() => import("./components/UsuariosPanel"));
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
 import { LayoutProvider, EditorDiseno } from "./lib/layout";
+import { cacheLeer, cacheGuardar, cacheBorrar } from "./lib/cacheLocal";
 import {
-  fetchAllData, saveGestionRemote, markRevisadoRemote,
+  fetchDatosBase, fetchDatosAval, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
   uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote,
 } from "./lib/db";
@@ -30,7 +31,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [], tiposUnidad: {} });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [], tiposUnidad: {}, cargandoAval: true });
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
@@ -101,15 +102,40 @@ function AppInner() {
   // (pilpilen_gate_unlocked) para que la próxima vez vuelva a pedir
   // usuario y contraseña en vez de dejar pasar directo al Dashboard.
   async function handleLogoutCompleto() {
+    cacheBorrar("avalCompleto");
+    cacheBorrar("tiposUnidad");
     await handleLogout();
   }
+
+  // Aval completo y listado Tipo Unidad (pesados, solo para el Dashboard):
+  // se muestran primero desde la caché del navegador y se actualizan por detrás.
+  const cargarAval = useCallback(async () => {
+    const aval = await fetchDatosAval();
+    setDb((d) => ({
+      ...d,
+      ...(aval.avalCompleto ? { avalCompleto: aval.avalCompleto } : {}),
+      ...(aval.tiposUnidad ? { tiposUnidad: aval.tiposUnidad } : {}),
+      cargandoAval: false,
+    }));
+    if (aval.avalCompleto) cacheGuardar("avalCompleto", aval.avalCompleto);
+    if (aval.tiposUnidad) cacheGuardar("tiposUnidad", aval.tiposUnidad);
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError("");
+    // Lo pesado parte en paralelo, sin retrasar la pantalla inicial.
+    (async () => {
+      const [av, tu] = await Promise.all([cacheLeer("avalCompleto"), cacheLeer("tiposUnidad")]);
+      if (av && av.length) setDb((d) => (d.cargandoAval ? { ...d, avalCompleto: av, tiposUnidad: tu || d.tiposUnidad, cargandoAval: false } : d));
+      try { await cargarAval(); } catch (e) {
+        console.warn("No se pudo cargar el Aval", e);
+        setDb((d) => ({ ...d, cargandoAval: false }));
+      }
+    })();
     try {
-      const data = await fetchAllData();
-      setDb(data);
+      const data = await fetchDatosBase();
+      setDb((d) => ({ ...d, ...data }));
     } catch (e) {
       console.error(e);
       setError(
@@ -119,7 +145,7 @@ function AppInner() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cargarAval]);
 
   useEffect(() => {
     if (desbloqueado) reload();
@@ -135,9 +161,9 @@ function AppInner() {
     ultimaLectura.current = Date.now();
     async function refrescar() {
       try {
-        const data = await fetchAllData();
+        const [data] = await Promise.all([fetchDatosBase(), cargarAval()]);
         ultimaLectura.current = Date.now();
-        setDb(data);
+        setDb((d) => ({ ...d, ...data }));
       } catch (e) {
         console.warn("No se pudo actualizar en segundo plano", e);
       }
@@ -153,7 +179,7 @@ function AppInner() {
       document.removeEventListener("visibilitychange", alVolver);
       clearInterval(t);
     };
-  }, [desbloqueado]);
+  }, [desbloqueado, cargarAval]);
 
   // Si la sesión de administrador se cierra (o nunca existió) mientras se
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
@@ -292,6 +318,7 @@ function AppInner() {
         cargas={db.cargas}
       />
       <div className="flex-1 min-w-0">
+        <Suspense fallback={<div className="p-10 text-sm text-stone-500">Cargando…</div>}>
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
         {view === "carga" && !sinCarga && (
@@ -320,6 +347,7 @@ function AppInner() {
             onRevisado={markRevisado}
           />
         )}
+        </Suspense>
       </div>
       <EditorDiseno puedeEditar={esAdmin} />
     </div>

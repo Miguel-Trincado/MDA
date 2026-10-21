@@ -33,9 +33,13 @@ function chunk(arr, size) {
 // Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos
 // (el resto en paralelo, ya que el Aval completo tiene decenas de miles de filas).
 async function fetchPaginado(table, orderCol, columns = "*") {
-  const primera = await supabase.from(table).select(columns, { count: "exact" }).order(orderCol).range(0, 999);
+  // La cuenta total y la primera página se piden a la vez.
+  const [conteo, primera] = await Promise.all([
+    supabase.from(table).select(orderCol, { count: "exact", head: true }),
+    supabase.from(table).select(columns).order(orderCol).range(0, 999),
+  ]);
   if (primera.error) return { data: [], error: primera.error };
-  const total = primera.count || (primera.data || []).length;
+  const total = conteo.count || (primera.data || []).length;
   const out = [...(primera.data || [])];
   const paginas = [];
   for (let from = 1000; from < total; from += 1000) paginas.push(from);
@@ -87,8 +91,32 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
 /* ---------------------------------------------------------------------
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
-export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes, tiposUnidadRes, avalCompletoRes] = await Promise.all([
+// Datos pesados que solo usa el Dashboard: se leen aparte para no retrasar
+// la pantalla inicial. Con caché local se muestran al instante al refrescar.
+export async function fetchDatosAval() {
+  const [tiposUnidadRes, avalCompletoRes] = await Promise.all([
+    fetchTiposUnidad(),
+    fetchPaginado("aval_completo", "opp", "opp,rut,cliente,ejecutivo,proyecto,estado,tipologia,region,lote,fecha,fecha_opp,fecha_promesa,fecha_escritura,fecha_desistimiento"),
+  ]);
+  if (avalCompletoRes.error) console.warn("No se pudo cargar aval_completo:", avalCompletoRes.error.message);
+  if (tiposUnidadRes.error) console.warn("No se pudo cargar lista_tipo_unidad:", tiposUnidadRes.error.message);
+  const avalCompleto = (avalCompletoRes.data || []).map(rowToObj);
+  const tiposUnidad = {};
+  (tiposUnidadRes.data || []).forEach((row) => {
+    tiposUnidad[String(row.codigo || "").trim().toUpperCase()] = {
+      tipoUnidad: row.tipo_unidad || "",
+      ...(row.tipologia !== undefined ? { tipologia: row.tipologia || "" } : {}),
+    };
+  });
+  // Si falló la lectura, se devuelve null para no pisar lo que ya había.
+  return {
+    avalCompleto: avalCompletoRes.error ? null : avalCompleto,
+    tiposUnidad: tiposUnidadRes.error ? null : tiposUnidad,
+  };
+}
+
+export async function fetchDatosBase() {
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
@@ -98,8 +126,6 @@ export async function fetchAllData() {
     supabase.from("metas_mensuales").select("*"),
     supabase.from("cambios_estado_opp").select("*").order("fecha_deteccion", { ascending: false }),
     supabase.from("cargas_archivos").select("*").order("created_at", { ascending: false }).limit(60),
-    fetchTiposUnidad(),
-    fetchPaginado("aval_completo", "opp", "opp,rut,cliente,ejecutivo,proyecto,estado,tipologia,region,lote,fecha,fecha_opp,fecha_promesa,fecha_escritura,fecha_desistimiento"),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
@@ -111,17 +137,6 @@ export async function fetchAllData() {
   if (listaPreciosRes.error) console.warn("No se pudo cargar lista_precios:", listaPreciosRes.error.message);
   if (metasRes.error) console.warn("No se pudo cargar metas_mensuales:", metasRes.error.message);
   if (cambiosEstadoOppRes.error) console.warn("No se pudo cargar cambios_estado_opp:", cambiosEstadoOppRes.error.message);
-
-  if (avalCompletoRes.error) console.warn("No se pudo cargar aval_completo:", avalCompletoRes.error.message);
-  const avalCompleto = (avalCompletoRes.data || []).map(rowToObj);
-  if (tiposUnidadRes.error) console.warn("No se pudo cargar lista_tipo_unidad:", tiposUnidadRes.error.message);
-  const tiposUnidad = {};
-  (tiposUnidadRes.data || []).forEach((row) => {
-    tiposUnidad[String(row.codigo || "").trim().toUpperCase()] = {
-      tipoUnidad: row.tipo_unidad || "",
-      ...(row.tipologia !== undefined ? { tipologia: row.tipologia || "" } : {}),
-    };
-  });
 
   const gestion = {};
   (gestionRes.data || []).forEach((row) => {
@@ -159,7 +174,13 @@ export async function fetchAllData() {
     if (!cargas[row.tipo]) cargas[row.tipo] = rowToObj(row);
   });
 
-  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas, avalCompleto, tiposUnidad };
+  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas };
+}
+
+// Carga completa (base + Aval), por si se necesita todo junto.
+export async function fetchAllData() {
+  const [base, aval] = await Promise.all([fetchDatosBase(), fetchDatosAval()]);
+  return { ...base, avalCompleto: aval.avalCompleto || [], tiposUnidad: aval.tiposUnidad || {} };
 }
 
 /* ---------------------------------------------------------------------
