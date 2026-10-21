@@ -1,5 +1,6 @@
 import { supabase } from "../supabaseClient";
 import { parseMaestro, parseAvalCompleto } from "./parseMaestro";
+import { parseTiposUnidad } from "./parseListaPrecios";
 import { todayISO, nowISO } from "./helpers";
 
 /* ---------------------------------------------------------------------
@@ -29,16 +30,46 @@ function chunk(arr, size) {
   return out;
 }
 
-// Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos.
-async function fetchPaginado(table, orderCol) {
-  const out = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase.from(table).select("*").order(orderCol).range(from, from + 999);
-    if (error) return { data: out, error };
-    out.push(...(data || []));
-    if (!data || data.length < 1000) break;
+// Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos
+// (el resto en paralelo, ya que el Aval completo tiene decenas de miles de filas).
+async function fetchPaginado(table, orderCol, columns = "*") {
+  const primera = await supabase.from(table).select(columns, { count: "exact" }).order(orderCol).range(0, 999);
+  if (primera.error) return { data: [], error: primera.error };
+  const total = primera.count || (primera.data || []).length;
+  const out = [...(primera.data || [])];
+  const paginas = [];
+  for (let from = 1000; from < total; from += 1000) paginas.push(from);
+  const resto = await Promise.all(
+    paginas.map((from) => supabase.from(table).select(columns).order(orderCol).range(from, from + 999))
+  );
+  for (const r of resto) {
+    if (r.error) return { data: out, error: r.error };
+    out.push(...(r.data || []));
   }
   return { data: out, error: null };
+}
+
+// Lee código → Tipo Unidad/Tipología; si la columna tipologia aún no existe
+// (falta la migración v159), lee solo el Tipo Unidad.
+async function fetchTiposUnidad() {
+  const r = await fetchPaginado("lista_tipo_unidad", "codigo", "codigo,tipo_unidad,tipologia");
+  if (!r.error) return r;
+  return fetchPaginado("lista_tipo_unidad", "codigo", "codigo,tipo_unidad");
+}
+
+// Guarda código → Tipo Unidad del listado (todos los proyectos) para el Dashboard.
+// No rompe la carga del listado si la tabla aún no existe.
+export async function guardarTiposUnidadRemote(text) {
+  const filas = parseTiposUnidad(text);
+  if (filas.length === 0) return { filas: 0, tipos: {}, error: "" };
+  try {
+    await upsertInChunks("lista_tipo_unidad", filas.map((f) => objToRow(f)), "codigo");
+    const tipos = {};
+    filas.forEach((f) => { tipos[f.codigo] = { tipoUnidad: f.tipoUnidad, tipologia: f.tipologia }; });
+    return { filas: filas.length, tipos, error: "" };
+  } catch (e) {
+    return { filas: 0, tipos: null, error: e.message || String(e) };
+  }
 }
 
 export async function guardarAvalCompletoRemote(rows) {
@@ -57,7 +88,7 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
 export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes, avalCompletoRes] = await Promise.all([
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes, tiposUnidadRes, avalCompletoRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
@@ -67,7 +98,8 @@ export async function fetchAllData() {
     supabase.from("metas_mensuales").select("*"),
     supabase.from("cambios_estado_opp").select("*").order("fecha_deteccion", { ascending: false }),
     supabase.from("cargas_archivos").select("*").order("created_at", { ascending: false }).limit(60),
-    fetchPaginado("aval_completo", "opp"),
+    fetchTiposUnidad(),
+    fetchPaginado("aval_completo", "opp", "opp,rut,cliente,ejecutivo,proyecto,estado,tipologia,region,lote,fecha,fecha_opp,fecha_promesa,fecha_escritura,fecha_desistimiento"),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
@@ -82,6 +114,14 @@ export async function fetchAllData() {
 
   if (avalCompletoRes.error) console.warn("No se pudo cargar aval_completo:", avalCompletoRes.error.message);
   const avalCompleto = (avalCompletoRes.data || []).map(rowToObj);
+  if (tiposUnidadRes.error) console.warn("No se pudo cargar lista_tipo_unidad:", tiposUnidadRes.error.message);
+  const tiposUnidad = {};
+  (tiposUnidadRes.data || []).forEach((row) => {
+    tiposUnidad[String(row.codigo || "").trim().toUpperCase()] = {
+      tipoUnidad: row.tipo_unidad || "",
+      ...(row.tipologia !== undefined ? { tipologia: row.tipologia || "" } : {}),
+    };
+  });
 
   const gestion = {};
   (gestionRes.data || []).forEach((row) => {
@@ -119,7 +159,7 @@ export async function fetchAllData() {
     if (!cargas[row.tipo]) cargas[row.tipo] = rowToObj(row);
   });
 
-  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas, avalCompleto };
+  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas, avalCompleto, tiposUnidad };
 }
 
 /* ---------------------------------------------------------------------

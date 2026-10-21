@@ -235,7 +235,6 @@ export function parseAvalCompleto(text) {
   const iLote = col("Lote"), iFCot = col("Fecha Cotización", "Fecha Cotizacion"), iFOpp = col("Fecha Opp");
   const iFRes = col("Fecha Reserva"), iFCierre = col("Fecha Cierre"), iFProm = col("Fecha Promesa");
   const iFEsc = col("Fecha Escritura"), iFDes = col("Fecha Desistimiento");
-  const iTipoUnidad = col("Tipo Unidad", "Tipo de Unidad", "Tipo Unid");
   if (iOpp === -1) return [];
 
   const get = (cols, i) => (i !== -1 && cols[i] ? cols[i].trim() : "");
@@ -251,10 +250,9 @@ export function parseAvalCompleto(text) {
       rut: normalizeRut(get(cols, iRut)),
       cliente: nombre,
       ejecutivo: normalizeName(get(cols, iEjec)),
-      proyecto: get(cols, iProy),
+      proyecto: get(cols, iProy).replace(/\s+/g, " "),
       estado: get(cols, iEstado),
       tipologia: get(cols, iTip),
-      tipoUnidad: get(cols, iTipoUnidad),
       region: get(cols, iReg),
       lote: get(cols, iLote),
       fecha: get(cols, iFCot),

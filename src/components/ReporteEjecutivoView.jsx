@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks } from "lucide-react";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
-import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, esProyectoPilpilen, esProyectoExcluidoDashboard, stripAccents } from "../lib/helpers";
+import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, normalizarTipologia, limpiarTipologiaLista, esProyectoPilpilen, esProyectoExcluidoDashboard, stripAccents } from "../lib/helpers";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
@@ -18,6 +18,10 @@ const ESTADOS = [
   { value: "escrituradas", label: "Escrituradas" },
   { value: "desistidas", label: "Desistidas" },
 ];
+// La tipología sale de la columna "Tipología" del Aval (con espacios unificados).
+// Solo si viene vacía o no parece una tipología (ej. "Torre 1") se recurre al
+// listado de precios.
+const pareceTipologia = (t) => /\dD/i.test(t || "");
 const claseEstado = (e) => {
   const s = stripAccents(e || "").toLowerCase();
   if (s.includes("promes")) return "promesas";
@@ -63,7 +67,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // se ha cargado, se usa el detalle de cotizaciones de siempre.
   const usaAvalCompleto = Array.isArray(db.avalCompleto) && db.avalCompleto.length > 0;
   const base = useMemo(
-    () => (usaAvalCompleto ? db.avalCompleto : Object.values(db.cotizaciones || {})).filter((r) => !esProyectoExcluidoDashboard(r.proyecto)),
+    () => (usaAvalCompleto ? db.avalCompleto : Object.values(db.cotizaciones || {})).filter((r) => !esProyectoExcluidoDashboard(r.proyecto)).map((r) => (r.proyecto && /\s{2,}/.test(r.proyecto) ? { ...r, proyecto: r.proyecto.replace(/\s+/g, " ") } : r)),
     [usaAvalCompleto, db.avalCompleto, db.cotizaciones]
   );
   const estadoSel = filtros.estado;
@@ -71,16 +75,30 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const sust = sustantivo.toLowerCase();
   const esCotizaciones = estadoSel === "cotizaciones";
 
+  // Tipo Unidad: se cruza el "Lote" del Aval con el "Código" del listado de precios.
+  const tiposUnidadPorCodigo = db.tiposUnidad || {};
+  const tipoUnidadDe = (r) => tiposUnidadPorCodigo[normalizarCodigo(r.lote)]?.tipoUnidad || "";
+
+  const tipologiaDe = (r) => {
+    // 1) La del listado de precios (columna "Tipologia", sin la letra entre paréntesis).
+    const info = tiposUnidadPorCodigo[normalizarCodigo(r.lote)];
+    if (info && info.tipologia !== undefined) return limpiarTipologiaLista(info.tipologia);
+    // 2) Respaldo si el listado aún no trae ese dato: la del Aval.
+    const t = normalizarTipologia(r.tipologia);
+    if (pareceTipologia(t)) return t;
+    const unidad = r.lote ? listaPreciosPorCodigo[normalizarCodigo(r.lote)] : null;
+    const rep = unidad?.tipologiaReporte?.trim();
+    return rep ? normalizarTipologia(rep) : t;
+  };
+
   const filasTotales = useMemo(() => {
     const fechaDe = FECHA_POR_ESTADO[estadoSel] || FECHA_POR_ESTADO.cotizaciones;
     return base
       .filter((r) => estadoSel === "cotizaciones" || claseEstado(r.estado) === estadoSel)
       .map((r) => {
-        const unidad = r.lote ? listaPreciosPorCodigo[normalizarCodigo(r.lote)] : null;
-        const tipologiaReporte = unidad?.tipologiaReporte?.trim();
-        return { ...r, fecha: fechaDe(r), ...(tipologiaReporte ? { tipologia: tipologiaReporte } : {}) };
+        return { ...r, fecha: fechaDe(r), tipologia: tipologiaDe(r), tipoUnidad: tipoUnidadDe(r) };
       });
-  }, [base, estadoSel, listaPreciosPorCodigo]);
+  }, [base, estadoSel, listaPreciosPorCodigo, tiposUnidadPorCodigo]);
 
   // Opciones de los filtros: se calculan siempre sobre el universo completo,
   // para que no se achiquen a medida que el usuario va filtrando.
@@ -103,23 +121,17 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // hasta su actividad más reciente (o el mes actual si el proyecto sigue activo),
   // del más nuevo al más antiguo.
   const periodos = useMemo(() => {
-    const claveDe = (str) => {
-      const fm = parseFechaAMes(str);
-      return fm ? `${fm.year}-${String(fm.month).padStart(2, "0")}` : null;
-    };
-    // Solo meses con datos reales del proyecto (toda Opp nace como cotización,
-    // así que cada mes listado tiene al menos una cotización); nunca meses vacíos.
+    // Solo meses con datos del proyecto elegido y del Estado elegido (con la fecha
+    // propia de ese estado): del primero al último, sin meses vacíos.
     const meses = new Set();
-    base.forEach((r) => {
+    filasTotales.forEach((r) => {
       if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return;
-      [r.fecha || r.fechaOpp, r.fechaPromesa, r.fechaEscritura, r.fechaDesistimiento].forEach((f) => {
-        const k = claveDe(f);
-        if (k) meses.add(k);
-      });
+      const fm = parseFechaAMes(r.fecha);
+      if (fm) meses.add(`${fm.year}-${String(fm.month).padStart(2, "0")}`);
     });
     const lista = [...meses].sort().reverse().map((key) => ({ value: key, label: labelPeriodo(key, "mes") }));
     return [{ value: TODO, label: "Todo" }, ...lista];
-  }, [base, proyectoEf]);
+  }, [filasTotales, proyectoEf]);
   opciones.periodos = periodos;
   // Si el período elegido no existe para este proyecto, se usa su mes más reciente.
   const periodoValido = new Set(periodos.map((o) => o.value));
@@ -229,6 +241,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       <PageHeader title="Dashboard" subtitle={`Reporte ejecutivo de ${sust} · ${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · Extracción: ${fechaExtraccion}`} />
 
       <FilterBar filtros={filtrosEf} onChange={setFiltros} opciones={opciones} />
+      {Object.keys(tiposUnidadPorCodigo).length === 0 && (
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
+          El filtro "Tipo Unidad" se llena con el listado de precios: corre la migración v158 y vuelve a cargar el listado (pestaña Carga).
+        </p>
+      )}
       {!usaAvalCompleto && (
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
           Aún no hay Aval completo guardado: se muestran solo las Opp de Pilpilén. Corre la migración v147 y vuelve a cargar el Aval (pestaña Carga) para ver todos los proyectos y las Escrituradas y Desistidas.
@@ -345,9 +362,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     const filasE = base
       .filter((r) => claseEstado(r.estado) === clase)
       .map((r) => {
-        const unidad = r.lote ? listaPreciosPorCodigo[normalizarCodigo(r.lote)] : null;
-        const tr = unidad?.tipologiaReporte?.trim();
-        return { ...r, fecha: fechaDe(r), ...(tr ? { tipologia: tr } : {}) };
+        return { ...r, fecha: fechaDe(r), tipologia: tipologiaDe(r), tipoUnidad: tipoUnidadDe(r) };
       })
       .filter((r) => {
         if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return false;

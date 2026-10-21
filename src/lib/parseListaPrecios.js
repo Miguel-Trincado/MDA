@@ -122,3 +122,36 @@ export function parseListaPrecios(text) {
   }
   return { unidades: out, filasOtrosProyectos };
 }
+
+// Código → Tipo Unidad de TODAS las filas del listado (cualquier proyecto):
+// el Dashboard cruza el "Lote" del Aval con el "Código" de esta lista.
+export function parseTiposUnidad(text) {
+  const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split("\t").map(normalizeHeader);
+  const find = (...names) => {
+    for (const n of names) {
+      const i = headers.indexOf(normalizeHeader(n));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
+  const iCodigo = find("CODIGO", "CÓDIGO", "COD");
+  const iTipo = find("TIPO UNIDAD", "TIPO DE UNIDAD");
+  const iProy = find("PROYECTO", "NOMBRE PROYECTO", "PROYECTOS");
+  const iTipologia = find("TIPOLOGIA", "TIPOLOGÍA");
+  if (iCodigo === -1 || iTipo === -1) return [];
+  const porCodigo = new Map();
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split("\t");
+    const codigo = (cols[iCodigo] || "").trim().toUpperCase();
+    if (!codigo) continue;
+    porCodigo.set(codigo, {
+      codigo,
+      tipoUnidad: (cols[iTipo] || "").trim(),
+      tipologia: iTipologia !== -1 ? (cols[iTipologia] || "").trim() : "",
+      proyecto: iProy !== -1 ? (cols[iProy] || "").trim().replace(/\s+/g, " ") : "",
+    });
+  }
+  return [...porCodigo.values()];
+}

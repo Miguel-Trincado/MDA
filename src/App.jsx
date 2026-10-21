@@ -18,7 +18,7 @@ import { LayoutProvider, EditorDiseno } from "./lib/layout";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote,
+  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -30,7 +30,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [] });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [], tiposUnidad: {} });
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
@@ -215,9 +215,10 @@ function AppInner() {
   async function uploadListaPrecios(text, archivo) {
     const { unidades, filasOtrosProyectos } = parseListaPrecios(text);
     const listaPrecios = await uploadListaPreciosRemote(unidades);
-    setDb((d) => ({ ...d, listaPrecios }));
+    const tu = await guardarTiposUnidadRemote(text);
+    setDb((d) => ({ ...d, listaPrecios, tiposUnidad: tu.tipos ? { ...d.tiposUnidad, ...tu.tipos } : d.tiposUnidad }));
     anotarCarga("lista_precios", archivo, `${Object.keys(listaPrecios).length} unidades`);
-    return { unidades: Object.values(listaPrecios), filasOtrosProyectos };
+    return { unidades: Object.values(listaPrecios), filasOtrosProyectos, tiposUnidad: { filas: tu.filas, error: tu.error } };
   }
 
   async function uploadDescuentosUnidades(filas) {

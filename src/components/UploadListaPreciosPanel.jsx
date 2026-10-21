@@ -32,11 +32,12 @@ export default function UploadListaPreciosPanel({ onUpload }) {
       if (!sheetName) throw new Error("El archivo no tiene hojas legibles.");
       const sheet = workbook.Sheets[sheetName];
       const tsv = XLSX.utils.sheet_to_csv(sheet, { FS: "\t", blankrows: false });
-      const { unidades, filasOtrosProyectos } = await onUpload(tsv, file.name);
+      const { unidades, filasOtrosProyectos, tiposUnidad } = await onUpload(tsv, file.name);
       setResult({
         total: unidades.length,
         disponibles: unidades.filter((u) => u.estado === "Disponible").length,
         filasOtrosProyectos,
+        tiposUnidad,
       });
     } catch (err) {
       setError(err.message || "No se pudo procesar el archivo. Verifica que tenga las columnas correctas.");
@@ -77,6 +78,14 @@ export default function UploadListaPreciosPanel({ onUpload }) {
             <Stat label="Unidades cargadas" value={result.total} />
             <Stat label="Disponibles" value={result.disponibles} accent="text-emerald-700" />
           </div>
+          {result.tiposUnidad && result.tiposUnidad.filas > 0 && (
+            <p className="text-xs text-emerald-700 mt-3">Dashboard: se guardó el Tipo Unidad de {result.tiposUnidad.filas} códigos (todos los proyectos).</p>
+          )}
+          {result.tiposUnidad && result.tiposUnidad.error && (
+            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+              ⚠ No se pudo guardar el Tipo Unidad para el Dashboard: {result.tiposUnidad.error}. ¿Corriste la migración v158 en Supabase?
+            </div>
+          )}
           {result.filasOtrosProyectos > 0 && (
             <p className="text-xs text-stone-400 mt-3">
               Se ignoraron {result.filasOtrosProyectos} fila(s) de otros proyectos del listado.
