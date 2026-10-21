@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import UfChip from "./UfChip";
-import { T, Bloque, UfSlot } from "../lib/layout";
+import { T, Bloque } from "../lib/layout";
 import { ALERT_STYLE } from "../lib/constants";
 
 // Círculo con las iniciales de un nombre o correo — usado en el header de
@@ -91,7 +91,7 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
   const idGrad = `spark-${tone}-${String(label).replace(/\W/g, "")}`;
   const card = (
     <div
-      className="relative overflow-hidden rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1 min-h-[184px]"
+      className="relative overflow-hidden rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1"
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
     >
       <div className="relative z-10 flex items-start justify-between mb-1">
@@ -117,7 +117,7 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
     </div>
   );
   return bid ? (
-    <Bloque id={bid} grupo="dash-kpi" orden={orden} span={12} spanM={30}>{card}</Bloque>
+    <Bloque id={bid} grupo="dash-kpi" orden={orden} span={12} spanM={30} minH={184}>{card}</Bloque>
   ) : card;
 }
 
@@ -161,9 +161,7 @@ export function PageHeader({ title, subtitle, children }) {
         {subtitle && <p className="text-sm text-stone-500 mt-1">{subtitle}</p>}
       </div>
       {children}
-      <UfSlot>
-        <UfChip />
-      </UfSlot>
+      <UfChip />
     </div>
   );
 }

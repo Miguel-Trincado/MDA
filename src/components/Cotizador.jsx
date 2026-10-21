@@ -1,4 +1,5 @@
 import UfChip from "./UfChip";
+import { T } from "../lib/layout";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { Search, FileText, Loader2, Check, ChevronLeft, Trash2 } from "lucide-react";
 import { buildQuotePdfDoc, currency, currencyDecimal, quoteNumber } from "../lib/quotePdf";
@@ -454,7 +455,7 @@ export default function Cotizador({ db, puedeEliminar = true }) {
     <div className={PAGE_CLASS}>
       <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
         <div className="flex-1 min-w-[200px]">
-          <h1 className="font-display text-3xl text-[#13234A]">Simulador</h1>
+          <h1 className="font-display text-3xl text-[#13234A]"><T>Simulador</T></h1>
           <p className="text-sm text-stone-500 mt-1">Cotiza y simula el financiamiento de una unidad</p>
         </div>
         <UfChip />

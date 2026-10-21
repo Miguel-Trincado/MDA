@@ -28,6 +28,7 @@ export function LayoutProvider({ children }) {
   const [editando, setEditando] = useState(false);
   const [puedeEditar, setPuedeEditar] = useState(false);
   const [estado, setEstado] = useState("");
+  const [sel, setSel] = useState(null);
   const cfgRef = useRef(cfg);
   const timer = useRef(null);
 
@@ -68,6 +69,14 @@ export function LayoutProvider({ children }) {
     puedeEditar,
     setPuedeEditar,
     estado,
+    sel,
+    setSel,
+    setMuchos: (ids, patch) =>
+      aplicar((c) => {
+        const b = { ...c.bloques };
+        ids.forEach((i) => { b[i] = { ...(b[i] || {}), ...patch }; });
+        return { ...c, bloques: b };
+      }),
     setBloque: (id, patch) => aplicar((c) => ({ ...c, bloques: { ...c.bloques, [id]: { ...(c.bloques[id] || {}), ...patch } } })),
     quitarBloque: (id) =>
       aplicar((c) => {
@@ -93,7 +102,7 @@ export function LayoutProvider({ children }) {
 
 const SIN_PROVIDER = {
   cfg: VACIO, editando: false, puedeEditar: false, estado: "",
-  setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
+  sel: null, setSel() {}, setMuchos() {}, setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
 };
 export const useLayout = () => useContext(Ctx) || SIN_PROVIDER;
 
@@ -123,29 +132,47 @@ export function T({ id, children }) {
 }
 
 // Tarjeta movible y redimensionable dentro de un contenedor `.grid-60`
-// (grilla de 60 columnas). `orden`, `span` y la altura mínima se guardan.
-export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }) {
+// (grilla de 60 columnas). `orden`, `span` y la altura se guardan.
+export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, children }) {
   const L = useLayout();
   const ref = useRef(null);
+  const [, refrescar] = useState(0);
+  useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
   const b = L.cfg.bloques[id] || {};
   const ord = b.orden ?? orden;
   const sp = b.span ?? span;
   const style = { order: ord, "--span": sp, "--span-m": spanM };
-  if (b.h) style.minHeight = b.h;
+  if (b.h) { style.height = b.h; style.minHeight = 0; }
+  else if (minH) style.minHeight = minH;
+  const hijo = "[&>*:first-child]:h-full";
 
   if (!L.editando) {
-    return <div className="bloque [&>*]:h-full" style={style}>{children}</div>;
+    return <div className={`bloque ${hijo}`} style={style}>{children}</div>;
   }
+
+  const sel = L.sel === id;
+  const altoActual = b.h ?? Math.round(ref.current?.offsetHeight || 0);
+  const pct = Math.round((sp / 60) * 100);
+  const setAncho = (p) => {
+    const n = Math.max(3, Math.min(60, Math.round(((Number(p) || 0) / 100) * 60 / 3) * 3));
+    L.setBloque(id, { span: n });
+  };
+  const setAlto = (h) => L.setBloque(id, { h: Math.max(40, Math.round(Number(h) || 0)) });
+  const igualarAlto = () => {
+    const ids = [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])].map((el) => el.dataset.bid);
+    L.setMuchos(ids, { h: altoActual });
+  };
 
   const iniciarResize = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    L.setSel(id);
     const el = ref.current;
     const padre = el.parentElement.clientWidth;
     const sx = e.clientX, sy = e.clientY, w0 = el.offsetWidth, h0 = el.offsetHeight;
     const mover = (ev) => {
-      const s = Math.max(12, Math.min(60, Math.round(((w0 + ev.clientX - sx) / padre) * 30) * 2));
-      const h = Math.max(80, Math.round((h0 + ev.clientY - sy) / 8) * 8);
+      const s = Math.max(3, Math.min(60, Math.round(((w0 + ev.clientX - sx) / padre) * 20) * 3));
+      const h = Math.max(40, Math.round((h0 + ev.clientY - sy) / 4) * 4);
       L.setBloque(id, { span: s, h });
     };
     const fin = () => {
@@ -156,11 +183,19 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
     window.addEventListener("pointerup", fin);
   };
 
+  const btn = "px-1.5 py-1 rounded hover:bg-stone-100";
+  const num = "w-14 text-center text-xs border border-stone-200 rounded py-0.5";
+  const confirmar = (fn) => (e) => {
+    if (e.type === "blur" || e.key === "Enter") fn(e.currentTarget.value);
+  };
+
   return (
     <div
       ref={ref}
-      className="bloque relative [&>*]:h-full rounded-2xl outline-dashed outline-2 outline-[#2563EB]/40 outline-offset-2"
+      data-bid={id}
+      className={`bloque relative ${hijo} rounded-2xl outline-dashed outline-2 ${sel ? "outline-[#2563EB]" : "outline-[#2563EB]/40"} outline-offset-2`}
       style={style}
+      onPointerDownCapture={() => L.setSel(id)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={(e) => {
         e.preventDefault();
@@ -171,28 +206,39 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
       }}
     >
       {children}
-      <div className="absolute -top-3 left-4 z-20 flex items-center gap-0.5 bg-[#2563EB] text-white rounded-full px-1.5 py-0.5 shadow">
-        <span
-          draggable
-          title="Arrastrar para mover"
-          className="cursor-grab active:cursor-grabbing p-0.5"
-          onDragStart={(e) => {
-            e.dataTransfer.setData("text/plain", JSON.stringify({ id, grupo, ord }));
-            e.dataTransfer.effectAllowed = "move";
-            if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
-          }}
-        >
-          <GripVertical size={14} />
-        </span>
-        <button title="Volver al tamaño y lugar originales" onClick={() => L.quitarBloque(id)} className="p-0.5 hover:text-amber-200">
-          <RotateCcw size={12} />
-        </button>
-      </div>
+      <span
+        draggable
+        title="Arrastrar para mover"
+        className="absolute -top-3 left-4 z-20 cursor-grab active:cursor-grabbing bg-[#2563EB] text-white rounded-full p-1 shadow"
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", JSON.stringify({ id, grupo, ord }));
+          e.dataTransfer.effectAllowed = "move";
+          if (ref.current) e.dataTransfer.setDragImage(ref.current, 20, 20);
+        }}
+      >
+        <GripVertical size={14} />
+      </span>
       <span
         title="Arrastrar para cambiar ancho y alto"
         onPointerDown={iniciarResize}
-        className="absolute -bottom-2 -right-2 z-20 w-5 h-5 rounded-full bg-[#2563EB] border-2 border-white shadow cursor-nwse-resize touch-none"
+        className="absolute -bottom-2 -right-2 z-20 w-4 h-4 rounded-full bg-[#2563EB] border-2 border-white shadow cursor-nwse-resize touch-none"
       />
+      {sel && (
+        <div className="absolute top-full mt-3 left-4 z-40 bg-white shadow-card border border-stone-200 rounded-lg p-1.5 flex items-center gap-1 text-[#13234A] text-xs whitespace-nowrap">
+          <span className="text-stone-400 px-1">Ancho %</span>
+          <button className={btn} onClick={() => setAncho(pct - 5)}><Minus size={13} /></button>
+          <input key={"w" + pct} type="number" defaultValue={pct} className={num} onBlur={confirmar(setAncho)} onKeyDown={confirmar(setAncho)} />
+          <button className={btn} onClick={() => setAncho(pct + 5)}><Plus size={13} /></button>
+          <span className="w-px h-5 bg-stone-200 mx-1" />
+          <span className="text-stone-400 px-1">Alto px</span>
+          <button className={btn} onClick={() => setAlto(altoActual - 8)}><Minus size={13} /></button>
+          <input key={"h" + altoActual} type="number" defaultValue={altoActual} className={num} onBlur={confirmar(setAlto)} onKeyDown={confirmar(setAlto)} />
+          <button className={btn} onClick={() => setAlto(altoActual + 8)}><Plus size={13} /></button>
+          <span className="w-px h-5 bg-stone-200 mx-1" />
+          <button className={`${btn} border border-stone-200`} title="Poner el mismo alto a todas las tarjetas de esta fila" onClick={igualarAlto}>Igualar alto fila</button>
+          <button className={btn} title="Volver al tamaño y lugar originales" onClick={() => L.quitarBloque(id)}><RotateCcw size={13} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -242,7 +288,7 @@ export function EditorDiseno({ puedeEditar }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
       <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
-      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números de Ancho y Alto. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
       <div className="flex items-center justify-between gap-2">
         <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
         <span className="flex gap-2">

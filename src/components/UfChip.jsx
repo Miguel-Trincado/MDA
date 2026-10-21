@@ -1,11 +1,12 @@
 import { ArrowDown, ArrowUp, Database, Loader2, RefreshCw } from "lucide-react";
 import { useValorUFHoy } from "../lib/uf";
+import { UfSlot } from "../lib/layout";
 
 const fmt = (n) => new Intl.NumberFormat("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 // Tarjeta de la UF del día, arriba a la derecha de cada pantalla: valor y
 // variación contra el día anterior.
-export default function UfChip({ className = "" }) {
+function UfTarjeta({ className = "" }) {
   const { valorUF, variacion, loading, error, recargar } = useValorUFHoy();
   const sube = variacion != null && variacion >= 0;
   return (
@@ -42,5 +43,14 @@ export default function UfChip({ className = "" }) {
         </button>
       )}
     </div>
+  );
+}
+
+// Tarjeta UF con el tamaño y la posición que fijó el administrador (igual en todos los menús).
+export default function UfChip(props) {
+  return (
+    <UfSlot>
+      <UfTarjeta {...props} />
+    </UfSlot>
   );
 }

@@ -1,4 +1,5 @@
 import UfChip from "./UfChip";
+import { T } from "../lib/layout";
 import { useState, useMemo, useEffect } from "react";
 import { ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, normalizarBusqueda, diasHabilesEntre, fmtDate, formatFechaCorta } from "../lib/helpers";
@@ -247,7 +248,7 @@ export default function JefaView({ db, onResolveCambio, onSetMeta, onSaveGestion
     <div className={PAGE_CLASS}>
       <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
         <div className="flex-1 min-w-[200px]">
-          <h1 className="font-display text-3xl text-[#13234A]">Jefa de Ventas</h1>
+          <h1 className="font-display text-3xl text-[#13234A]"><T>Jefa de Ventas</T></h1>
           <p className="text-sm text-stone-500 mt-1">Panel de seguimiento del equipo comercial</p>
         </div>
         <div className="flex items-center gap-3">

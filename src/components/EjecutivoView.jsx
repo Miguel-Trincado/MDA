@@ -1,4 +1,5 @@
 import UfChip from "./UfChip";
+import { T } from "../lib/layout";
 import { useState, useMemo } from "react";
 import { EJECUTIVOS, ALERT_PRIORITY, ALERT_STYLE, MESES_ES } from "../lib/constants";
 import { computeAlert, todayISO, parseFechaCompleta, formatFechaCorta, normalizarBusqueda, fmtDate } from "../lib/helpers";
@@ -198,7 +199,7 @@ export default function EjecutivoView({ db, onSave, onRevisado, embedded, ejecut
     <div className={wrapperClass}>
       <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
         <div className="flex-1 min-w-[200px]">
-          <h1 className="font-display text-3xl text-[#13234A]">Ejecutivo</h1>
+          <h1 className="font-display text-3xl text-[#13234A]"><T>Ejecutivo</T></h1>
           <p className="text-sm text-stone-500 mt-1">
             Cartera de {nombre} · {filtrados.length} {filtro === "Todos" ? "clientes en total" : `en "${filtro}"`}
           </p>
