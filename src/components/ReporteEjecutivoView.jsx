@@ -1,8 +1,9 @@
 import { useState, useMemo } from "react";
-import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks } from "lucide-react";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
 import { parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo } from "../lib/helpers";
-import { KpiCard, PageHeader, PAGE_CLASS } from "./Shared";
+import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
 
@@ -163,12 +164,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const header = (
     <>
-      <PageHeader title="Dashboard" subtitle="Reporte ejecutivo de cotizaciones · Proyecto Pilpilén">
-        <div className="border border-stone-200 bg-white rounded-xl px-4 py-2 text-right">
-          <div className="text-[11px] text-stone-400">Fecha de extracción</div>
-          <div className="text-sm font-medium text-[#0F3D66]">{fechaExtraccion}</div>
-        </div>
-      </PageHeader>
+      <PageHeader title="Dashboard" subtitle={`Reporte ejecutivo de cotizaciones · Proyecto Pilpilén · Extracción: ${fechaExtraccion}`} />
 
       <FilterBar filtros={filtros} onChange={setFiltros} opciones={opciones} />
     </>
@@ -179,7 +175,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     return (
       <div className={PAGE_CLASS}>
         {header}
-        <div className="bg-white border border-stone-200 p-10 text-center">
+        <Panel className="p-10 text-center">
           <div className="text-stone-500 text-sm mb-3">No hay cotizaciones para esta combinación de filtros.</div>
           <button
             onClick={() => setFiltros({ periodoDesde: TODO, periodoHasta: TODO, proyecto: TODO, tipologia: TODO })}
@@ -187,7 +183,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           >
             Quitar filtros
           </button>
-        </div>
+        </Panel>
       </div>
     );
   }
@@ -246,40 +242,94 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       : null,
   ].filter(Boolean);
 
+  // Mini-curvas de las tarjetas: últimos 12 meses, con los filtros de
+  // Proyecto y Tipología pero sin el de Período (igual que la tendencia).
+  const claveMes = (r) => {
+    const fm = parseFechaAMes(r.fecha);
+    return fm ? `${fm.year}-${String(fm.month).padStart(2, "0")}` : null;
+  };
+  const ultimos12 = (() => {
+    const out = [];
+    const hoy12 = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const x = new Date(hoy12.getFullYear(), hoy12.getMonth() - i, 1);
+      out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return out;
+  })();
+  const serieDe = (pred, unico) => {
+    const m = {};
+    filasTendencia.forEach((r) => {
+      if (pred && !pred(r)) return;
+      const k = claveMes(r);
+      if (!k) return;
+      if (unico) (m[k] = m[k] || new Set()).add(r.rut);
+      else m[k] = (m[k] || 0) + 1;
+    });
+    return ultimos12.map((k) => ({ v: unico ? (m[k] ? m[k].size : 0) : m[k] || 0 }));
+  };
+  const serieCot = serieDe(null, false);
+  const serieRut = serieDe(null, true);
+  const serieTip = analisisRut.tipTop ? serieDe((r) => valorOBlanco(r.tipologia) === analisisRut.tipTop[0], false) : [];
+  const serieReg = topRegion ? serieDe((r) => valorOBlanco(r.region) === topRegion[0], false) : [];
+  let acumulado = 0;
+  const serieTotal = serieCot.map((p) => ({ v: (acumulado += p.v) }));
+
+  // Variación del último mes del período contra el mes calendario anterior.
+  const cotsPorMes = Object.fromEntries(dataTendencia.mesesOrdenados);
+  const claveUltimoMes = data.mesesOrdenados.length ? data.mesesOrdenados[data.mesesOrdenados.length - 1][0] : null;
+  let deltaMes = null;
+  if (claveUltimoMes) {
+    const [yy, mm] = claveUltimoMes.split("-").map(Number);
+    const prev = `${mm === 1 ? yy - 1 : yy}-${String(mm === 1 ? 12 : mm - 1).padStart(2, "0")}`;
+    const previo = cotsPorMes[prev] || 0;
+    if (previo > 0) deltaMes = Math.round((((cotsPorMes[claveUltimoMes] || 0) - previo) / previo) * 100);
+  }
+
   return (
     <div className={PAGE_CLASS}>
       {header}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
         <KpiCard
+          tone="blue"
+          icon={FileText}
           label="Cotizaciones mes actual"
           value={mesPico ? data.mesesOrdenados[data.mesesOrdenados.length - 1][1] : 0}
           sub={data.mesesOrdenados.length ? labelPeriodo(data.mesesOrdenados[data.mesesOrdenados.length - 1][0], "mes") : "—"}
+          delta={deltaMes}
+          serie={serieCot}
         />
-        <KpiCard label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" />
+        <KpiCard tone="purple" icon={User} label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" serie={serieRut} />
         <KpiCard
-          label="Tipología con más clientes únicos"
+          tone="pink"
+          icon={LayoutGrid}
+          label="Tipología con más clientes"
           value={analisisRut.tipTop ? analisisRut.tipTop[0] : "—"}
           sub={analisisRut.tipTop ? `${analisisRut.tipTop[1]} clientes distintos` : "—"}
           small
+          serie={serieTip}
         />
         <KpiCard
+          tone="green"
+          icon={MapPin}
           label="Región con mayor cotización"
           value={topRegion ? topRegion[0] : "—"}
           sub={topRegion ? `${topRegion[1]} cotizaciones` : "—"}
           small
+          serie={serieReg}
         />
-        <KpiCard label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo (sin filtro de período)" />
+        <KpiCard tone="amber" icon={FileText} label="Total cotizaciones" value={filasTendencia.length} sub="Histórico completo" serie={serieTotal} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4">COTIZACIONES POR TIPOLOGÍA</div>
+      <div className="grid lg:grid-cols-2 gap-5 mb-5">
+        <Panel>
+          <CardTitle icon={Layers}>Cotizaciones por tipología</CardTitle>
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="w-full sm:w-1/2 h-56">
+            <div className="relative w-full sm:w-1/2 h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={1}>
+                  <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} cornerRadius={4} stroke="none">
                     {donutData.map((_, i) => (
                       <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
                     ))}
@@ -287,13 +337,24 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
                   <Tooltip />
                 </PieChart>
               </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="font-display text-2xl text-[#13234A]">{data.total}</span>
+                <span className="text-xs text-stone-500">Cotizaciones</span>
+              </div>
             </div>
             <table className="w-full sm:w-1/2 text-xs">
+              <thead>
+                <tr className="text-left text-stone-400">
+                  <th className="py-1.5 pr-2 font-normal">Tipología</th>
+                  <th className="py-1.5 pr-2 text-right font-normal">Cantidad</th>
+                  <th className="py-1.5 text-right font-normal">%</th>
+                </tr>
+              </thead>
               <tbody>
                 {data.tipologiaOrdenada.map(([name, value], i) => (
-                  <tr key={name} className="border-b border-stone-100">
+                  <tr key={name} className="border-t border-stone-100">
                     <td className="py-1.5 pr-2">
-                      <span className="inline-block w-2.5 h-2.5 mr-1.5" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                      <span className="inline-block w-2.5 h-2.5 rounded-[3px] mr-2" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
                       {name}
                     </td>
                     <td className="py-1.5 pr-2 text-right">{value}</td>
@@ -302,83 +363,96 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-stone-300 font-medium">
-                  <td className="py-1.5 pr-2">Total</td>
+                <tr className="border-t border-stone-200 font-semibold text-[#13234A]">
+                  <td className="py-1.5 pr-2 pl-[18px]">Total</td>
                   <td className="py-1.5 pr-2 text-right">{data.total}</td>
-                  <td className="py-1.5 text-right text-stone-400">100%</td>
+                  <td className="py-1.5 text-right">100%</td>
                 </tr>
               </tfoot>
             </table>
           </div>
-        </div>
+        </Panel>
 
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4 flex items-center justify-between flex-wrap gap-2">
-            <span>COTIZACIONES POR {modo === "mes" ? "MES" : "AÑO"}</span>
-            <span className="flex gap-1">
-              <button onClick={() => setModo("mes")} className={`text-[10px] px-2 py-0.5 ${modo === "mes" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
-                Mes
-              </button>
-              <button onClick={() => setModo("año")} className={`text-[10px] px-2 py-0.5 ${modo === "año" ? "bg-white text-[#0F3D66]" : "text-sky-100 border border-sky-100/40"}`}>
-                Año
-              </button>
-            </span>
-          </div>
+        <Panel>
+          <CardTitle
+            icon={BarChart3}
+            right={
+              <span className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
+                {[["mes", "Mes"], ["año", "Año"]].map(([k, l]) => (
+                  <button
+                    key={k}
+                    onClick={() => setModo(k)}
+                    className={`px-3.5 py-1.5 font-medium transition-colors ${modo === k ? "bg-[#2563EB] text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </span>
+            }
+          >
+            Cotizaciones por {modo === "mes" ? "mes" : "año"}
+          </CardTitle>
           <div className="h-64">
             {lineData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-sm text-stone-400">
-                Sin datos para este filtro.
-              </div>
+              <div className="h-full flex items-center justify-center text-sm text-stone-400">Sin datos para este filtro.</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={lineData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e7e5e4" />
+                <AreaChart data={lineData}>
+                  <defs>
+                    <linearGradient id="gradLinea" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={LINE_COLOR} stopOpacity={0.25} />
+                      <stop offset="100%" stopColor={LINE_COLOR} stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E8ECF4" />
                   <XAxis
                     dataKey="periodo"
-                    tick={{ fontSize: 10 }}
+                    tick={{ fontSize: 10, fill: "#64748B" }}
+                    axisLine={false}
+                    tickLine={false}
                     interval={0}
                     angle={lineData.length > 8 ? -35 : 0}
                     textAnchor={lineData.length > 8 ? "end" : "middle"}
                     height={lineData.length > 8 ? 50 : 25}
                   />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="value" stroke={LINE_COLOR} strokeWidth={2.5} dot={{ r: 3, fill: LINE_COLOR }} activeDot={{ r: 5 }} />
-                </LineChart>
+                  <YAxis tick={{ fontSize: 10, fill: "#64748B" }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ borderRadius: 12, border: "1px solid #EEF1F8", boxShadow: "0 4px 18px rgba(31,64,140,0.1)" }} />
+                  <Area type="monotone" dataKey="value" stroke={LINE_COLOR} strokeWidth={2.5} fill="url(#gradLinea)" dot={{ r: 3, fill: LINE_COLOR, strokeWidth: 0 }} activeDot={{ r: 5 }} />
+                </AreaChart>
               </ResponsiveContainer>
             )}
           </div>
-        </div>
+        </Panel>
       </div>
 
       <RutAnalysisSection filas={filas} gestion={db.gestion} tipologiaOrdenada={data.tipologiaOrdenada} />
 
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="font-display text-base font-semibold text-[#0F3D66] mb-3">Principales hallazgos</div>
+      <div className="grid lg:grid-cols-2 gap-5 mb-5">
+        <Panel>
+          <CardTitle icon={Lightbulb}>Principales hallazgos</CardTitle>
           <ul className="flex flex-col gap-2 text-sm text-stone-700">
             {hallazgos.map((h, i) => (
               <li key={i} className="flex gap-2">
-                <span className="text-[#1E5AA8] mt-0.5">✓</span>
+                <span className="text-[#2563EB] mt-0.5">✓</span>
                 <span>{h}</span>
               </li>
             ))}
           </ul>
-        </div>
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="font-display text-base font-semibold text-[#0F3D66] mb-3">Recomendaciones</div>
+        </Panel>
+        <Panel>
+          <CardTitle icon={ListChecks}>Recomendaciones</CardTitle>
           <ul className="flex flex-col gap-2 text-sm text-stone-700">
             {recomendaciones.map((r, i) => (
               <li key={i} className="flex gap-2">
-                <span className="text-[#1E5AA8] mt-0.5">✓</span>
+                <span className="text-[#2563EB] mt-0.5">✓</span>
                 <span>{r}</span>
               </li>
             ))}
           </ul>
-        </div>
+        </Panel>
       </div>
 
-      <div className="bg-[#0F3D66] text-white text-xs px-4 py-2 flex justify-between">
+      <div className="rounded-2xl bg-[#0F3D66] text-white text-xs px-5 py-3 flex justify-between">
         <span>Fuente: Maestro Aval</span>
         <span>MDA Inmobiliaria</span>
       </div>

@@ -1,52 +1,38 @@
-import { Calendar, Building2, LayoutGrid } from "lucide-react";
+import { Calendar, Building2, LayoutGrid, ChevronDown } from "lucide-react";
 
 const TODO = "Todo";
 
-function SimpleField({ icon: Icon, label, value, onChange, options }) {
+// Tarjeta de filtro: ícono en burbuja azul, etiqueta chica y valor en
+// negrita. Los <select> son nativos (se abren igual que siempre) con la
+// flecha dibujada aparte.
+function Tarjeta({ icon: Icon, label, className = "", children }) {
   return (
-    <div className="flex-1 min-w-[150px] border border-stone-200 bg-white px-3 py-2 flex items-center gap-2.5">
-      <Icon size={18} className="text-[#0F3D66] shrink-0" />
+    <div className={`bg-white rounded-2xl shadow-card px-4 py-3 flex items-center gap-3 min-w-[170px] ${className}`}>
+      <span className="w-11 h-11 rounded-xl bg-[#EEF3FF] text-[#2563EB] flex items-center justify-center shrink-0">
+        <Icon size={20} />
+      </span>
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[10px] text-stone-400 uppercase tracking-wide leading-none mb-1">{label}</span>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="text-sm text-stone-800 font-medium bg-transparent border-none focus:outline-none p-0 w-full"
-        >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+        <span className="text-xs text-stone-400 leading-none mb-1">{label}</span>
+        {children}
       </div>
     </div>
   );
 }
 
-function PeriodRangeField({ desde, hasta, onChangeDesde, onChangeHasta, options }) {
+function Selector({ value, onChange, options }) {
   return (
-    <div className="flex-[1.6] min-w-[240px] border border-stone-200 bg-white px-3 py-2 flex items-center gap-2.5">
-      <Calendar size={18} className="text-[#0F3D66] shrink-0" />
-      <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-[10px] text-stone-400 uppercase tracking-wide leading-none mb-1">Período</span>
-        <div className="flex items-center gap-1.5">
-          <select
-            value={desde}
-            onChange={(e) => onChangeDesde(e.target.value)}
-            className="text-sm text-stone-800 font-medium bg-transparent border-none focus:outline-none p-0 min-w-0 flex-1"
-          >
-            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-          <span className="text-stone-300 shrink-0">–</span>
-          <select
-            value={hasta}
-            onChange={(e) => onChangeHasta(e.target.value)}
-            className="text-sm text-stone-800 font-medium bg-transparent border-none focus:outline-none p-0 min-w-0 flex-1"
-          >
-            {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </div>
-      </div>
-    </div>
+    <span className="relative flex-1 min-w-0">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="appearance-none w-full text-sm text-[#13234A] font-semibold bg-transparent border-none focus:outline-none p-0 pr-5 cursor-pointer"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      <ChevronDown size={16} className="absolute right-0 top-1/2 -translate-y-1/2 text-stone-500 pointer-events-none" />
+    </span>
   );
 }
 
@@ -54,16 +40,20 @@ export default function FilterBar({ filtros, onChange, opciones }) {
   const set = (key) => (value) => onChange({ ...filtros, [key]: value });
 
   return (
-    <div className="flex flex-wrap gap-3 mb-4">
-      <PeriodRangeField
-        desde={filtros.periodoDesde}
-        hasta={filtros.periodoHasta}
-        onChangeDesde={set("periodoDesde")}
-        onChangeHasta={set("periodoHasta")}
-        options={opciones.periodos}
-      />
-      <SimpleField icon={Building2} label="Proyecto" value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />
-      <SimpleField icon={LayoutGrid} label="Tipología" value={filtros.tipologia} onChange={set("tipologia")} options={opciones.tipologias} />
+    <div className="flex flex-wrap gap-4 mb-5">
+      <Tarjeta icon={Calendar} label="Período" className="flex-[1.6] min-w-[260px]">
+        <div className="flex items-center gap-2">
+          <Selector value={filtros.periodoDesde} onChange={set("periodoDesde")} options={opciones.periodos} />
+          <span className="text-stone-300 shrink-0">–</span>
+          <Selector value={filtros.periodoHasta} onChange={set("periodoHasta")} options={opciones.periodos} />
+        </div>
+      </Tarjeta>
+      <Tarjeta icon={Building2} label="Proyecto" className="flex-1">
+        <Selector value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />
+      </Tarjeta>
+      <Tarjeta icon={LayoutGrid} label="Tipología" className="flex-1">
+        <Selector value={filtros.tipologia} onChange={set("tipologia")} options={opciones.tipologias} />
+      </Tarjeta>
     </div>
   );
 }

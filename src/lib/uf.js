@@ -17,19 +17,23 @@ function hoyChileISO() {
   }).format(new Date());
 }
 
-function leerCache() {
+function leerCacheCompleta() {
   try {
     const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (c && c.fecha === hoyChileISO() && Number(c.valor) > 0) return Number(c.valor);
+    if (c && c.fecha === hoyChileISO() && Number(c.valor) > 0) return { valor: Number(c.valor), anterior: Number(c.anterior) > 0 ? Number(c.anterior) : null };
   } catch {
     // sin caché: no es grave
   }
   return null;
 }
+const leerCache = () => leerCacheCompleta()?.valor ?? null;
 
-function guardarCache(valor) {
+// Variación porcentual de hoy contra el día anterior (null si no se conoce).
+const variacionPct = (valor, anterior) => (valor > 0 && anterior > 0 ? ((valor - anterior) / anterior) * 100 : null);
+
+function guardarCache(valor, anterior) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ fecha: hoyChileISO(), valor }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ fecha: hoyChileISO(), valor, anterior: anterior ?? null }));
   } catch {
     // sin caché: no es grave
   }
@@ -56,11 +60,14 @@ const valido = (v) => {
 export async function fetchValorUFHoy() {
   const [y, m, d] = hoyChileISO().split("-");
   const fuentes = [
-    async () => valido((await getJSON("/api/uf")).valor),
-    async () => valido((await getJSON(`https://mindicador.cl/api/uf/${d}-${m}-${y}`)).serie?.[0]?.valor),
+    async () => {
+      const j = await getJSON("/api/uf");
+      return { valor: valido(j.valor), anterior: Number(j.anterior) > 0 ? Number(j.anterior) : null };
+    },
+    async () => ({ valor: valido((await getJSON(`https://mindicador.cl/api/uf/${d}-${m}-${y}`)).serie?.[0]?.valor), anterior: null }),
     async () => {
       const data = await getJSON("https://api.boostr.cl/economy/indicator/uf.json");
-      return valido(data?.data?.value ?? data?.data?.[0]?.value ?? data?.value);
+      return { valor: valido(data?.data?.value ?? data?.data?.[0]?.value ?? data?.value), anterior: null };
     },
   ];
   try {
@@ -75,24 +82,43 @@ export async function fetchValorUFHoy() {
       .filter((s) => Number.isFinite(s.t) && s.v > 0 && s.t <= fin)
       .sort((a, b) => b.t - a.t);
     if (cand.length === 0) throw new Error("No se pudo obtener la UF de hoy");
-    return cand[0].v;
+    return { valor: cand[0].v, anterior: cand[1]?.v > 0 ? cand[1].v : null };
   }
+}
+
+// Valor de la UF de ayer (solo para mostrar la variación diaria). Se pide
+// aparte, sin bloquear, cuando la fuente más rápida no lo trajo.
+async function fetchUFAyer() {
+  const [y, m, d] = hoyChileISO().split("-").map(Number);
+  const a = new Date(Date.UTC(y, m - 1, d - 1));
+  const dd = String(a.getUTCDate()).padStart(2, "0");
+  const mm = String(a.getUTCMonth() + 1).padStart(2, "0");
+  const data = await getJSON(`https://mindicador.cl/api/uf/${dd}-${mm}-${a.getUTCFullYear()}`);
+  return valido(data?.serie?.[0]?.valor);
 }
 
 const UfContext = createContext({ valorUF: null, loading: false, error: "sin proveedor", recargar: () => {} });
 
 export function UfProvider({ children }) {
   const [estado, setEstado] = useState(() => {
-    const c = leerCache();
-    return { valorUF: c, loading: c == null, error: "" };
+    const c = leerCacheCompleta();
+    return { valorUF: c?.valor ?? null, variacion: c ? variacionPct(c.valor, c.anterior) : null, loading: c == null, error: "" };
   });
 
   const cargar = useCallback(() => {
     setEstado((s) => ({ ...s, loading: s.valorUF == null, error: "" }));
     fetchValorUFHoy()
-      .then((v) => {
-        guardarCache(v);
-        setEstado({ valorUF: v, loading: false, error: "" });
+      .then(({ valor, anterior }) => {
+        guardarCache(valor, anterior);
+        setEstado({ valorUF: valor, variacion: variacionPct(valor, anterior), loading: false, error: "" });
+        if (!(anterior > 0)) {
+          fetchUFAyer()
+            .then((ayer) => {
+              guardarCache(valor, ayer);
+              setEstado((s) => ({ ...s, variacion: variacionPct(valor, ayer) }));
+            })
+            .catch(() => {});
+        }
       })
       .catch((e) => {
         console.error("No se pudo obtener el valor de la UF", e);

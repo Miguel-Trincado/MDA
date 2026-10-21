@@ -14,7 +14,6 @@ import UsuariosPanel from "./components/UsuariosPanel";
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
-import UfChip from "./components/UfChip";
 import {
   fetchAllData, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
@@ -274,7 +273,7 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6FA] font-body text-stone-900 flex">
+    <div className="min-h-screen app-bg app-surface font-body text-stone-900 flex">
       <Sidebar
         active={view}
         onChange={setView}
@@ -289,7 +288,6 @@ function AppInner() {
         cargas={db.cargas}
       />
       <div className="flex-1 min-w-0">
-        <UfChip />
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
         {view === "carga" && !sinCarga && (

@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import { User, FileText } from "lucide-react";
+import { DONUT_COLORS } from "../lib/constants";
+import { Panel, CardTitle } from "./Shared";
 
 export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }) {
   const [busqueda, setBusqueda] = useState("");
@@ -41,56 +44,50 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
         c.cliente.toLowerCase().includes(busqueda.toLowerCase())
     );
 
+  const maxClientes = Math.max(1, ...rutPorTipologia.map(([, c]) => c));
+
   return (
-    <div className="mb-4">
-      <div className="grid lg:grid-cols-2 gap-4 mb-4">
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4">
-            CLIENTES ÚNICOS (RUT) POR TIPOLOGÍA
+    <div className="mb-5">
+      <div className="grid lg:grid-cols-2 gap-5 mb-5">
+        <Panel>
+          <CardTitle icon={User}>Clientes únicos (RUT) por tipología</CardTitle>
+          <div className="flex flex-col gap-2.5">
+            {rutPorTipologia.map(([tip, count], i) => (
+              <div key={tip} className="flex items-center gap-3 text-xs">
+                <span className="w-24 shrink-0 text-right text-stone-600">{tip}</span>
+                <span className="flex-1 h-3.5 rounded-full bg-stone-100 overflow-hidden">
+                  <span
+                    className="block h-full rounded-full"
+                    style={{ width: `${(count / maxClientes) * 100}%`, background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+                  />
+                </span>
+                <span className="w-8 shrink-0 text-stone-600">{count}</span>
+              </div>
+            ))}
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs text-stone-400 border-b border-stone-200">
-                <th className="py-2 pr-3">Tipología</th>
-                <th className="py-2 pr-3">Clientes únicos</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rutPorTipologia.map(([tip, count]) => (
-                <tr key={tip} className="border-b border-stone-100">
-                  <td className="py-1.5 pr-3">{tip}</td>
-                  <td className="py-1.5 pr-3">{count}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-stone-300 font-medium">
-                <td className="py-1.5 pr-3">Total</td>
-                <td className="py-1.5 pr-3">{rutPorTipologia.reduce((sum, [, count]) => sum + count, 0)}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <div className="flex justify-between border-t border-stone-100 mt-4 pt-2 text-sm font-semibold text-[#13234A]">
+            <span>Total</span>
+            <span>{rutPorTipologia.reduce((sum, [, count]) => sum + count, 0)}</span>
+          </div>
           <p className="text-[11px] text-stone-400 mt-2">
             La suma puede superar "Clientes únicos (RUT)" del resumen: un mismo cliente que cotizó más de una
             tipología se cuenta una vez en cada una.
           </p>
-        </div>
+        </Panel>
 
-        <div className="bg-white border border-stone-200 p-5">
-          <div className="bg-[#0F3D66] text-white text-sm font-medium px-3 py-2 -mx-5 -mt-5 mb-4">
-            TOTAL DE COTIZACIONES POR RUT
-          </div>
+        <Panel>
+          <CardTitle icon={FileText}>Total de cotizaciones por RUT</CardTitle>
           <div className="flex flex-wrap gap-2 mb-3">
             <input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por RUT o nombre…"
-              className="text-xs border border-stone-300 px-2 py-1.5 focus:outline-none focus:border-[#0F3D66] flex-1 min-w-[160px]"
+              className="text-xs border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#2563EB] flex-1 min-w-[160px]"
             />
             <select
               value={tipologiaFiltro}
               onChange={(e) => setTipologiaFiltro(e.target.value)}
-              className="text-xs border border-stone-300 px-2 py-1.5 focus:outline-none focus:border-[#0F3D66]"
+              className="text-xs border border-stone-200 rounded-lg px-3 py-2 focus:outline-none focus:border-[#2563EB]"
             >
               <option value="Todas">Todas las tipologías</option>
               {tipologiaOrdenada.map(([name]) => (
@@ -103,10 +100,10 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
           <div className="max-h-72 overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white">
-                <tr className="text-left text-stone-400 border-b border-stone-200">
-                  <th className="py-1.5 pr-2">RUT</th>
-                  <th className="py-1.5 pr-2">Cliente</th>
-                  <th className="py-1.5 pr-2 text-right">Total cotizaciones</th>
+                <tr className="text-left text-stone-400 border-b border-stone-100">
+                  <th className="py-1.5 pr-2 font-normal">RUT</th>
+                  <th className="py-1.5 pr-2 font-normal">Cliente</th>
+                  <th className="py-1.5 pr-2 text-right font-normal">Total cotizaciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -132,7 +129,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
               Mostrando los primeros 200 de {listaFiltrada.length} resultados. Usa el buscador para acotar.
             </p>
           )}
-        </div>
+        </Panel>
       </div>
     </div>
   );

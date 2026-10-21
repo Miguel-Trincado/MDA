@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Area, AreaChart, ResponsiveContainer } from "recharts";
+import UfChip from "./UfChip";
 import { ALERT_STYLE } from "../lib/constants";
 
 // Círculo con las iniciales de un nombre o correo — usado en el header de
@@ -54,21 +56,85 @@ export function Field({ label, children, className = "" }) {
   );
 }
 
-export function KpiCard({ label, value, sub, small }) {
+// Colores pastel de las tarjetas de indicadores (mismo juego del Dashboard).
+const TONOS = {
+  blue: { bg: "#EAF1FF", fg: "#2563EB", ico: "#DCE8FF" },
+  purple: { bg: "#F1EAFF", fg: "#7C3AED", ico: "#E7DCFF" },
+  pink: { bg: "#FFEAF4", fg: "#EC4899", ico: "#FFDCEC" },
+  green: { bg: "#E3F8F0", fg: "#14B8A6", ico: "#CFF1E5" },
+  amber: { bg: "#FFF3DD", fg: "#F59E0B", ico: "#FFE6BB" },
+};
+
+function Spark({ data, color, id }) {
   return (
-    <div className="bg-white border border-stone-200 border-t-2 border-t-[#1E5AA8] rounded-xl shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-1">
-      <div className="text-[11px] text-stone-400 uppercase tracking-wide">{label}</div>
-      <div className={`font-display font-bold text-[#0F3D66] ${small ? "text-lg leading-snug" : "text-3xl"}`}>{value}</div>
-      <div className="text-xs text-stone-500">{sub}</div>
+    <div className="absolute bottom-0 right-0 w-1/2 h-9 opacity-60 pointer-events-none">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill={`url(#${id})`} dot={false} isAnimationActive={false} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// Tarjeta de indicador: ícono en burbuja, valor grande y, si hay datos,
+// una mini-curva de fondo y una variación (delta, en %).
+export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, serie }) {
+  const t = TONOS[tone] || TONOS.blue;
+  const idGrad = `spark-${tone}-${String(label).replace(/\W/g, "")}`;
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1 min-h-[184px]"
+      style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
+    >
+      <div className="relative z-10 flex items-start justify-between mb-1">
+        {Icon ? (
+          <span className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
+            <Icon size={20} />
+          </span>
+        ) : (
+          <span />
+        )}
+        {delta != null && (
+          <span
+            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${delta >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
+          >
+            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
+          </span>
+        )}
+      </div>
+      <div className="relative z-10 text-sm text-stone-600">{label}</div>
+      <div className={`relative z-10 font-display text-[#13234A] ${small ? "text-xl leading-snug" : "text-3xl"}`}>{value}</div>
+      <div className="relative z-10 text-xs text-stone-500 pb-9 max-w-[60%]">{sub}</div>
+      {serie && serie.length > 1 && <Spark data={serie} color={t.fg} id={idGrad} />}
     </div>
   );
 }
 
 export function Panel({ title, children, className = "" }) {
   return (
-    <div className={`bg-white border border-stone-200 rounded-xl shadow-sm p-5 ${className}`}>
-      {title && <div className="font-display text-lg text-[#0F3D66] mb-3">{title}</div>}
+    <div className={`bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-5 ${className}`}>
+      {title && <div className="font-display text-lg text-[#13234A] mb-3">{title}</div>}
       {children}
+    </div>
+  );
+}
+
+// Título de tarjeta con ícono azul y, a la derecha, un control opcional.
+export function CardTitle({ icon: Icon, children, right }) {
+  return (
+    <div className="flex items-center justify-between gap-3 mb-4 pb-3 border-b border-stone-100 flex-wrap">
+      <div className="flex items-center gap-2.5">
+        {Icon && <Icon size={22} className="text-[#2563EB] shrink-0" />}
+        <span className="font-display text-lg text-[#13234A]">{children}</span>
+      </div>
+      {right}
     </div>
   );
 }
@@ -83,11 +149,12 @@ export const PAGE_CLASS = "w-full max-w-6xl mx-auto px-5 pt-4 pb-6";
 export function PageHeader({ title, subtitle, children }) {
   return (
     <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-      <div>
-        <h1 className="font-display text-3xl text-[#0F3D66]">{title}</h1>
+      <div className="flex-1 min-w-[200px]">
+        <h1 className="font-display text-3xl text-[#13234A]">{title}</h1>
         {subtitle && <p className="text-sm text-stone-500 mt-1">{subtitle}</p>}
       </div>
       {children}
+      <UfChip />
     </div>
   );
 }

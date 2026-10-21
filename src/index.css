@@ -12,6 +12,17 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Tema común de todos los menús: fondo suave azul-lavanda y tarjetas
+   blancas redondeadas con sombra liviana (mismo look del Dashboard). */
+.app-bg {
+  background: linear-gradient(135deg, #F3F7FF 0%, #F6F4FE 58%, #F1F6FD 100%);
+}
+.app-surface div.bg-white.border {
+  border-radius: 1rem;
+  border-color: #EEF1F8;
+  box-shadow: 0 4px 18px rgba(31, 64, 140, 0.07);
+}
+
 /* Títulos y cabeceras: Roboto Slab Bold en todo el sistema. */
 .font-display {
   font-family: "Roboto Slab", serif;

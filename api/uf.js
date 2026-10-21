@@ -12,14 +12,21 @@ function fechaChile() {
 
 export default async function handler(req, res) {
   const { y, m, d, iso } = fechaChile();
-  try {
-    const r = await fetch(`https://mindicador.cl/api/uf/${d}-${m}-${y}`, { signal: AbortSignal.timeout(8000) });
+  const ayer = new Date(`${iso}T12:00:00Z`);
+  ayer.setUTCDate(ayer.getUTCDate() - 1);
+  const [ya, ma, da] = ayer.toISOString().slice(0, 10).split("-");
+  const valorDe = async (dd, mm, yy) => {
+    const r = await fetch(`https://mindicador.cl/api/uf/${dd}-${mm}-${yy}`, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) throw new Error(`mindicador ${r.status}`);
-    const data = await r.json();
-    const valor = Number(data?.serie?.[0]?.valor);
-    if (!Number.isFinite(valor) || valor <= 0) throw new Error("sin valor");
+    const v = Number((await r.json())?.serie?.[0]?.valor);
+    if (!Number.isFinite(v) || v <= 0) throw new Error("sin valor");
+    return v;
+  };
+  try {
+    // Hoy y ayer en paralelo: ayer solo sirve para mostrar la variación.
+    const [valor, anterior] = await Promise.all([valorDe(d, m, y), valorDe(da, ma, ya).catch(() => null)]);
     res.setHeader("Cache-Control", "public, s-maxage=1800, stale-while-revalidate=86400");
-    res.status(200).json({ valor, fecha: iso });
+    res.status(200).json({ valor, anterior, fecha: iso });
   } catch (e) {
     res.setHeader("Cache-Control", "no-store");
     res.status(502).json({ error: String(e.message || e) });
