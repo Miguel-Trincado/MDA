@@ -4,11 +4,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Reserva siempre el espacio de la barra de desplazamiento: sin esto, las
+   pantallas largas (con barra) y las cortas (sin barra) quedan centradas
+   con ~8 px de diferencia y el título "salta" al cambiar de menú. */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 /* Títulos y cabeceras: Roboto Slab Bold en todo el sistema. */
 .font-display {
   font-family: "Roboto Slab", serif;
   font-weight: 700;
   font-style: normal;
+  text-transform: uppercase; /* todos los títulos en mayúscula */
+  letter-spacing: 0.01em;
 }
 .font-body {
   font-family: "IBM Plex Sans", system-ui, sans-serif;
