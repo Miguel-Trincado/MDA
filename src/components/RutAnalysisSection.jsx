@@ -55,7 +55,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
             {rutPorTipologia.map(([tip, count], i) => (
               <div key={tip} className="flex items-center gap-3 text-xs">
                 <span className="w-24 shrink-0 text-right text-stone-600">{tip}</span>
-                <span className="flex-1 h-3.5 rounded-full bg-stone-100 overflow-hidden">
+                <span className="flex-1 h-[14px] rounded-full bg-stone-100 overflow-hidden">
                   <span
                     className="block h-full rounded-full"
                     style={{ width: `${(count / maxClientes) * 100}%`, background: DONUT_COLORS[i % DONUT_COLORS.length] }}
@@ -97,7 +97,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
               ))}
             </select>
           </div>
-          <div className="max-h-72 overflow-y-auto">
+          <div className="max-h-[288px] overflow-y-auto">
             <table className="w-full text-xs">
               <thead className="sticky top-0 bg-white">
                 <tr className="text-left text-stone-400 border-b border-stone-100">

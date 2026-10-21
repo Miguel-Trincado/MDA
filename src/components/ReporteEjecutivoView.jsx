@@ -326,7 +326,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         <Panel bid="fila1-tipologia" grupo="dash-f1" orden={0}>
           <CardTitle icon={Layers}>Cotizaciones por tipología</CardTitle>
           <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="relative w-full sm:w-1/2 h-56">
+            <div className="relative w-full sm:w-1/2 h-[224px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} cornerRadius={4} stroke="none">
@@ -354,7 +354,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
                 {data.tipologiaOrdenada.map(([name, value], i) => (
                   <tr key={name} className="border-t border-stone-100">
                     <td className="py-1.5 pr-2">
-                      <span className="inline-block w-2.5 h-2.5 rounded-[3px] mr-2" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                      <span className="inline-block w-[10px] h-[10px] rounded-[3px] mr-2" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
                       {name}
                     </td>
                     <td className="py-1.5 pr-2 text-right">{value}</td>
@@ -392,7 +392,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           >
             Cotizaciones por {modo === "mes" ? "mes" : "año"}
           </CardTitle>
-          <div className="h-64">
+          <div className="h-[256px]">
             {lineData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-sm text-stone-400">Sin datos para este filtro.</div>
             ) : (

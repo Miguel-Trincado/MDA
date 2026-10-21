@@ -68,7 +68,7 @@ const TONOS = {
 
 function Spark({ data, color, id }) {
   return (
-    <div className="absolute bottom-0 right-0 w-1/2 h-9 opacity-60 pointer-events-none">
+    <div className="absolute bottom-0 right-0 w-1/2 h-[36px] opacity-60 pointer-events-none">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <defs>

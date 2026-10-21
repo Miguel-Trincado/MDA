@@ -8,7 +8,7 @@ import { supabase } from "../supabaseClient";
 const KEY = "mda_layout_v1";
 const VACIO = { bloques: {}, textos: {}, uf: { escala: 1, pos: "der" } };
 const Ctx = createContext(null);
-const D_MIN = 0.3;
+const D_MIN = 0;
 
 const slug = (s) =>
   String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -81,7 +81,7 @@ export function LayoutProvider({ children }) {
     sel,
     setSel,
     zGrupo,
-    // Cada tarjeta informa con qué densidad de espacios (0.3–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
+    // Cada tarjeta informa con qué densidad de espacios (0–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
     setFit: (id, grupo, z) => {
       fitsRef.current[id] = { grupo, z };
       const min = Math.min(1, ...Object.values(fitsRef.current).filter((f) => f.grupo === grupo).map((f) => f.z));
@@ -160,6 +160,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   const ref = useRef(null);
   const innerRef = useRef(null);
   const [, refrescar] = useState(0);
+  const [corta, setCorta] = useState(false);
   const b = L.cfg.bloques[id] || {};
   const ord = b.orden ?? orden;
   const sp = b.span ?? span;
@@ -175,7 +176,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   }, []);
   useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Densidad (0.3–1) con la que le cabe el contenido en el alto elegido: reduce espacios, nunca las letras.
+  // Densidad (0–1) con la que le cabe el contenido en el alto elegido: reduce espacios, nunca las letras.
   useLayoutEffect(() => {
     const box = ref.current, inner = innerRef.current;
     if (!box || !inner) return;
@@ -197,10 +198,11 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
         fit = Math.max(D_MIN, Math.floor(lo * 100) / 100);
       }
     }
-    if (L.editando) box.dataset.minfit = Math.ceil(medir(D_MIN));
+    const sobra = b.h ? medir(D_MIN) > box.clientHeight + 1 : false;
     inner.style.setProperty("--d", prev.d);
     inner.style.height = prev.h;
     if (grupo) L.setFit(id, grupo, fit);
+    setCorta((c) => (c === sobra ? c : sobra));
   });
 
   const envuelto = (
@@ -216,7 +218,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   const sel = L.sel === id;
   const fila = () => [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])];
   const idsFila = () => fila().map((el) => el.dataset.bid);
-  const pisoFila = () => Math.max(40, ...fila().map((el) => Number(el.dataset.minfit) || 0));
+  const pisoFila = () => 40;
   const sumaFila = () => fila().reduce((t, el) => t + Number(el.dataset.span || 0), 0) || 60;
 
   const altoActual = Math.round(ref.current?.offsetHeight || 0);
@@ -289,6 +291,11 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
       }}
     >
       {envuelto}
+      {corta && (
+        <span className="absolute top-2 right-2 z-20 rounded-full bg-rose-600 text-white text-[11px] px-2 py-0.5 shadow" title="Con este alto el contenido no cabe y se corta abajo">
+          Contenido cortado
+        </span>
+      )}
       <span
         draggable
         title="Arrastrar para mover"
