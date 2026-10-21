@@ -54,5 +54,7 @@ html {
 .grid-60 { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); }
 .bloque { grid-column: span var(--span-m, 60); min-width: 0; }
 @media (min-width: 1024px) {
-  .bloque { grid-column: span var(--span, 60); }
+  /* Fila que siempre llena el ancho: cada tarjeta ocupa en proporción a su "span". */
+  .grid-60 { display: flex; }
+  .bloque { flex: var(--span, 60) 1 0; grid-column: auto; }
 }

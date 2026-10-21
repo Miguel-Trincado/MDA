@@ -13,6 +13,12 @@ const slug = (s) =>
   String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function normalizar(d) {
+  if (d && d.v !== 2 && d.bloques) {
+    // v2: el alto pasó a ser de toda la fila; se descartan altos sueltos de versiones anteriores.
+    const bl = {};
+    Object.entries(d.bloques).forEach(([k, b]) => { const { h, ...resto } = b || {}; bl[k] = resto; }); // eslint-disable-line no-unused-vars
+    d = { ...d, bloques: bl, v: 2 };
+  }
   return { ...VACIO, ...(d || {}), uf: { ...VACIO.uf, ...((d && d.uf) || {}) }, bloques: (d && d.bloques) || {}, textos: (d && d.textos) || {} };
 }
 function leerLocal() {
@@ -71,6 +77,12 @@ export function LayoutProvider({ children }) {
     estado,
     sel,
     setSel,
+    setSpans: (mapa) =>
+      aplicar((c) => {
+        const b = { ...c.bloques };
+        Object.entries(mapa).forEach(([i, sp]) => { b[i] = { ...(b[i] || {}), span: sp }; });
+        return { ...c, bloques: b };
+      }),
     setMuchos: (ids, patch) =>
       aplicar((c) => {
         const b = { ...c.bloques };
@@ -102,7 +114,7 @@ export function LayoutProvider({ children }) {
 
 const SIN_PROVIDER = {
   cfg: VACIO, editando: false, puedeEditar: false, estado: "",
-  sel: null, setSel() {}, setMuchos() {}, setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
+  sel: null, setSel() {}, setSpans() {}, setMuchos() {}, setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
 };
 export const useLayout = () => useContext(Ctx) || SIN_PROVIDER;
 
@@ -133,7 +145,7 @@ export function T({ id, children }) {
 
 // Tarjeta movible y redimensionable dentro de un contenedor `.grid-60`
 // (grilla de 60 columnas). `orden`, `span` y la altura se guardan.
-export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, children }) {
+export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH = 40, children }) {
   const L = useLayout();
   const ref = useRef(null);
   const [, refrescar] = useState(0);
@@ -141,27 +153,50 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, chil
   const b = L.cfg.bloques[id] || {};
   const ord = b.orden ?? orden;
   const sp = b.span ?? span;
+  // El alto es de toda la fila (así las tarjetas siempre quedan alineadas arriba y abajo).
+  const hFila = b.h;
   const style = { order: ord, "--span": sp, "--span-m": spanM };
-  if (b.h) { style.height = b.h; style.minHeight = 0; }
-  else if (minH) style.minHeight = minH;
+  if (hFila) { style.height = Math.max(hFila, minH); style.minHeight = 0; }
   const hijo = "[&>*:first-child]:h-full";
+  const datos = { "data-bid": id, "data-span": sp, "data-minh": minH };
 
   if (!L.editando) {
-    return <div className={`bloque ${hijo}`} style={style}>{children}</div>;
+    return <div className={`bloque ${hijo}`} style={style} {...datos}>{children}</div>;
   }
 
   const sel = L.sel === id;
-  const altoActual = b.h ?? Math.round(ref.current?.offsetHeight || 0);
-  const pct = Math.round((sp / 60) * 100);
-  const setAncho = (p) => {
-    const n = Math.max(3, Math.min(60, Math.round(((Number(p) || 0) / 100) * 60 / 3) * 3));
-    L.setBloque(id, { span: n });
+  const fila = () => [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])];
+  const idsFila = () => fila().map((el) => el.dataset.bid);
+  const pisoFila = () => Math.max(40, ...fila().map((el) => Number(el.dataset.minh) || 0));
+  const sumaFila = () => fila().reduce((t, el) => t + Number(el.dataset.span || 0), 0) || 60;
+
+  const altoActual = Math.round(ref.current?.offsetHeight || 0);
+  const pct = Math.round((sp / sumaFila()) * 100);
+
+  // Cambia el ancho de esta tarjeta y reparte el resto entre las demás: la fila siempre suma 100%.
+  const ajustarAncho = (nuevo) => {
+    const otros = fila().filter((el) => el.dataset.bid !== id).map((el) => ({ id: el.dataset.bid, sp: Number(el.dataset.span) }));
+    const mapa = {};
+    if (!otros.length) {
+      mapa[id] = 60;
+    } else {
+      const n = Math.max(3, Math.min(60 - 3 * otros.length, Math.round(nuevo / 3) * 3));
+      mapa[id] = n;
+      const resto = 60 - n;
+      const tot = otros.reduce((t, o) => t + o.sp, 0) || 1;
+      let usado = 0;
+      otros.forEach((o, i) => {
+        const quedan = otros.length - 1 - i;
+        let v = i === otros.length - 1 ? resto - usado : Math.round((resto * o.sp) / tot / 3) * 3;
+        v = Math.max(3, Math.min(v, resto - usado - 3 * quedan));
+        mapa[o.id] = v;
+        usado += v;
+      });
+    }
+    L.setSpans(mapa);
   };
-  const setAlto = (h) => L.setBloque(id, { h: Math.max(40, Math.round(Number(h) || 0)) });
-  const igualarAlto = () => {
-    const ids = [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])].map((el) => el.dataset.bid);
-    L.setMuchos(ids, { h: altoActual });
-  };
+  const setAncho = (p) => ajustarAncho(((Number(p) || 0) / 100) * 60);
+  const setAlto = (h) => L.setMuchos(idsFila(), { h: Math.max(pisoFila(), Math.round(Number(h) || 0)) });
 
   const iniciarResize = (e) => {
     e.preventDefault();
@@ -171,9 +206,8 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, chil
     const padre = el.parentElement.clientWidth;
     const sx = e.clientX, sy = e.clientY, w0 = el.offsetWidth, h0 = el.offsetHeight;
     const mover = (ev) => {
-      const s = Math.max(3, Math.min(60, Math.round(((w0 + ev.clientX - sx) / padre) * 20) * 3));
-      const h = Math.max(40, Math.round((h0 + ev.clientY - sy) / 4) * 4);
-      L.setBloque(id, { span: s, h });
+      ajustarAncho(((w0 + ev.clientX - sx) / padre) * 60);
+      L.setMuchos(idsFila(), { h: Math.max(pisoFila(), Math.round((h0 + ev.clientY - sy) / 4) * 4) });
     };
     const fin = () => {
       window.removeEventListener("pointermove", mover);
@@ -192,7 +226,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, chil
   return (
     <div
       ref={ref}
-      data-bid={id}
+      {...datos}
       className={`bloque relative ${hijo} rounded-2xl outline-dashed outline-2 ${sel ? "outline-[#2563EB]" : "outline-[#2563EB]/40"} outline-offset-2`}
       style={style}
       onPointerDownCapture={() => L.setSel(id)}
@@ -230,13 +264,12 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH, chil
           <input key={"w" + pct} type="number" defaultValue={pct} className={num} onBlur={confirmar(setAncho)} onKeyDown={confirmar(setAncho)} />
           <button className={btn} onClick={() => setAncho(pct + 5)}><Plus size={13} /></button>
           <span className="w-px h-5 bg-stone-200 mx-1" />
-          <span className="text-stone-400 px-1">Alto px</span>
+          <span className="text-stone-400 px-1" title="El alto cambia en toda la fila, para que queden parejas">Alto fila px</span>
           <button className={btn} onClick={() => setAlto(altoActual - 8)}><Minus size={13} /></button>
           <input key={"h" + altoActual} type="number" defaultValue={altoActual} className={num} onBlur={confirmar(setAlto)} onKeyDown={confirmar(setAlto)} />
           <button className={btn} onClick={() => setAlto(altoActual + 8)}><Plus size={13} /></button>
           <span className="w-px h-5 bg-stone-200 mx-1" />
-          <button className={`${btn} border border-stone-200`} title="Poner el mismo alto a todas las tarjetas de esta fila" onClick={igualarAlto}>Igualar alto fila</button>
-          <button className={btn} title="Volver al tamaño y lugar originales" onClick={() => L.quitarBloque(id)}><RotateCcw size={13} /></button>
+          <button className={btn} title="Restablecer esta fila al tamaño y orden originales" onClick={() => idsFila().forEach((i) => L.quitarBloque(i))}><RotateCcw size={13} /></button>
         </div>
       )}
     </div>
@@ -288,7 +321,7 @@ export function EditorDiseno({ puedeEditar }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
       <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
-      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números de Ancho y Alto. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila y el alto vale para toda la fila. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
       <div className="flex items-center justify-between gap-2">
         <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
         <span className="flex gap-2">
