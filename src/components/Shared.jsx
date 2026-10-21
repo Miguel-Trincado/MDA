@@ -104,15 +104,15 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
           <span />
         )}
         {delta != null && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1.5">
             <span
               className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${delta >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
             >
               {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
             </span>
             {deltaInfo && (
-              <span className="relative group" title={deltaInfo}>
-                <span className="w-4 h-4 min-w-[16px] rounded-full bg-white/80 border border-stone-300 text-stone-500 flex items-center justify-center cursor-help">
+              <span className="relative group shrink-0" title={deltaInfo}>
+                <span className="flex items-center justify-center w-[16px] h-[16px] rounded-full border border-stone-400 text-stone-500 cursor-help">
                   <Info size={10} />
                 </span>
                 <span className="hidden group-hover:block absolute right-0 top-full mt-1 z-30 w-[230px] rounded-lg bg-[#13234A] text-white text-[11px] leading-snug p-2.5 shadow-lg font-normal">

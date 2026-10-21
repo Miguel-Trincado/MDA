@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks } from "lucide-react";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
-import { parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, esProyectoPilpilen, stripAccents } from "../lib/helpers";
+import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, esProyectoPilpilen, stripAccents } from "../lib/helpers";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
@@ -85,39 +85,46 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // Opciones de los filtros: se calculan siempre sobre el universo completo,
   // para que no se achiquen a medida que el usuario va filtrando.
   const opciones = useMemo(() => {
-    const periodosSet = new Map(); // key "YYYY-MM" -> label
     const proyectosSet = new Set();
     const tipologiasSet = new Set();
-
-    filasTotales.forEach((r) => {
-      const fm = parseFechaAMes(r.fecha);
-      if (fm) {
-        const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
-        periodosSet.set(key, labelPeriodo(key, "mes"));
-      }
-      proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO);
-      tipologiasSet.add(valorOBlanco(r.tipologia));
-    });
-
-    if (!periodosSet.has(mesActualKey())) {
-      periodosSet.set(mesActualKey(), labelPeriodo(mesActualKey(), "mes"));
-    }
-
-    const periodos = [
-      { value: TODO, label: "Todo" },
-      ...[...periodosSet.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([value, label]) => ({ value, label })),
-    ];
+    base.forEach((r) => proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO));
+    filasTotales.forEach((r) => tipologiasSet.add(valorOBlanco(r.tipologia)));
     const toOptions = (set) => [{ value: TODO, label: "Todo" }, ...[...set].sort().map((v) => ({ value: v, label: v }))];
-
-    return { periodos, proyectos: toOptions(proyectosSet), tipologias: toOptions(tipologiasSet), estados: ESTADOS };
-  }, [filasTotales]);
+    return { proyectos: toOptions(proyectosSet), tipologias: toOptions(tipologiasSet), estados: ESTADOS };
+  }, [base, filasTotales]);
 
   // Proyecto por defecto: Pilpilén (si el Aval lo trae); el usuario puede cambiarlo.
   const proyectoEf =
     filtros.proyecto === PROYECTO_DEFECTO
       ? opciones.proyectos.find((o) => o.value !== TODO && esProyectoPilpilen(o.value))?.value || TODO
       : filtros.proyecto;
-  const filtrosEf = { ...filtros, proyecto: proyectoEf };
+
+  // Calendario: va desde el mes de la primera cotización del proyecto elegido
+  // hasta su actividad más reciente (o el mes actual si el proyecto sigue activo),
+  // del más nuevo al más antiguo.
+  const periodos = useMemo(() => {
+    const claveDe = (str) => {
+      const fm = parseFechaAMes(str);
+      return fm ? `${fm.year}-${String(fm.month).padStart(2, "0")}` : null;
+    };
+    // Solo meses con datos reales del proyecto (toda Opp nace como cotización,
+    // así que cada mes listado tiene al menos una cotización); nunca meses vacíos.
+    const meses = new Set();
+    base.forEach((r) => {
+      if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return;
+      [r.fecha || r.fechaOpp, r.fechaPromesa, r.fechaEscritura, r.fechaDesistimiento].forEach((f) => {
+        const k = claveDe(f);
+        if (k) meses.add(k);
+      });
+    });
+    const lista = [...meses].sort().reverse().map((key) => ({ value: key, label: labelPeriodo(key, "mes") }));
+    return [{ value: TODO, label: "Todo" }, ...lista];
+  }, [base, proyectoEf]);
+  opciones.periodos = periodos;
+  // Si el período elegido no existe para este proyecto, se usa su mes más reciente.
+  const periodoValido = new Set(periodos.map((o) => o.value));
+  const ajustaPeriodo = (v) => (v === TODO || periodoValido.has(v) ? v : periodos[1]?.value || TODO);
+  const filtrosEf = { ...filtros, proyecto: proyectoEf, periodoDesde: ajustaPeriodo(filtros.periodoDesde), periodoHasta: ajustaPeriodo(filtros.periodoHasta) };
 
   // Filtro de proyecto + tipología, sin el rango de período: esto alimenta
   // exclusivamente el gráfico de tendencia, que debe verse completo aunque
@@ -135,15 +142,15 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // la dona de tipología, el análisis por RUT y los hallazgos.
   const filas = useMemo(() => {
     return filasTendencia.filter((r) => {
-      if (filtros.periodoDesde === TODO && filtros.periodoHasta === TODO) return true;
+      if (filtrosEf.periodoDesde === TODO && filtrosEf.periodoHasta === TODO) return true;
       const fm = parseFechaAMes(r.fecha);
       if (!fm) return false;
       const key = `${fm.year}-${String(fm.month).padStart(2, "0")}`;
-      if (filtros.periodoDesde !== TODO && key < filtros.periodoDesde) return false;
-      if (filtros.periodoHasta !== TODO && key > filtros.periodoHasta) return false;
+      if (filtrosEf.periodoDesde !== TODO && key < filtrosEf.periodoDesde) return false;
+      if (filtrosEf.periodoHasta !== TODO && key > filtrosEf.periodoHasta) return false;
       return true;
     });
-  }, [filasTendencia, filtros.periodoDesde, filtros.periodoHasta]);
+  }, [filasTendencia, filtrosEf.periodoDesde, filtrosEf.periodoHasta]);
 
   function agregarPorTipoYFecha(lista) {
     const tipologiaCounts = {};
@@ -348,30 +355,44 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const totPromesas = totalEstado("promesas");
   const totEscrituradas = totalEstado("escrituradas");
 
-  // Variación del último mes del período contra el mes calendario anterior.
+  // Variación del mes elegido contra el mes anterior, comparando el ACUMULADO
+  // hasta el mismo día del mes (si el mes elegido es el actual, hasta hoy; si ya
+  // terminó, el mes completo contra el mes anterior completo).
   const cotsPorMes = Object.fromEntries(dataTendencia.mesesOrdenados);
-  // Mes de la primera tarjeta: el seleccionado en el calendario ("Hasta"); con "Todo", el mes actual.
-  const claveUltimoMes = filtros.periodoHasta !== TODO ? filtros.periodoHasta : mesActualKey();
-  let deltaMes = null;
-  if (claveUltimoMes) {
-    const [yy, mm] = claveUltimoMes.split("-").map(Number);
-    const prev = `${mm === 1 ? yy - 1 : yy}-${String(mm === 1 ? 12 : mm - 1).padStart(2, "0")}`;
-    const previo = cotsPorMes[prev] || 0;
-    if (previo > 0) deltaMes = Math.round((((cotsPorMes[claveUltimoMes] || 0) - previo) / previo) * 100);
-    var prevClave = prev; // eslint-disable-line no-var
-  }
+  const claveUltimoMes = filtrosEf.periodoHasta !== TODO ? filtrosEf.periodoHasta : mesActualKey();
+  const [yyK, mmK] = claveUltimoMes.split("-").map(Number);
+  const prevClave = `${mmK === 1 ? yyK - 1 : yyK}-${String(mmK === 1 ? 12 : mmK - 1).padStart(2, "0")}`;
+  const diasDelMes = (y, m) => new Date(y, m, 0).getDate();
+  const hoyKPI = new Date();
+  const diaCorte = claveUltimoMes === mesActualKey() ? hoyKPI.getDate() : diasDelMes(yyK, mmK);
+  const diaCortePrev = Math.min(diaCorte, diasDelMes(mmK === 1 ? yyK - 1 : yyK, mmK === 1 ? 12 : mmK - 1));
+  const acumulado = (k, dia, unico) => {
+    const set = new Set();
+    let n = 0;
+    filasTendencia.forEach((r) => {
+      const d = parseFechaCompleta(r.fecha);
+      if (!d) return;
+      const kk = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+      if (kk !== k || d.getUTCDate() > dia) return;
+      if (unico) set.add(r.rut);
+      else n += 1;
+    });
+    return unico ? set.size : n;
+  };
   const nombreMes = (k) => (k ? labelPeriodo(k, "mes") : "—");
+  const cotActual = acumulado(claveUltimoMes, diaCorte, false);
+  const cotPrevio = acumulado(prevClave, diaCortePrev, false);
+  const deltaMes = cotPrevio > 0 ? Math.round(((cotActual - cotPrevio) / cotPrevio) * 100) : null;
   const infoMes =
-    claveUltimoMes && deltaMes != null
-      ? `Variación de ${nombreMes(claveUltimoMes)} (${cotsPorMes[claveUltimoMes] || 0} ${sust}) contra ${nombreMes(prevClave)} (${cotsPorMes[prevClave] || 0}). Ojo: si el mes aún no termina, se compara un mes parcial con uno completo.`
+    deltaMes != null
+      ? `Acumulado de ${nombreMes(claveUltimoMes)} al día ${diaCorte}: ${cotActual} ${sust}. Acumulado de ${nombreMes(prevClave)} al día ${diaCortePrev}: ${cotPrevio}.`
       : "";
-  const rutsEnMes = (k) => new Set(filasTendencia.filter((r) => claveMes(r) === k).map((r) => r.rut)).size;
-  const rutActual = rutsEnMes(claveUltimoMes);
-  const rutPrevio = prevClave ? rutsEnMes(prevClave) : 0;
+  const rutActual = acumulado(claveUltimoMes, diaCorte, true);
+  const rutPrevio = acumulado(prevClave, diaCortePrev, true);
   const deltaRut = rutPrevio > 0 ? Math.round(((rutActual - rutPrevio) / rutPrevio) * 100) : null;
   const infoRut =
     deltaRut != null
-      ? `Variación de clientes únicos (RUT distintos que cotizaron) de ${nombreMes(claveUltimoMes)} (${rutActual}) contra ${nombreMes(prevClave)} (${rutPrevio}). Ojo: si el mes aún no termina, se compara un mes parcial con uno completo.`
+      ? `Clientes únicos (RUT distintos). Acumulado de ${nombreMes(claveUltimoMes)} al día ${diaCorte}: ${rutActual}. Acumulado de ${nombreMes(prevClave)} al día ${diaCortePrev}: ${rutPrevio}.`
       : "";
 
   return (

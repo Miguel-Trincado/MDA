@@ -54,7 +54,7 @@ export default function FilterBar({ filtros, onChange, opciones }) {
       <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={12}>
         <Selector value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />
       </Tarjeta>
-      <Tarjeta icon={LayoutGrid} label="Tipología" bid="filtro-tipologia" orden={2} span={12}>
+      <Tarjeta icon={LayoutGrid} label="Tipo Unidad" bid="filtro-tipologia" orden={2} span={12}>
         <Selector value={filtros.tipologia} onChange={set("tipologia")} options={opciones.tipologias} />
       </Tarjeta>
       <Tarjeta icon={ListFilter} label="Estado" bid="filtro-estado" orden={3} span={12}>
