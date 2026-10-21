@@ -1,0 +1,60 @@
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@700&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reserva siempre el espacio de la barra de desplazamiento: sin esto, las
+   pantallas largas (con barra) y las cortas (sin barra) quedan centradas
+   con ~8 px de diferencia y el título "salta" al cambiar de menú. */
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
+/* Tema común de todos los menús: fondo suave azul-lavanda y tarjetas
+   blancas redondeadas con sombra liviana (mismo look del Dashboard). */
+.app-bg {
+  background: linear-gradient(135deg, #F3F7FF 0%, #F6F4FE 58%, #F1F6FD 100%);
+}
+.app-surface div.bg-white.border {
+  border-radius: 1rem;
+  border-color: #EEF1F8;
+  box-shadow: 0 4px 18px rgba(31, 64, 140, 0.07);
+}
+
+/* Títulos y cabeceras: Roboto Slab Bold en todo el sistema. */
+.font-display {
+  font-family: "Roboto Slab", serif;
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase; /* todos los títulos en mayúscula */
+  letter-spacing: 0.01em;
+}
+.font-body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.ipt {
+  width: 100%;
+  border: 1px solid #d6d3d1;
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.875rem;
+  background: white;
+  transition: border-color 0.15s ease;
+}
+.ipt:focus {
+  outline: none;
+  border-color: #1e5aa8;
+  box-shadow: 0 0 0 3px rgba(30, 90, 168, 0.12);
+}
+
+/* Grilla de 60 columnas para tarjetas movibles (ver src/lib/layout.jsx) */
+.grid-60 { display: grid; grid-template-columns: repeat(60, minmax(0, 1fr)); }
+.bloque { grid-column: span var(--span-m, 60); min-width: 0; }
+@media (min-width: 1024px) {
+  /* Fila que siempre llena el ancho: cada tarjeta ocupa en proporción a su "span". */
+  .grid-60 { display: flex; }
+  .bloque { flex: var(--span, 60) 1 0; grid-column: auto; }
+}
