@@ -96,7 +96,7 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
     >
       <div className="relative z-10 flex items-start justify-between mb-1">
         {Icon ? (
-          <span className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
+          <span className="w-11 h-11 min-w-[32px] min-h-[32px] rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
             <Icon size={20} />
           </span>
         ) : (

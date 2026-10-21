@@ -8,6 +8,7 @@ import { supabase } from "../supabaseClient";
 const KEY = "mda_layout_v1";
 const VACIO = { bloques: {}, textos: {}, uf: { escala: 1, pos: "der" } };
 const Ctx = createContext(null);
+const D_MIN = 0.3;
 
 const slug = (s) =>
   String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -80,7 +81,7 @@ export function LayoutProvider({ children }) {
     sel,
     setSel,
     zGrupo,
-    // Cada tarjeta informa a qué escala (0.5–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
+    // Cada tarjeta informa con qué densidad de espacios (0.3–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
     setFit: (id, grupo, z) => {
       fitsRef.current[id] = { grupo, z };
       const min = Math.min(1, ...Object.values(fitsRef.current).filter((f) => f.grupo === grupo).map((f) => f.z));
@@ -174,42 +175,36 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   }, []);
   useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Escala a la que le cabe el contenido en el alto elegido (sin barras ni cortes).
+  // Densidad (0.3–1) con la que le cabe el contenido en el alto elegido: reduce espacios, nunca las letras.
   useLayoutEffect(() => {
     const box = ref.current, inner = innerRef.current;
     if (!box || !inner) return;
-    const prev = { w: inner.style.width, h: inner.style.height, t: inner.style.transform };
-    const medir = (zz) => {
-      inner.style.width = `${100 / zz}%`;
+    const prev = { d: inner.style.getPropertyValue("--d"), h: inner.style.height };
+    const medir = (dd) => {
+      inner.style.setProperty("--d", String(dd));
       inner.style.height = "auto";
-      inner.style.transform = "none";
-      return inner.offsetHeight * zz;
+      return inner.offsetHeight;
     };
     let fit = 1;
     if (b.h) {
       const disp = box.clientHeight;
       if (medir(1) > disp + 1) {
-        let lo = 0.5, hi = 1;
-        for (let i = 0; i < 6; i++) {
+        let lo = D_MIN, hi = 1;
+        for (let i = 0; i < 7; i++) {
           const mid = (lo + hi) / 2;
           if (medir(mid) > disp + 1) hi = mid; else lo = mid;
         }
-        fit = Math.max(0.5, Math.floor(lo * 100) / 100);
+        fit = Math.max(D_MIN, Math.floor(lo * 100) / 100);
       }
     }
-    if (L.editando) box.dataset.minfit = Math.ceil(medir(0.5));
-    inner.style.width = prev.w;
+    if (L.editando) box.dataset.minfit = Math.ceil(medir(D_MIN));
+    inner.style.setProperty("--d", prev.d);
     inner.style.height = prev.h;
-    inner.style.transform = prev.t;
     if (grupo) L.setFit(id, grupo, fit);
   });
 
   const envuelto = (
-    <div
-      ref={innerRef}
-      className="origin-top-left [&>*:first-child]:h-full"
-      style={{ width: `${100 / z}%`, height: `${100 / z}%`, transform: z < 1 ? `scale(${z})` : undefined }}
-    >
+    <div ref={innerRef} className="[&>*:first-child]:h-full" style={{ height: "100%", "--d": z }}>
       {children}
     </div>
   );
@@ -375,7 +370,7 @@ export function EditorDiseno({ puedeEditar }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
       <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
-      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila; el alto vale para toda la fila y el contenido se ajusta solo (espacios y letras) para que quede parejo. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila; el alto vale para toda la fila y los espacios se ajustan solos (las letras no cambian de tamaño). Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
       <div className="flex items-center justify-between gap-2">
         <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
         <span className="flex gap-2">
