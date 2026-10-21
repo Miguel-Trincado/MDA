@@ -8,7 +8,7 @@ const TODO = "Todo";
 // flecha dibujada aparte.
 function Tarjeta({ icon: Icon, label, bid, orden, span, children }) {
   return (
-    <Bloque id={bid} grupo="dash-filtros" orden={orden} span={span} spanM={60} minH={60}>
+    <Bloque id={bid} grupo="dash-filtros" orden={orden} span={span} spanM={60}>
     <div className="bg-white rounded-2xl shadow-card px-4 py-3 flex items-center gap-3">
       <span className="w-11 h-11 rounded-xl bg-[#EEF3FF] text-[#2563EB] flex items-center justify-center shrink-0">
         <Icon size={20} />

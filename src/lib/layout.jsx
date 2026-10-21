@@ -1,7 +1,7 @@
 // Diseño editable (solo administrador): mover y redimensionar tarjetas,
 // editar títulos y ajustar la tarjeta de la UF. Lo que guarda el admin queda
 // en la tabla `ui_layout` y lo ven todos los usuarios.
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GripVertical, Minus, Pencil, Plus, RotateCcw, Check } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
@@ -35,6 +35,8 @@ export function LayoutProvider({ children }) {
   const [puedeEditar, setPuedeEditar] = useState(false);
   const [estado, setEstado] = useState("");
   const [sel, setSel] = useState(null);
+  const [zGrupo, setZGrupo] = useState({});
+  const fitsRef = useRef({});
   const cfgRef = useRef(cfg);
   const timer = useRef(null);
 
@@ -77,6 +79,13 @@ export function LayoutProvider({ children }) {
     estado,
     sel,
     setSel,
+    zGrupo,
+    // Cada tarjeta informa a qué escala (0.5–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
+    setFit: (id, grupo, z) => {
+      fitsRef.current[id] = { grupo, z };
+      const min = Math.min(1, ...Object.values(fitsRef.current).filter((f) => f.grupo === grupo).map((f) => f.z));
+      setZGrupo((prev) => (prev[grupo] === min ? prev : { ...prev, [grupo]: min }));
+    },
     setSpans: (mapa) =>
       aplicar((c) => {
         const b = { ...c.bloques };
@@ -114,7 +123,7 @@ export function LayoutProvider({ children }) {
 
 const SIN_PROVIDER = {
   cfg: VACIO, editando: false, puedeEditar: false, estado: "",
-  sel: null, setSel() {}, setSpans() {}, setMuchos() {}, setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
+  sel: null, setSel() {}, zGrupo: {}, setFit() {}, setSpans() {}, setMuchos() {}, setBloque() {}, quitarBloque() {}, intercambiar() {}, setTexto() {}, setUf() {}, restablecer() {}, setEditando() {}, setPuedeEditar() {},
 };
 export const useLayout = () => useContext(Ctx) || SIN_PROVIDER;
 
@@ -145,29 +154,74 @@ export function T({ id, children }) {
 
 // Tarjeta movible y redimensionable dentro de un contenedor `.grid-60`
 // (grilla de 60 columnas). `orden`, `span` y la altura se guardan.
-export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH = 40, children }) {
+export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }) {
   const L = useLayout();
   const ref = useRef(null);
+  const innerRef = useRef(null);
   const [, refrescar] = useState(0);
-  useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
   const b = L.cfg.bloques[id] || {};
   const ord = b.orden ?? orden;
   const sp = b.span ?? span;
-  // El alto es de toda la fila (así las tarjetas siempre quedan alineadas arriba y abajo).
-  const hFila = b.h;
+  const z = (grupo && L.zGrupo[grupo]) || 1;
   const style = { order: ord, "--span": sp, "--span-m": spanM };
-  if (hFila) { style.height = Math.max(hFila, minH); style.minHeight = 0; }
-  const hijo = "[&>*:first-child]:h-full";
-  const datos = { "data-bid": id, "data-span": sp, "data-minh": minH };
+  if (b.h) style.height = b.h;
+  const datos = { "data-bid": id, "data-span": sp };
+
+  useEffect(() => {
+    const f = () => refrescar((n) => n + 1);
+    window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Escala a la que le cabe el contenido en el alto elegido (sin barras ni cortes).
+  useLayoutEffect(() => {
+    const box = ref.current, inner = innerRef.current;
+    if (!box || !inner) return;
+    const prev = { w: inner.style.width, h: inner.style.height, t: inner.style.transform };
+    const medir = (zz) => {
+      inner.style.width = `${100 / zz}%`;
+      inner.style.height = "auto";
+      inner.style.transform = "none";
+      return inner.offsetHeight * zz;
+    };
+    let fit = 1;
+    if (b.h) {
+      const disp = box.clientHeight;
+      if (medir(1) > disp + 1) {
+        let lo = 0.5, hi = 1;
+        for (let i = 0; i < 6; i++) {
+          const mid = (lo + hi) / 2;
+          if (medir(mid) > disp + 1) hi = mid; else lo = mid;
+        }
+        fit = Math.max(0.5, Math.floor(lo * 100) / 100);
+      }
+    }
+    if (L.editando) box.dataset.minfit = Math.ceil(medir(0.5));
+    inner.style.width = prev.w;
+    inner.style.height = prev.h;
+    inner.style.transform = prev.t;
+    if (grupo) L.setFit(id, grupo, fit);
+  });
+
+  const envuelto = (
+    <div
+      ref={innerRef}
+      className="origin-top-left [&>*:first-child]:h-full"
+      style={{ width: `${100 / z}%`, height: `${100 / z}%`, transform: z < 1 ? `scale(${z})` : undefined }}
+    >
+      {children}
+    </div>
+  );
 
   if (!L.editando) {
-    return <div className={`bloque ${hijo}`} style={style} {...datos}>{children}</div>;
+    return <div ref={ref} className="bloque" style={style} {...datos}>{envuelto}</div>;
   }
 
   const sel = L.sel === id;
   const fila = () => [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])];
   const idsFila = () => fila().map((el) => el.dataset.bid);
-  const pisoFila = () => Math.max(40, ...fila().map((el) => Number(el.dataset.minh) || 0));
+  const pisoFila = () => Math.max(40, ...fila().map((el) => Number(el.dataset.minfit) || 0));
   const sumaFila = () => fila().reduce((t, el) => t + Number(el.dataset.span || 0), 0) || 60;
 
   const altoActual = Math.round(ref.current?.offsetHeight || 0);
@@ -227,7 +281,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH = 40,
     <div
       ref={ref}
       {...datos}
-      className={`bloque relative ${hijo} rounded-2xl outline-dashed outline-2 ${sel ? "outline-[#2563EB]" : "outline-[#2563EB]/40"} outline-offset-2`}
+      className={`bloque relative rounded-2xl outline-dashed outline-2 ${sel ? "outline-[#2563EB]" : "outline-[#2563EB]/40"} outline-offset-2`}
       style={style}
       onPointerDownCapture={() => L.setSel(id)}
       onDragOver={(e) => e.preventDefault()}
@@ -239,7 +293,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, minH = 40,
         } catch { /* arrastre ajeno */ }
       }}
     >
-      {children}
+      {envuelto}
       <span
         draggable
         title="Arrastrar para mover"
@@ -321,7 +375,7 @@ export function EditorDiseno({ puedeEditar }) {
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
       <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
-      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila y el alto vale para toda la fila. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila; el alto vale para toda la fila y el contenido se ajusta solo (espacios y letras) para que quede parejo. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
       <div className="flex items-center justify-between gap-2">
         <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
         <span className="flex gap-2">

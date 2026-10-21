@@ -117,19 +117,19 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
     </div>
   );
   return bid ? (
-    <Bloque id={bid} grupo="dash-kpi" orden={orden} span={12} spanM={30} minH={168}>{card}</Bloque>
+    <Bloque id={bid} grupo="dash-kpi" orden={orden} span={12} spanM={30}>{card}</Bloque>
   ) : card;
 }
 
 export function Panel({ title, children, className = "", bid, grupo, orden, span = 30 }) {
   const panel = (
-    <div className={`bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-5 ${bid ? "overflow-auto" : ""} ${className}`}>
+    <div className={`bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-5 ${bid ? "overflow-hidden" : ""} ${className}`}>
       {title && <div className="font-display text-lg text-[#13234A] mb-3">{typeof title === "string" ? <T>{title}</T> : title}</div>}
       {children}
     </div>
   );
   return bid ? (
-    <Bloque id={bid} grupo={grupo} orden={orden} span={span} minH={120}>{panel}</Bloque>
+    <Bloque id={bid} grupo={grupo} orden={orden} span={span}>{panel}</Bloque>
   ) : panel;
 }
 
