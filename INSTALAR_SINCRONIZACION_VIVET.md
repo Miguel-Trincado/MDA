@@ -1,4 +1,4 @@
-# Aval automático desde Vivet (v161)
+# Aval automático desde Vivet (v162)
 
 Vivet no deja iniciar sesión desde un servidor (tiene reCAPTCHA), así que el envío lo hace un
 script dentro de tu propio navegador, con tu sesión de Vivet ya abierta. Cada vez que entras a
@@ -24,7 +24,7 @@ Proyecto → Settings → Environment Variables. Crea estas 3 y vuelve a despleg
 ## 3. Uso
 - Entra a Vivet como siempre. Abajo a la izquierda aparece "Aval enviado al CRM (N filas)".
 - Para forzar un envío: ícono de Tampermonkey → "Enviar el Aval al CRM ahora".
-- Si falla, el aviso sale en rojo con el motivo. Subir el Aval a mano en Carga sigue funcionando.
+- Si falla, el aviso sale en rojo con el motivo (incluido si no se pudo anotar el registro de "Datos al día"). Subir el Aval a mano en Carga sigue funcionando.
 - En el menú del CRM, "Datos al día" muestra la hora del último "Aval Vivet".
 
 No requiere migración SQL.

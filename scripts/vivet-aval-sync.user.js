@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivet → CRM Pilpilén (Aval completo)
 // @namespace    mda.pilpilen
-// @version      1.0
+// @version      1.1
 // @description  Cuando entras a Vivet, envía el Aval completo al CRM (como máximo 1 vez cada N horas).
 // @match        https://mda.vivetsoft.cl/*
 // @grant        GM_xmlhttpRequest
@@ -54,7 +54,10 @@
         headers: { "Content-Type": "application/json", "x-sync-key": CLAVE },
         data: JSON.stringify(payload),
         timeout: 120000,
-        onload: (r) => (r.status >= 200 && r.status < 300 ? resolve() : reject(new Error(`CRM ${r.status}: ${String(r.responseText).slice(0, 200)}`))),
+        onload: (r) => {
+          if (r.status < 200 || r.status >= 300) return reject(new Error(`CRM ${r.status}: ${String(r.responseText).slice(0, 300)}`));
+          try { resolve(JSON.parse(r.responseText)); } catch (e) { resolve({}); }
+        },
         onerror: () => reject(new Error("No se pudo conectar con el CRM (revisa CRM_URL)")),
         ontimeout: () => reject(new Error("El CRM tardó demasiado en responder")),
       });
@@ -89,14 +92,22 @@
         return o;
       });
       if (filas.length === 0) throw new Error("El reporte vino vacío");
+      let guardadas = 0;
+      let cargaError = "";
       for (let i = 0; i < filas.length; i += TROZO) {
         const rows = filas.slice(i, i + TROZO);
         const fin = i + TROZO >= filas.length;
         aviso(`Enviando al CRM… ${Math.min(i + TROZO, filas.length)} de ${filas.length}`);
-        await enviar({ rows, fin, total: filas.length });
+        const r = await enviar({ rows, fin, total: filas.length });
+        guardadas += Number(r.guardadas) || 0;
+        if (r.cargaError) cargaError = r.cargaError;
       }
       GM_setValue("ultima", Date.now());
-      aviso(`Aval enviado al CRM (${filas.length} filas)`);
+      if (cargaError) {
+        aviso(`Aval guardado (${guardadas} filas), pero no se pudo anotar en "Datos al día": ${cargaError}`, true);
+      } else {
+        aviso(`Aval guardado en el CRM: ${guardadas} de ${filas.length} filas`);
+      }
     } catch (e) {
       aviso("No se pudo enviar el Aval al CRM: " + (e.message || e), true);
     } finally {

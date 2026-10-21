@@ -91,6 +91,12 @@ export default async function handler(req, res) {
       if (f) porOpp.set(f.opp, f);
     }
     const filas = [...porOpp.values()];
+    if (rows.length > 0 && filas.length === 0) {
+      return res.status(422).json({
+        error: "Ninguna fila válida: no se reconocieron los campos de Vivet (o todas eran de proyectos excluidos)",
+        camposRecibidos: Object.keys(rows[0] || {}).slice(0, 30),
+      });
+    }
     for (let i = 0; i < filas.length; i += TROZO) {
       await sb(base, key, "aval_completo?on_conflict=opp", {
         method: "POST",
@@ -98,19 +104,26 @@ export default async function handler(req, res) {
         body: JSON.stringify(filas.slice(i, i + TROZO)),
       });
     }
+    // Registro visible en "Datos al día". Si falla, no se pierde el Aval ya
+    // guardado, pero el motivo se devuelve para que el script lo muestre.
+    let cargaError = "";
     if (body.fin) {
-      await sb(base, key, "cargas_archivos", {
-        method: "POST",
-        headers: { Prefer: "return=minimal" },
-        body: JSON.stringify({
-          tipo: "aval_completo",
-          archivo: "Vivet (automático)",
-          usuario: "Sincronización Vivet",
-          resumen: `${Number(body.total) || filas.length} filas`,
-        }),
-      }).catch(() => {});
+      try {
+        await sb(base, key, "cargas_archivos", {
+          method: "POST",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify({
+            tipo: "aval_completo",
+            archivo: "Vivet (automático)",
+            usuario: "Sincronización Vivet",
+            resumen: `${Number(body.total) || filas.length} filas`,
+          }),
+        });
+      } catch (e) {
+        cargaError = String(e.message || e);
+      }
     }
-    return res.status(200).json({ ok: true, recibidas: rows.length, guardadas: filas.length });
+    return res.status(200).json({ ok: true, recibidas: rows.length, guardadas: filas.length, ...(cargaError ? { cargaError } : {}) });
   } catch (e) {
     return res.status(500).json({ error: String(e.message || e) });
   }
