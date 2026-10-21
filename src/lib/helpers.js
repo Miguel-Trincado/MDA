@@ -125,6 +125,12 @@ function esFecha(r) {
   return r;
 }
 
+// Proyectos del Aval que el Dashboard no debe leer.
+export function esProyectoExcluidoDashboard(proyecto) {
+  const p = stripAccents(proyecto || "").toUpperCase();
+  return (p.includes("ACACIA") && p.includes("SAN PEDRO")) || (p.includes("OLIVOS") && p.includes("VALLE"));
+}
+
 export function parseFechaCompleta(str) {
   const r = esFecha(parseAnyDate(str));
   if (!r) return null;

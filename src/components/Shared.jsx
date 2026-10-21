@@ -95,7 +95,7 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
       className="relative rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1"
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
     >
-      <div className="relative z-10 flex items-start justify-between mb-1">
+      <div className="relative z-20 flex items-start justify-between mb-1">
         {Icon ? (
           <span className="w-11 h-11 min-w-[32px] min-h-[32px] rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
             <Icon size={20} />
@@ -111,11 +111,9 @@ export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, d
               {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
             </span>
             {deltaInfo && (
-              <span className="relative group shrink-0" title={deltaInfo}>
-                <span className="flex items-center justify-center w-[16px] h-[16px] rounded-full border border-stone-400 text-stone-500 cursor-help">
-                  <Info size={10} />
-                </span>
-                <span className="hidden group-hover:block absolute right-0 top-full mt-1 z-30 w-[230px] rounded-lg bg-[#13234A] text-white text-[11px] leading-snug p-2.5 shadow-lg font-normal">
+              <span className="relative group shrink-0 flex items-center text-stone-500 cursor-help">
+                <Info size={17} />
+                <span className="hidden group-hover:block absolute right-0 top-full mt-1 z-50 w-[230px] rounded-lg bg-[#13234A] text-white text-[11px] leading-snug p-2.5 shadow-lg font-normal">
                   {deltaInfo}
                 </span>
               </span>

@@ -1,4 +1,4 @@
-import { esProyectoPilpilen, normalizeName, normalizeRut } from "./helpers";
+import { esProyectoPilpilen, esProyectoExcluidoDashboard, normalizeName, normalizeRut } from "./helpers";
 
 // Para columnas cuyo nombre puede venir con variantes de mayúsculas, tildes,
 // puntos (ej. "Uni." vs "Unidad") o palabras de más (ej. "Precio Lista" vs
@@ -235,6 +235,7 @@ export function parseAvalCompleto(text) {
   const iLote = col("Lote"), iFCot = col("Fecha Cotización", "Fecha Cotizacion"), iFOpp = col("Fecha Opp");
   const iFRes = col("Fecha Reserva"), iFCierre = col("Fecha Cierre"), iFProm = col("Fecha Promesa");
   const iFEsc = col("Fecha Escritura"), iFDes = col("Fecha Desistimiento");
+  const iTipoUnidad = col("Tipo Unidad", "Tipo de Unidad", "Tipo Unid");
   if (iOpp === -1) return [];
 
   const get = (cols, i) => (i !== -1 && cols[i] ? cols[i].trim() : "");
@@ -243,6 +244,7 @@ export function parseAvalCompleto(text) {
     const cols = lines[k].split("\t");
     const opp = get(cols, iOpp);
     if (!opp) continue;
+    if (esProyectoExcluidoDashboard(get(cols, iProy))) continue;
     const nombre = [get(cols, iNombre), get(cols, iSegundo), get(cols, iApPat), get(cols, iApMat)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
     porOpp.set(opp, {
       opp,
@@ -252,6 +254,7 @@ export function parseAvalCompleto(text) {
       proyecto: get(cols, iProy),
       estado: get(cols, iEstado),
       tipologia: get(cols, iTip),
+      tipoUnidad: get(cols, iTipoUnidad),
       region: get(cols, iReg),
       lote: get(cols, iLote),
       fecha: get(cols, iFCot),

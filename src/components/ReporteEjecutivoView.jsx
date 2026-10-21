@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks } from "lucide-react";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
-import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, esProyectoPilpilen, stripAccents } from "../lib/helpers";
+import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, esProyectoPilpilen, esProyectoExcluidoDashboard, stripAccents } from "../lib/helpers";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
@@ -63,7 +63,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // se ha cargado, se usa el detalle de cotizaciones de siempre.
   const usaAvalCompleto = Array.isArray(db.avalCompleto) && db.avalCompleto.length > 0;
   const base = useMemo(
-    () => (usaAvalCompleto ? db.avalCompleto : Object.values(db.cotizaciones || {})),
+    () => (usaAvalCompleto ? db.avalCompleto : Object.values(db.cotizaciones || {})).filter((r) => !esProyectoExcluidoDashboard(r.proyecto)),
     [usaAvalCompleto, db.avalCompleto, db.cotizaciones]
   );
   const estadoSel = filtros.estado;
@@ -88,7 +88,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     const proyectosSet = new Set();
     const tipologiasSet = new Set();
     base.forEach((r) => proyectosSet.add(r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO));
-    filasTotales.forEach((r) => tipologiasSet.add(valorOBlanco(r.tipologia)));
+    filasTotales.forEach((r) => tipologiasSet.add(valorOBlanco(r.tipoUnidad)));
     const toOptions = (set) => [{ value: TODO, label: "Todo" }, ...[...set].sort().map((v) => ({ value: v, label: v }))];
     return { proyectos: toOptions(proyectosSet), tipologias: toOptions(tipologiasSet), estados: ESTADOS };
   }, [base, filasTotales]);
@@ -124,7 +124,18 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // Si el período elegido no existe para este proyecto, se usa su mes más reciente.
   const periodoValido = new Set(periodos.map((o) => o.value));
   const ajustaPeriodo = (v) => (v === TODO || periodoValido.has(v) ? v : periodos[1]?.value || TODO);
-  const filtrosEf = { ...filtros, proyecto: proyectoEf, periodoDesde: ajustaPeriodo(filtros.periodoDesde), periodoHasta: ajustaPeriodo(filtros.periodoHasta) };
+  // "Tipo Unidad": valores de la columna del Aval de ese nombre, solo del proyecto elegido.
+  const tiposUnidad = useMemo(() => {
+    const set = new Set();
+    filasTotales.forEach((r) => {
+      if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return;
+      set.add(valorOBlanco(r.tipoUnidad));
+    });
+    return [{ value: TODO, label: "Todo" }, ...[...set].sort().map((v) => ({ value: v, label: v }))];
+  }, [filasTotales, proyectoEf]);
+  opciones.tipologias = tiposUnidad;
+  const tipoEf = filtros.tipologia === TODO || tiposUnidad.some((o) => o.value === filtros.tipologia) ? filtros.tipologia : TODO;
+  const filtrosEf = { ...filtros, tipologia: tipoEf, proyecto: proyectoEf, periodoDesde: ajustaPeriodo(filtros.periodoDesde), periodoHasta: ajustaPeriodo(filtros.periodoHasta) };
 
   // Filtro de proyecto + tipología, sin el rango de período: esto alimenta
   // exclusivamente el gráfico de tendencia, que debe verse completo aunque
@@ -133,10 +144,10 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const filasTendencia = useMemo(() => {
     return filasTotales.filter((r) => {
       if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return false;
-      if (filtros.tipologia !== TODO && valorOBlanco(r.tipologia) !== filtros.tipologia) return false;
+      if (tipoEf !== TODO && valorOBlanco(r.tipoUnidad) !== tipoEf) return false;
       return true;
     });
-  }, [filasTotales, proyectoEf, filtros.tipologia]);
+  }, [filasTotales, proyectoEf, tipoEf]);
 
   // Filtro completo (incluye rango de período): alimenta las tarjetas,
   // la dona de tipología, el análisis por RUT y los hallazgos.
@@ -340,7 +351,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       })
       .filter((r) => {
         if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return false;
-        if (filtros.tipologia !== TODO && valorOBlanco(r.tipologia) !== filtros.tipologia) return false;
+        if (tipoEf !== TODO && valorOBlanco(r.tipoUnidad) !== tipoEf) return false;
         return true;
       });
     const porMes = {};
