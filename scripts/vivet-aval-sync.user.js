@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivet → CRM Pilpilén (Aval completo)
 // @namespace    mda.pilpilen
-// @version      1.2
+// @version      1.3
 // @description  Cuando entras a Vivet, envía el Aval completo al CRM (como máximo 1 vez cada N horas).
 // @match        https://mda.vivetsoft.cl/*
 // @grant        GM_xmlhttpRequest
@@ -103,7 +103,14 @@
         clearInterval(reloj);
         clearTimeout(corte);
       }
-      if (json.status !== 1 || !Array.isArray(json.data)) throw new Error("Vivet no entregó datos");
+      // Vivet compara con == (flexible): status puede venir como 1, "1" o true.
+      if (!json || json.status != 1 || !Array.isArray(json.data)) {
+        const claves = json && typeof json === "object" ? Object.keys(json).slice(0, 8).join(", ") : typeof json;
+        const mensaje = json && (json.message || json.msg || json.error);
+        throw new Error(
+          `Vivet no entregó datos (status=${json && json.status}, tipo de data=${Array.isArray(json && json.data) ? "lista" : typeof (json && json.data)}, campos=[${claves}]${mensaje ? ", mensaje=" + String(mensaje).slice(0, 120) : ""})`
+        );
+      }
       const filas = json.data.map((d) => {
         const o = {};
         CAMPOS.forEach((c) => { o[c] = d[c]; });
