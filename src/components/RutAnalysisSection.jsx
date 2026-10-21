@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { User, FileText } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { DONUT_COLORS } from "../lib/constants";
 import { Panel, CardTitle } from "./Shared";
 
 export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }) {
+  const [vista, setVista] = useState("barra");
   const [busqueda, setBusqueda] = useState("");
   const [tipologiaFiltro, setTipologiaFiltro] = useState("Todas");
 
@@ -44,27 +46,87 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
         c.cliente.toLowerCase().includes(busqueda.toLowerCase())
     );
 
+  const totalRut = rutPorTipologia.reduce((sum, [, c]) => sum + c, 0);
   const maxClientes = Math.max(1, ...rutPorTipologia.map(([, c]) => c));
 
   return (
     <div className="mb-5">
       <div className="grid-60 gap-5 mb-5">
         <Panel bid="fila2-clientes-tipologia" grupo="dash-f2" orden={0}>
-          <CardTitle icon={User}>Clientes únicos (RUT) por tipología</CardTitle>
-          <div className="flex flex-col gap-2.5">
-            {rutPorTipologia.map(([tip, count], i) => (
-              <div key={tip} className="flex items-center gap-3 text-xs">
-                <span className="w-24 shrink-0 text-right text-stone-600">{tip}</span>
-                <span className="flex-1 h-[14px] rounded-full bg-stone-100 overflow-hidden">
-                  <span
-                    className="block h-full rounded-full"
-                    style={{ width: `${(count / maxClientes) * 100}%`, background: DONUT_COLORS[i % DONUT_COLORS.length] }}
-                  />
-                </span>
-                <span className="w-8 shrink-0 text-stone-600">{count}</span>
+          <CardTitle
+            icon={User}
+            right={
+              <span className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
+                {[["barra", "Barra"], ["torta", "Torta"]].map(([k, l]) => (
+                  <button
+                    key={k}
+                    onClick={() => setVista(k)}
+                    className={`px-3.5 py-1.5 font-medium transition-colors ${vista === k ? "bg-[#2563EB] text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </span>
+            }
+          >
+            Clientes únicos (RUT) por tipología
+          </CardTitle>
+          {vista === "barra" ? (
+            <div className="flex flex-col gap-2.5">
+              {rutPorTipologia.map(([tip, count], i) => (
+                <div key={tip} className="flex items-center gap-3 text-xs">
+                  <span className="w-[96px] shrink-0 text-right text-stone-600 whitespace-nowrap">{tip}</span>
+                  <span className="flex-1 min-w-0 h-[14px] rounded-full bg-stone-100 overflow-hidden">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{ width: `${(count / maxClientes) * 100}%`, background: DONUT_COLORS[i % DONUT_COLORS.length] }}
+                    />
+                  </span>
+                  <span className="w-[32px] shrink-0 text-stone-600 whitespace-nowrap">{count}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="relative w-full sm:w-1/2 h-[224px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={rutPorTipologia.map(([name, value]) => ({ name, value }))} dataKey="value" nameKey="name" innerRadius={62} outerRadius={92} paddingAngle={2} cornerRadius={4} stroke="none">
+                      {rutPorTipologia.map((_, i) => (
+                        <Cell key={i} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="font-display text-2xl text-[#13234A]">{totalRut}</span>
+                  <span className="text-xs text-stone-500">Clientes</span>
+                </div>
               </div>
-            ))}
-          </div>
+              <table className="w-full sm:w-1/2 text-xs">
+                <thead>
+                  <tr className="text-left text-stone-400">
+                    <th className="py-1.5 pr-2 font-normal">Tipología</th>
+                    <th className="py-1.5 pr-2 text-right font-normal">Cantidad</th>
+                    <th className="py-1.5 text-right font-normal">%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rutPorTipologia.map(([name, value], i) => (
+                    <tr key={name} className="border-t border-stone-100">
+                      <td className="py-1.5 pr-2">
+                        <span className="inline-block w-[10px] h-[10px] rounded-[3px] mr-2" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
+                        {name}
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">{value}</td>
+                      <td className="py-1.5 text-right text-stone-400">{totalRut ? Math.round((value / totalRut) * 100) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
           <div className="flex justify-between border-t border-stone-100 mt-4 pt-2 text-sm font-semibold text-[#13234A]">
             <span>Total</span>
             <span>{rutPorTipologia.reduce((sum, [, count]) => sum + count, 0)}</span>
