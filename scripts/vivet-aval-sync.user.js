@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivet → CRM Pilpilén (Aval completo)
 // @namespace    mda.pilpilen
-// @version      1.1
+// @version      1.2
 // @description  Cuando entras a Vivet, envía el Aval completo al CRM (como máximo 1 vez cada N horas).
 // @match        https://mda.vivetsoft.cl/*
 // @grant        GM_xmlhttpRequest
@@ -33,7 +33,7 @@
   if (!meta) return; // página de login u otra sin sesión
 
   let caja = null;
-  function aviso(texto, error) {
+  function aviso(texto, error, fijo) {
     if (!caja) {
       caja = document.createElement("div");
       caja.style.cssText =
@@ -43,7 +43,8 @@
     caja.style.background = error ? "#b91c1c" : "#0F3D66";
     caja.textContent = texto;
     clearTimeout(caja._t);
-    caja._t = setTimeout(() => { if (caja) { caja.remove(); caja = null; } }, error ? 20000 : 6000);
+    console.log("[Vivet→CRM]", texto);
+    if (!fijo) caja._t = setTimeout(() => { if (caja) { caja.remove(); caja = null; } }, error ? 30000 : 8000);
   }
 
   function enviar(payload) {
@@ -72,19 +73,36 @@
     if (ahora - Number(GM_getValue("corriendo", 0)) < 10 * 60 * 1000) return; // ya corre en otra pestaña
     GM_setValue("corriendo", ahora);
     try {
-      aviso("Enviando el Aval de Vivet al CRM…");
-      const resp = await fetch(DATA_URL, {
+      const t0 = Date.now();
+      const reloj = setInterval(() => {
+        aviso(`Descargando el reporte de Vivet… ${Math.round((Date.now() - t0) / 1000)} s (puede tardar 1–3 minutos, no cierres esta pestaña)`, false, true);
+      }, 1000);
+      aviso("Descargando el reporte de Vivet…", false, true);
+      const ctl = new AbortController();
+      const corte = setTimeout(() => ctl.abort(), 6 * 60 * 1000);
+      let resp;
+      let json;
+      try {
+        resp = await fetch(DATA_URL, {
         method: "POST",
         credentials: "include",
+        signal: ctl.signal,
         headers: {
           "X-CSRF-TOKEN": meta.content,
           "X-Requested-With": "XMLHttpRequest",
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         },
         body: "id_pro=0&id_eta=0&id_usr=0&id_tci=0&id_cll=0&id_sme=0&id_eop=&fecha_desde=&fecha_hasta=&search=",
-      });
-      if (!resp.ok) throw new Error(`Vivet respondió ${resp.status}`);
-      const json = await resp.json();
+        });
+        if (!resp.ok) throw new Error(`Vivet respondió ${resp.status}`);
+        aviso("Reporte recibido, procesando…", false, true);
+        json = await resp.json();
+      } catch (e) {
+        throw new Error(e && e.name === "AbortError" ? "Vivet tardó más de 6 minutos en responder" : (e.message || e));
+      } finally {
+        clearInterval(reloj);
+        clearTimeout(corte);
+      }
       if (json.status !== 1 || !Array.isArray(json.data)) throw new Error("Vivet no entregó datos");
       const filas = json.data.map((d) => {
         const o = {};
@@ -97,7 +115,7 @@
       for (let i = 0; i < filas.length; i += TROZO) {
         const rows = filas.slice(i, i + TROZO);
         const fin = i + TROZO >= filas.length;
-        aviso(`Enviando al CRM… ${Math.min(i + TROZO, filas.length)} de ${filas.length}`);
+        aviso(`Enviando al CRM… ${Math.min(i + TROZO, filas.length)} de ${filas.length}`, false, true);
         const r = await enviar({ rows, fin, total: filas.length });
         guardadas += Number(r.guardadas) || 0;
         if (r.cargaError) cargaError = r.cargaError;
