@@ -212,3 +212,56 @@ export function parseMaestro(text) {
   }
   return { byRut, filas, filasOtrosProyectos, filasSinOpp, clientes: Object.keys(byRut).length, filasDetalle, oppsDuplicadosEnCarga };
 }
+
+/**
+ * Lee el Aval COMPLETO para el Dashboard: todas las filas con Opp, de todos
+ * los proyectos y en cualquier estado (a diferencia de parseMaestro, que solo
+ * conserva Pilpilén para el resto del sistema).
+ */
+export function parseAvalCompleto(text) {
+  const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split("\t").map((h) => normalizeHeaderFlexible(h));
+  const col = (...names) => {
+    for (const n of names) {
+      const i = headers.indexOf(normalizeHeaderFlexible(n));
+      if (i !== -1) return i;
+    }
+    return -1;
+  };
+  const iOpp = col("Opp"), iRut = col("RUT Cliente"), iNombre = col("Nombre Cliente"), iSegundo = col("Segundo Nombre");
+  const iApPat = col("Apellido Paterno"), iApMat = col("Apellido Materno"), iEjec = col("Ejecutivo");
+  const iProy = col("Proyecto"), iEstado = col("Estado"), iTip = col("Tipología", "Tipologia"), iReg = col("Región Cliente", "Region Cliente");
+  const iLote = col("Lote"), iFCot = col("Fecha Cotización", "Fecha Cotizacion"), iFOpp = col("Fecha Opp");
+  const iFRes = col("Fecha Reserva"), iFCierre = col("Fecha Cierre"), iFProm = col("Fecha Promesa");
+  const iFEsc = col("Fecha Escritura"), iFDes = col("Fecha Desistimiento");
+  if (iOpp === -1) return [];
+
+  const get = (cols, i) => (i !== -1 && cols[i] ? cols[i].trim() : "");
+  const porOpp = new Map();
+  for (let k = 1; k < lines.length; k++) {
+    const cols = lines[k].split("\t");
+    const opp = get(cols, iOpp);
+    if (!opp) continue;
+    const nombre = [get(cols, iNombre), get(cols, iSegundo), get(cols, iApPat), get(cols, iApMat)].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+    porOpp.set(opp, {
+      opp,
+      rut: normalizeRut(get(cols, iRut)),
+      cliente: nombre,
+      ejecutivo: normalizeName(get(cols, iEjec)),
+      proyecto: get(cols, iProy),
+      estado: get(cols, iEstado),
+      tipologia: get(cols, iTip),
+      region: get(cols, iReg),
+      lote: get(cols, iLote),
+      fecha: get(cols, iFCot),
+      fechaOpp: get(cols, iFOpp),
+      fechaReserva: get(cols, iFRes),
+      fechaCierre: get(cols, iFCierre),
+      fechaPromesa: get(cols, iFProm),
+      fechaEscritura: get(cols, iFEsc),
+      fechaDesistimiento: get(cols, iFDes),
+    });
+  }
+  return [...porOpp.values()];
+}

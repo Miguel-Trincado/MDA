@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { DONUT_COLORS } from "../lib/constants";
 import { Panel, CardTitle } from "./Shared";
 
-export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }) {
+export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada, sustantivo = "Cotizaciones" }) {
   const [vista, setVista] = useState("barra");
   const [busqueda, setBusqueda] = useState("");
   const [tipologiaFiltro, setTipologiaFiltro] = useState("Todas");
@@ -13,13 +13,14 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
     const map = {};
     filas.forEach((r) => {
       const rut = r.rut || "(sin RUT)";
-      if (!map[rut]) map[rut] = { rut, total: 0, tipologias: new Set() };
+      if (!map[rut]) map[rut] = { rut, total: 0, tipologias: new Set(), clienteAval: "" };
+      if (r.cliente) map[rut].clienteAval = r.cliente;
       map[rut].total += 1;
       const tip = r.tipologia && r.tipologia.trim() ? r.tipologia.trim() : "(en blanco)";
       map[rut].tipologias.add(tip);
     });
     return Object.values(map)
-      .map((o) => ({ ...o, tipologias: Array.from(o.tipologias), cliente: gestion?.[o.rut]?.cliente || "" }))
+      .map((o) => ({ ...o, tipologias: Array.from(o.tipologias), cliente: gestion?.[o.rut]?.cliente || o.clienteAval || "" }))
       .sort((a, b) => b.total - a.total);
   }, [filas, gestion]);
 
@@ -138,7 +139,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
         </Panel>
 
         <Panel bid="fila2-rut" grupo="dash-f2" orden={1}>
-          <CardTitle icon={FileText}>Total de cotizaciones por RUT</CardTitle>
+          <CardTitle icon={FileText}>{`Total de ${sustantivo.toLowerCase()} por RUT`}</CardTitle>
           <div className="flex flex-wrap gap-2 mb-3">
             <input
               value={busqueda}
@@ -165,7 +166,7 @@ export default function RutAnalysisSection({ filas, gestion, tipologiaOrdenada }
                 <tr className="text-left text-stone-400 border-b border-stone-100">
                   <th className="py-1.5 pr-2 font-normal">RUT</th>
                   <th className="py-1.5 pr-2 font-normal">Cliente</th>
-                  <th className="py-1.5 pr-2 text-right font-normal">Total cotizaciones</th>
+                  <th className="py-1.5 pr-2 text-right font-normal">Total {sustantivo.toLowerCase()}</th>
                 </tr>
               </thead>
               <tbody>

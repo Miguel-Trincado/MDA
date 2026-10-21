@@ -1,5 +1,5 @@
 import { supabase } from "../supabaseClient";
-import { parseMaestro } from "./parseMaestro";
+import { parseMaestro, parseAvalCompleto } from "./parseMaestro";
 import { todayISO, nowISO } from "./helpers";
 
 /* ---------------------------------------------------------------------
@@ -29,6 +29,22 @@ function chunk(arr, size) {
   return out;
 }
 
+// Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos.
+async function fetchPaginado(table, orderCol) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from(table).select("*").order(orderCol).range(from, from + 999);
+    if (error) return { data: out, error };
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}
+
+export async function guardarAvalCompletoRemote(rows) {
+  await upsertInChunks("aval_completo", rows.map((r) => objToRow(r)), "opp");
+}
+
 async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
   for (const part of chunk(rows, chunkSize)) {
     if (part.length === 0) continue;
@@ -41,7 +57,7 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
 export async function fetchAllData() {
-  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes] = await Promise.all([
+  const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes, avalCompletoRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
     supabase.from("cambios_ejecutivo").select("*").order("fecha_deteccion", { ascending: false }),
@@ -51,6 +67,7 @@ export async function fetchAllData() {
     supabase.from("metas_mensuales").select("*"),
     supabase.from("cambios_estado_opp").select("*").order("fecha_deteccion", { ascending: false }),
     supabase.from("cargas_archivos").select("*").order("created_at", { ascending: false }).limit(60),
+    fetchPaginado("aval_completo", "opp"),
   ]);
 
   for (const res of [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes]) {
@@ -62,6 +79,9 @@ export async function fetchAllData() {
   if (listaPreciosRes.error) console.warn("No se pudo cargar lista_precios:", listaPreciosRes.error.message);
   if (metasRes.error) console.warn("No se pudo cargar metas_mensuales:", metasRes.error.message);
   if (cambiosEstadoOppRes.error) console.warn("No se pudo cargar cambios_estado_opp:", cambiosEstadoOppRes.error.message);
+
+  if (avalCompletoRes.error) console.warn("No se pudo cargar aval_completo:", avalCompletoRes.error.message);
+  const avalCompleto = (avalCompletoRes.data || []).map(rowToObj);
 
   const gestion = {};
   (gestionRes.data || []).forEach((row) => {
@@ -99,7 +119,7 @@ export async function fetchAllData() {
     if (!cargas[row.tipo]) cargas[row.tipo] = rowToObj(row);
   });
 
-  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas };
+  return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas, avalCompleto };
 }
 
 /* ---------------------------------------------------------------------
@@ -403,12 +423,25 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     cambiosInsertados = (data || []).map(rowToObj);
   }
 
+  // Aval completo para el Dashboard (todos los proyectos y estados). Si la
+  // tabla aún no existe (falta la migración v147) no rompe la carga normal.
+  let avalCompleto = null;
+  let avalCompletoError = "";
+  try {
+    avalCompleto = parseAvalCompleto(text);
+    await guardarAvalCompletoRemote(avalCompleto);
+  } catch (e) {
+    avalCompleto = null;
+    avalCompletoError = e.message || String(e);
+  }
+
   return {
     gestion: gestionOut,
     control: controlOut,
     cotizaciones: cotizacionesOut,
     cambiosNuevos: cambiosInsertados,
-    summary: { ...summary, filas, clientes, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga },
+    avalCompleto,
+    summary: { ...summary, filas, clientes, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga, avalCompletoFilas: avalCompleto ? avalCompleto.length : 0, avalCompletoError },
   };
 }
 

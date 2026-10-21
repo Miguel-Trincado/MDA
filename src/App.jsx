@@ -30,7 +30,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [] });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [] });
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
@@ -84,6 +84,7 @@ function AppInner() {
       gestion,
       control: filtrarPorRut(db.control),
       cotizaciones,
+      avalCompleto: (db.avalCompleto || []).filter((r) => normalizarBusqueda(r.ejecutivo) === mio),
       cambios: (db.cambios || []).filter((c) => gestion[c.rut]),
       historial: (db.historial || []).filter((h) => gestion[h.rut]),
       cambiosEstadoOpp: (db.cambiosEstadoOpp || []).filter((c) => gestion[c.rut]),
@@ -92,7 +93,7 @@ function AppInner() {
   // Ejecutiva sin ejecutiva asignada en su perfil: no se le muestra nada
   // en vez de mostrarle todo.
   const dbParaVista = esEjecutiva && !miEjecutivo
-    ? { ...db, gestion: {}, control: {}, cotizaciones: {}, cambios: [], historial: [], cambiosEstadoOpp: [] }
+    ? { ...db, gestion: {}, control: {}, cotizaciones: {}, avalCompleto: [], cambios: [], historial: [], cambiosEstadoOpp: [] }
     : dbVista;
 
   // "Cerrar sesión" debe expulsar de verdad, no solo ocultar Comisiones:
@@ -196,7 +197,7 @@ function AppInner() {
   }
 
   async function uploadMaestro(text, archivo) {
-    const { gestion, control, cotizaciones, cambiosNuevos, summary } = await uploadMaestroRemote(
+    const { gestion, control, cotizaciones, cambiosNuevos, avalCompleto, summary } = await uploadMaestroRemote(
       text, db.gestion, db.control, db.cotizaciones
     );
     setDb((d) => ({
@@ -204,6 +205,7 @@ function AppInner() {
       gestion,
       control,
       cotizaciones,
+      avalCompleto: avalCompleto || d.avalCompleto,
       cambios: [...cambiosNuevos, ...d.cambios],
     }));
     anotarCarga("aval", archivo, null);

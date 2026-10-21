@@ -1,5 +1,5 @@
 import { Bloque } from "../lib/layout";
-import { Calendar, Building2, LayoutGrid, ChevronDown } from "lucide-react";
+import { Calendar, Building2, LayoutGrid, ChevronDown, ListFilter } from "lucide-react";
 
 const TODO = "Todo";
 
@@ -51,11 +51,14 @@ export default function FilterBar({ filtros, onChange, opciones }) {
           <Selector value={filtros.periodoHasta} onChange={set("periodoHasta")} options={opciones.periodos} />
         </div>
       </Tarjeta>
-      <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={18}>
+      <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={12}>
         <Selector value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />
       </Tarjeta>
-      <Tarjeta icon={LayoutGrid} label="Tipología" bid="filtro-tipologia" orden={2} span={18}>
+      <Tarjeta icon={LayoutGrid} label="Tipología" bid="filtro-tipologia" orden={2} span={12}>
         <Selector value={filtros.tipologia} onChange={set("tipologia")} options={opciones.tipologias} />
+      </Tarjeta>
+      <Tarjeta icon={ListFilter} label="Estado" bid="filtro-estado" orden={3} span={12}>
+        <Selector value={filtros.estado} onChange={set("estado")} options={opciones.estados} />
       </Tarjeta>
     </div>
   );
