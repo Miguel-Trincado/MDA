@@ -104,6 +104,12 @@ export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
     if (error) throw error;
     borradas += (data || []).length;
   }
+  // Proyectos que no se manejan aquí (SALF, Sendero): se borran siempre.
+  for (const patron of ["%salf%", "%sendero%"]) {
+    const { data, error } = await supabase.from("cuotas_pago").delete().ilike("proyecto", patron).select("opp");
+    if (error) throw error;
+    borradas += (data || []).length;
+  }
   return { guardadas: rows.length, borradas };
 }
 
