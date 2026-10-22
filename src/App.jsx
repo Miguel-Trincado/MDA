@@ -20,7 +20,7 @@ import { cacheLeer, cacheGuardar, cacheBorrar } from "./lib/cacheLocal";
 import {
   fetchDatosBase, fetchDatosAval, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote, guardarCuotasPagoRemote,
+  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote, guardarCuotasPagoRemote, registrarConexionRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -41,6 +41,17 @@ function AppInner() {
   // Rol: "admin" ve todo; "ejecutiva" solo ve sus comisiones (y no Jefa ni
   // Carga); "sinperfil" (usuario creado pero sin vincular) queda limitado.
   const { rol, ejecutivo: miEjecutivo, cargando: cargandoPerfil } = useMiPerfil(authSession);
+
+  // Latido de actividad: al entrar y cada 2 minutos mientras la pestaña esté a la vista.
+  const miUserIdLatido = authSession?.user?.id;
+  useEffect(() => {
+    if (!miUserIdLatido) return undefined;
+    const latir = () => { if (document.visibilityState === "visible") registrarConexionRemote(); };
+    latir();
+    const t = setInterval(latir, 2 * 60 * 1000);
+    document.addEventListener("visibilitychange", latir);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", latir); };
+  }, [miUserIdLatido]);
   const esAdmin = rol === "admin";
   const esEjecutiva = rol === "ejecutiva";
   const esJefe = rol === "jefe";

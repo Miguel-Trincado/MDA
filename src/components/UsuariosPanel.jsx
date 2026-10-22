@@ -3,7 +3,7 @@ import {
   listarPerfilesRemote, crearUsuarioRemote, cambiarPerfilUsuarioRemote,
   resetearClaveUsuarioRemote, eliminarUsuarioRemote,
 } from "../lib/db";
-import { normalizarBusqueda } from "../lib/helpers";
+import { normalizarBusqueda, fmtDateTime } from "../lib/helpers";
 import { Panel, Field, PageHeader } from "./Shared";
 
 const PERFILES = [
@@ -11,6 +11,38 @@ const PERFILES = [
   { value: "jefe", label: "Jefe de ventas" },
   { value: "admin", label: "Administrador" },
 ];
+// Activo = tuvo actividad en los últimos 5 minutos (la app avisa cada 2).
+const MIN_ACTIVO_MS = 5 * 60 * 1000;
+function haceTexto(ms) {
+  const m = Math.floor(ms / 60000);
+  if (m < 1) return "hace menos de 1 min";
+  if (m < 60) return `hace ${m} min`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return `hace ${d} ${d === 1 ? "día" : "días"}`;
+}
+function EstadoConexion({ ultima, ahora }) {
+  if (!ultima) {
+    return (
+      <span className="flex items-center gap-2 text-xs text-stone-400 w-[230px]">
+        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" /> Nunca ha ingresado
+      </span>
+    );
+  }
+  const ms = Math.max(0, ahora - new Date(ultima).getTime());
+  const activo = ms <= MIN_ACTIVO_MS;
+  return (
+    <span className="flex items-center gap-2 text-xs w-[230px]" title={`Última conexión: ${fmtDateTime(ultima)}`}>
+      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${activo ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-rose-500"}`} />
+      <span className={activo ? "text-emerald-700 font-medium" : "text-stone-500"}>
+        {activo ? "Activo ahora" : `Inactivo · ${haceTexto(ms)}`}
+      </span>
+      {!activo && <span className="text-stone-400">({fmtDateTime(ultima)})</span>}
+    </span>
+  );
+}
+
 const etiquetaPerfil = (rol) => PERFILES.find((p) => p.value === rol)?.label || "Sin perfil";
 
 // Panel de administrador: alta y mantención de usuarios sin entrar a
@@ -44,8 +76,12 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
       setError(e.message || "No se pudo cargar la lista (¿corriste la migración v121?)");
     }
   }
+  const [ahora, setAhora] = useState(Date.now());
   useEffect(() => {
     cargar();
+    // Se refresca cada minuto para que los puntos verde/rojo estén al día.
+    const t = setInterval(() => { cargar(); setAhora(Date.now()); }, 60 * 1000);
+    return () => clearInterval(t);
   }, []);
 
   async function ejecutar(fn, okMsg) {
@@ -99,7 +135,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title="Usuarios" subtitle="Crea usuarios y asígnales un perfil" />
+      <PageHeader title="Usuarios" subtitle="Crea usuarios, asígnales un perfil y revisa su última conexión" />
 
       <Panel title="Nuevo usuario">
         <form onSubmit={crear} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
@@ -149,6 +185,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
                 <span className="flex-1 min-w-[180px] truncate">
                   {u.email} {esYo && <span className="text-xs text-stone-400">(tú)</span>}
                 </span>
+                <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} />
                 <select
                   className="ipt !w-40"
                   disabled={esYo || trabajando}

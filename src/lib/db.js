@@ -838,6 +838,12 @@ export async function listarPerfilesRemote() {
   return (data || []).map(rowToObj);
 }
 
+// Marca "estoy conectado" (última conexión del usuario). Falla en silencio: no debe molestar a nadie.
+export async function registrarConexionRemote() {
+  const { error } = await supabase.rpc("registrar_conexion");
+  if (error) console.warn("No se pudo registrar la conexión:", error.message);
+}
+
 export async function vincularEjecutivaRemote(email, ejecutivo) {
   const { error } = await supabase.rpc("vincular_ejecutiva", { p_email: email, p_ejecutivo: ejecutivo });
   if (error) throw error;
