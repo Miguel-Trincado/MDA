@@ -2,12 +2,13 @@
 // editar títulos y ajustar la tarjeta de la UF. Lo que guarda el admin queda
 // en la tabla `ui_layout` y lo ven todos los usuarios.
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { GripVertical, Minus, Pencil, Plus, RotateCcw, Check } from "lucide-react";
+import { GripVertical, Minus, Plus, RotateCcw, Check } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
 const KEY = "mda_layout_v1";
 const VACIO = { bloques: {}, textos: {}, uf: { escala: 1, pos: "der" } };
 const Ctx = createContext(null);
+const D_MIN = 0;
 
 const slug = (s) =>
   String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -80,7 +81,7 @@ export function LayoutProvider({ children }) {
     sel,
     setSel,
     zGrupo,
-    // Cada tarjeta informa a qué escala (0.5–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
+    // Cada tarjeta informa con qué densidad de espacios (0–1) le cabe su contenido; la fila usa la menor, para que todas queden parejas.
     setFit: (id, grupo, z) => {
       fitsRef.current[id] = { grupo, z };
       const min = Math.min(1, ...Object.values(fitsRef.current).filter((f) => f.grupo === grupo).map((f) => f.z));
@@ -159,6 +160,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   const ref = useRef(null);
   const innerRef = useRef(null);
   const [, refrescar] = useState(0);
+  const [corta, setCorta] = useState(false);
   const b = L.cfg.bloques[id] || {};
   const ord = b.orden ?? orden;
   const sp = b.span ?? span;
@@ -174,42 +176,37 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   }, []);
   useEffect(() => { if (L.editando) refrescar((n) => n + 1); }, [L.editando]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Escala a la que le cabe el contenido en el alto elegido (sin barras ni cortes).
+  // Densidad (0–1) con la que le cabe el contenido en el alto elegido: reduce espacios, nunca las letras.
   useLayoutEffect(() => {
     const box = ref.current, inner = innerRef.current;
     if (!box || !inner) return;
-    const prev = { w: inner.style.width, h: inner.style.height, t: inner.style.transform };
-    const medir = (zz) => {
-      inner.style.width = `${100 / zz}%`;
+    const prev = { d: inner.style.getPropertyValue("--d"), h: inner.style.height };
+    const medir = (dd) => {
+      inner.style.setProperty("--d", String(dd));
       inner.style.height = "auto";
-      inner.style.transform = "none";
-      return inner.offsetHeight * zz;
+      return inner.offsetHeight;
     };
     let fit = 1;
     if (b.h) {
       const disp = box.clientHeight;
       if (medir(1) > disp + 1) {
-        let lo = 0.5, hi = 1;
-        for (let i = 0; i < 6; i++) {
+        let lo = D_MIN, hi = 1;
+        for (let i = 0; i < 7; i++) {
           const mid = (lo + hi) / 2;
           if (medir(mid) > disp + 1) hi = mid; else lo = mid;
         }
-        fit = Math.max(0.5, Math.floor(lo * 100) / 100);
+        fit = Math.max(D_MIN, Math.floor(lo * 100) / 100);
       }
     }
-    if (L.editando) box.dataset.minfit = Math.ceil(medir(0.5));
-    inner.style.width = prev.w;
+    const sobra = b.h ? medir(D_MIN) > box.clientHeight + 1 : false;
+    inner.style.setProperty("--d", prev.d);
     inner.style.height = prev.h;
-    inner.style.transform = prev.t;
     if (grupo) L.setFit(id, grupo, fit);
+    setCorta((c) => (c === sobra ? c : sobra));
   });
 
   const envuelto = (
-    <div
-      ref={innerRef}
-      className="origin-top-left [&>*:first-child]:h-full"
-      style={{ width: `${100 / z}%`, height: `${100 / z}%`, transform: z < 1 ? `scale(${z})` : undefined }}
-    >
+    <div ref={innerRef} className="[&>*:first-child]:h-full" style={{ height: "100%", "--d": z }}>
       {children}
     </div>
   );
@@ -221,7 +218,7 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
   const sel = L.sel === id;
   const fila = () => [...(ref.current?.parentElement?.querySelectorAll(":scope > [data-bid]") || [])];
   const idsFila = () => fila().map((el) => el.dataset.bid);
-  const pisoFila = () => Math.max(40, ...fila().map((el) => Number(el.dataset.minfit) || 0));
+  const pisoFila = () => 40;
   const sumaFila = () => fila().reduce((t, el) => t + Number(el.dataset.span || 0), 0) || 60;
 
   const altoActual = Math.round(ref.current?.offsetHeight || 0);
@@ -294,6 +291,11 @@ export function Bloque({ id, grupo, orden = 0, span = 30, spanM = 60, children }
       }}
     >
       {envuelto}
+      {corta && (
+        <span className="absolute top-2 right-2 z-20 rounded-full bg-rose-600 text-white text-[11px] px-2 py-0.5 shadow" title="Con este alto el contenido no cabe y se corta abajo">
+          Contenido cortado
+        </span>
+      )}
       <span
         draggable
         title="Arrastrar para mover"
@@ -361,21 +363,12 @@ export function EditorDiseno({ puedeEditar }) {
   const L = useLayout();
   useEffect(() => { L.setPuedeEditar(!!puedeEditar); }, [puedeEditar]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!puedeEditar) return null;
-  if (!L.editando) {
-    return (
-      <button
-        onClick={() => L.setEditando(true)}
-        className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-[#13234A] text-white text-sm px-4 py-2.5 shadow-lg hover:bg-[#1b3270]"
-      >
-        <Pencil size={15} /> Editar diseño
-      </button>
-    );
-  }
+  if (!L.editando) return null;
   const msg = { guardando: "Guardando…", guardado: "Guardado ✓", error: "No se pudo guardar (¿corriste el SQL v138?)" }[L.estado] || "";
   return (
     <div className="fixed bottom-4 right-4 z-50 max-w-sm bg-white rounded-2xl shadow-lg border border-stone-200 p-3 text-xs text-stone-600 flex flex-col gap-2">
       <div className="font-semibold text-[#13234A] text-sm">Modo edición</div>
-      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila; el alto vale para toda la fila y el contenido se ajusta solo (espacios y letras) para que quede parejo. Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
+      <div>Mover: arrastra el ícono ⠿ de la tarjeta. Tamaño: arrastra el punto de la esquina o haz clic en la tarjeta y usa los números. El ancho siempre reparte el 100% de la fila; el alto vale para toda la fila y los espacios se ajustan solos (las letras no cambian de tamaño). Títulos: clic en el texto. UF: botones bajo la tarjeta.</div>
       <div className="flex items-center justify-between gap-2">
         <span className={L.estado === "error" ? "text-rose-600" : "text-stone-400"}>{msg}</span>
         <span className="flex gap-2">

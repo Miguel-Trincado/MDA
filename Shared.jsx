@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import UfChip from "./UfChip";
 import { T, Bloque } from "../lib/layout";
@@ -68,7 +69,7 @@ const TONOS = {
 
 function Spark({ data, color, id }) {
   return (
-    <div className="absolute bottom-0 right-0 w-1/2 h-9 opacity-60 pointer-events-none">
+    <div className="absolute bottom-0 right-0 w-1/2 h-[36px] opacity-60 pointer-events-none overflow-hidden rounded-br-2xl">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
           <defs>
@@ -86,27 +87,37 @@ function Spark({ data, color, id }) {
 
 // Tarjeta de indicador: ícono en burbuja, valor grande y, si hay datos,
 // una mini-curva de fondo y una variación (delta, en %).
-export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, serie, bid, orden }) {
+export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, deltaInfo, serie, bid, orden }) {
   const t = TONOS[tone] || TONOS.blue;
   const idGrad = `spark-${tone}-${String(label).replace(/\W/g, "")}`;
   const card = (
     <div
-      className="relative overflow-hidden rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1"
+      className="relative rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1"
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
     >
-      <div className="relative z-10 flex items-start justify-between mb-1">
+      <div className="relative z-20 flex items-start justify-between mb-1">
         {Icon ? (
-          <span className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
+          <span className="w-11 h-11 min-w-[32px] min-h-[32px] rounded-full flex items-center justify-center" style={{ background: t.ico, color: t.fg }}>
             <Icon size={20} />
           </span>
         ) : (
           <span />
         )}
         {delta != null && (
-          <span
-            className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${delta >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
-          >
-            {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
+          <span className="flex items-center gap-1.5">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${delta >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-rose-50 text-rose-600"}`}
+            >
+              {delta >= 0 ? "↑" : "↓"} {Math.abs(delta)}%
+            </span>
+            {deltaInfo && (
+              <span className="relative group shrink-0 flex items-center text-stone-500 cursor-help">
+                <Info size={17} />
+                <span className="hidden group-hover:block absolute right-0 top-full mt-1 z-50 w-[230px] rounded-lg bg-[#13234A] text-white text-[11px] leading-snug p-2.5 shadow-lg font-normal">
+                  {deltaInfo}
+                </span>
+              </span>
+            )}
           </span>
         )}
       </div>

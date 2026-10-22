@@ -3,8 +3,9 @@ import { PageHeader, PAGE_CLASS } from "./Shared";
 import UploadMaestroPanel from "./UploadMaestroPanel";
 import UploadListaPreciosPanel from "./UploadListaPreciosPanel";
 import UploadDescuentosUnidadesPanel from "./UploadDescuentosUnidadesPanel";
+import UploadCuotasPanel from "./UploadCuotasPanel";
 
-export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUploadDescuentosUnidades }) {
+export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUploadDescuentosUnidades, onUploadCuotas }) {
   // El logout vive centralizado en el menú de Cuenta del sidebar (cierra
   // sesión Y borra el candado general de entrada); acá solo se usa la
   // sesión para decidir si mostrar el login o el formulario de carga.
@@ -12,7 +13,7 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUpl
 
   return (
     <div className={PAGE_CLASS}>
-      <PageHeader title="Carga" subtitle="Sube el Maestro Aval y el listado de precios" />
+      <PageHeader title="Carga" subtitle="Sube el Maestro Aval, el listado de precios y el reporte de cobranza" />
 
       {session === undefined ? (
         <p className="text-stone-400 text-sm">Verificando sesión…</p>
@@ -56,6 +57,7 @@ export default function CargaPage({ onUploadMaestro, onUploadListaPrecios, onUpl
             <UploadMaestroPanel onUpload={onUploadMaestro} />
             <UploadListaPreciosPanel onUpload={onUploadListaPrecios} />
             <UploadDescuentosUnidadesPanel onUpload={onUploadDescuentosUnidades} />
+            {onUploadCuotas && <UploadCuotasPanel onUpload={onUploadCuotas} />}
           </div>
         </>
       )}

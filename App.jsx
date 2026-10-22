@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { normalizarBusqueda } from "./lib/helpers";
 import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
@@ -6,19 +6,22 @@ import SiteGate from "./components/SiteGate";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
-import CargaPage from "./components/CargaPage";
-import Cotizador from "./components/Cotizador";
-import Comisiones from "./components/Comisiones";
-import MisComisiones from "./components/MisComisiones";
-import UsuariosPanel from "./components/UsuariosPanel";
+const CargaPage = lazy(() => import("./components/CargaPage"));
+const Cotizador = lazy(() => import("./components/Cotizador"));
+const Comisiones = lazy(() => import("./components/Comisiones"));
+const MisComisiones = lazy(() => import("./components/MisComisiones"));
+const UsuariosPanel = lazy(() => import("./components/UsuariosPanel"));
+const CuotasPagos = lazy(() => import("./components/CuotasPagos"));
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
 import { LayoutProvider, EditorDiseno } from "./lib/layout";
+import { iniciarPresencia } from "./lib/presencia";
+import { cacheLeer, cacheGuardar, cacheBorrar } from "./lib/cacheLocal";
 import {
-  fetchAllData, saveGestionRemote, markRevisadoRemote,
+  fetchDatosBase, fetchDatosAval, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote,
+  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote, guardarCuotasPagoRemote, registrarConexionRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -30,7 +33,7 @@ function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [view, setView] = useState("dashboard");
-  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [] });
+  const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [], tiposUnidad: {}, cargandoAval: true });
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
   // esa pestaña vuelve a validar la sesión por su cuenta.
@@ -39,6 +42,18 @@ function AppInner() {
   // Rol: "admin" ve todo; "ejecutiva" solo ve sus comisiones (y no Jefa ni
   // Carga); "sinperfil" (usuario creado pero sin vincular) queda limitado.
   const { rol, ejecutivo: miEjecutivo, cargando: cargandoPerfil } = useMiPerfil(authSession);
+
+  // Latido de actividad: al entrar y cada 2 minutos mientras la pestaña esté a la vista.
+  const miUserIdLatido = authSession?.user?.id;
+  useEffect(() => {
+    if (!miUserIdLatido) return undefined;
+    const latir = () => { if (document.visibilityState === "visible") registrarConexionRemote(); };
+    latir();
+    const t = setInterval(latir, 2 * 60 * 1000);
+    document.addEventListener("visibilitychange", latir);
+    const detener = iniciarPresencia(miUserIdLatido, authSession?.user?.email);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", latir); detener(); };
+  }, [miUserIdLatido]);
   const esAdmin = rol === "admin";
   const esEjecutiva = rol === "ejecutiva";
   const esJefe = rol === "jefe";
@@ -84,6 +99,7 @@ function AppInner() {
       gestion,
       control: filtrarPorRut(db.control),
       cotizaciones,
+      avalCompleto: (db.avalCompleto || []).filter((r) => normalizarBusqueda(r.ejecutivo) === mio),
       cambios: (db.cambios || []).filter((c) => gestion[c.rut]),
       historial: (db.historial || []).filter((h) => gestion[h.rut]),
       cambiosEstadoOpp: (db.cambiosEstadoOpp || []).filter((c) => gestion[c.rut]),
@@ -92,7 +108,7 @@ function AppInner() {
   // Ejecutiva sin ejecutiva asignada en su perfil: no se le muestra nada
   // en vez de mostrarle todo.
   const dbParaVista = esEjecutiva && !miEjecutivo
-    ? { ...db, gestion: {}, control: {}, cotizaciones: {}, cambios: [], historial: [], cambiosEstadoOpp: [] }
+    ? { ...db, gestion: {}, control: {}, cotizaciones: {}, avalCompleto: [], cambios: [], historial: [], cambiosEstadoOpp: [] }
     : dbVista;
 
   // "Cerrar sesión" debe expulsar de verdad, no solo ocultar Comisiones:
@@ -100,15 +116,40 @@ function AppInner() {
   // (pilpilen_gate_unlocked) para que la próxima vez vuelva a pedir
   // usuario y contraseña en vez de dejar pasar directo al Dashboard.
   async function handleLogoutCompleto() {
+    cacheBorrar("avalCompleto");
+    cacheBorrar("tiposUnidad");
     await handleLogout();
   }
+
+  // Aval completo y listado Tipo Unidad (pesados, solo para el Dashboard):
+  // se muestran primero desde la caché del navegador y se actualizan por detrás.
+  const cargarAval = useCallback(async () => {
+    const aval = await fetchDatosAval();
+    setDb((d) => ({
+      ...d,
+      ...(aval.avalCompleto ? { avalCompleto: aval.avalCompleto } : {}),
+      ...(aval.tiposUnidad ? { tiposUnidad: aval.tiposUnidad } : {}),
+      cargandoAval: false,
+    }));
+    if (aval.avalCompleto) cacheGuardar("avalCompleto", aval.avalCompleto);
+    if (aval.tiposUnidad) cacheGuardar("tiposUnidad", aval.tiposUnidad);
+  }, []);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError("");
+    // Lo pesado parte en paralelo, sin retrasar la pantalla inicial.
+    (async () => {
+      const [av, tu] = await Promise.all([cacheLeer("avalCompleto"), cacheLeer("tiposUnidad")]);
+      if (av && av.length) setDb((d) => (d.cargandoAval ? { ...d, avalCompleto: av, tiposUnidad: tu || d.tiposUnidad, cargandoAval: false } : d));
+      try { await cargarAval(); } catch (e) {
+        console.warn("No se pudo cargar el Aval", e);
+        setDb((d) => ({ ...d, cargandoAval: false }));
+      }
+    })();
     try {
-      const data = await fetchAllData();
-      setDb(data);
+      const data = await fetchDatosBase();
+      setDb((d) => ({ ...d, ...data }));
     } catch (e) {
       console.error(e);
       setError(
@@ -118,7 +159,7 @@ function AppInner() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cargarAval]);
 
   useEffect(() => {
     if (desbloqueado) reload();
@@ -134,9 +175,9 @@ function AppInner() {
     ultimaLectura.current = Date.now();
     async function refrescar() {
       try {
-        const data = await fetchAllData();
+        const [data] = await Promise.all([fetchDatosBase(), cargarAval()]);
         ultimaLectura.current = Date.now();
-        setDb(data);
+        setDb((d) => ({ ...d, ...data }));
       } catch (e) {
         console.warn("No se pudo actualizar en segundo plano", e);
       }
@@ -152,12 +193,13 @@ function AppInner() {
       document.removeEventListener("visibilitychange", alVolver);
       clearInterval(t);
     };
-  }, [desbloqueado]);
+  }, [desbloqueado, cargarAval]);
 
   // Si la sesión de administrador se cierra (o nunca existió) mientras se
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
+    if (view === "cuotas" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
     if (view === "jefa" && sinJefa) setView("dashboard");
@@ -196,7 +238,7 @@ function AppInner() {
   }
 
   async function uploadMaestro(text, archivo) {
-    const { gestion, control, cotizaciones, cambiosNuevos, summary } = await uploadMaestroRemote(
+    const { gestion, control, cotizaciones, cambiosNuevos, avalCompleto, summary } = await uploadMaestroRemote(
       text, db.gestion, db.control, db.cotizaciones
     );
     setDb((d) => ({
@@ -204,6 +246,7 @@ function AppInner() {
       gestion,
       control,
       cotizaciones,
+      avalCompleto: avalCompleto || d.avalCompleto,
       cambios: [...cambiosNuevos, ...d.cambios],
     }));
     anotarCarga("aval", archivo, null);
@@ -213,9 +256,16 @@ function AppInner() {
   async function uploadListaPrecios(text, archivo) {
     const { unidades, filasOtrosProyectos } = parseListaPrecios(text);
     const listaPrecios = await uploadListaPreciosRemote(unidades);
-    setDb((d) => ({ ...d, listaPrecios }));
+    const tu = await guardarTiposUnidadRemote(text);
+    setDb((d) => ({ ...d, listaPrecios, tiposUnidad: tu.tipos ? { ...d.tiposUnidad, ...tu.tipos } : d.tiposUnidad }));
     anotarCarga("lista_precios", archivo, `${Object.keys(listaPrecios).length} unidades`);
-    return { unidades: Object.values(listaPrecios), filasOtrosProyectos };
+    return { unidades: Object.values(listaPrecios), filasOtrosProyectos, tiposUnidad: { filas: tu.filas, error: tu.error } };
+  }
+
+  async function uploadCuotas(parsed, archivo) {
+    const { guardadas, borradas } = await guardarCuotasPagoRemote(parsed.filas, parsed.proyectosEnArchivo);
+    anotarCarga("cuotas_pago", archivo, `${parsed.clientes} clientes · ${guardadas} cuotas`);
+    return { clientes: parsed.clientes, guardadas, borradas };
   }
 
   async function uploadDescuentosUnidades(filas) {
@@ -289,6 +339,7 @@ function AppInner() {
         cargas={db.cargas}
       />
       <div className="flex-1 min-w-0">
+        <Suspense fallback={<div className="p-10 text-sm text-stone-500">Cargando…</div>}>
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
         {view === "carga" && !sinCarga && (
@@ -296,10 +347,12 @@ function AppInner() {
             onUploadMaestro={uploadMaestro}
             onUploadListaPrecios={uploadListaPrecios}
             onUploadDescuentosUnidades={uploadDescuentosUnidades}
+            onUploadCuotas={uploadCuotas}
           />
         )}
         {view === "cotizador" && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
         {view === "comisiones" && authSession && puedeComisiones && <Comisiones db={db} />}
+        {view === "cuotas" && authSession && puedeComisiones && <CuotasPagos cargas={db.cargas} usuario={authSession?.user?.email} />}
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}
@@ -317,6 +370,7 @@ function AppInner() {
             onRevisado={markRevisado}
           />
         )}
+        </Suspense>
       </div>
       <EditorDiseno puedeEditar={esAdmin} />
     </div>

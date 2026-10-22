@@ -105,8 +105,16 @@ export default function UploadMaestroPanel({ onUpload }) {
           </div>
           {result.filasOtrosProyectos > 0 && (
             <p className="text-xs text-stone-400 mt-3">
-              Se ignoraron {result.filasOtrosProyectos} filas de otros proyectos del Maestro Aval.
+              {result.filasOtrosProyectos} filas de otros proyectos no entran a la gestión de clientes (solo se leen en el Dashboard).
             </p>
+          )}
+          {result.avalCompletoFilas > 0 && (
+            <p className="text-xs text-emerald-700 mt-3">Dashboard: se guardaron {result.avalCompletoFilas} Opp del Aval completo (todos los proyectos y estados).</p>
+          )}
+          {result.avalCompletoError && (
+            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+              ⚠ No se pudo guardar el Aval completo para el Dashboard: {result.avalCompletoError}. ¿Corriste la migración v147 en Supabase?
+            </div>
           )}
           {result.filasSinOpp > 0 && (
             <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">

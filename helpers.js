@@ -125,6 +125,29 @@ function esFecha(r) {
   return r;
 }
 
+// Unifica escrituras distintas de una misma tipología del Aval
+// ("3D + 1B (C)", "3D+1B(C)", "3D+1B ( C )" → "3D+1B (C)").
+export function normalizarTipologia(s) {
+  return String(s || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s*\+\s*/g, "+")
+    .replace(/\s*\(\s*/g, " (")
+    .replace(/\s*\)/g, ")");
+}
+
+// Tipología tal como viene en la columna "Tipologia" del listado de precios, sin
+// la letra entre paréntesis ("2D + 1B (D)" → "2D+1B").
+export function limpiarTipologiaLista(s) {
+  return normalizarTipologia(String(s || "").replace(/\([^)]*\)/g, " "));
+}
+
+// Proyectos del Aval que el Dashboard no debe leer.
+export function esProyectoExcluidoDashboard(proyecto) {
+  const p = stripAccents(proyecto || "").toUpperCase();
+  return (/ACAC/.test(p) && p.includes("SAN PEDRO")) || (p.includes("OLIVO") && p.includes("VALLE"));
+}
+
 export function parseFechaCompleta(str) {
   const r = esFecha(parseAnyDate(str));
   if (!r) return null;

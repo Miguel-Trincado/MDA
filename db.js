@@ -1,5 +1,6 @@
 import { supabase } from "../supabaseClient";
-import { parseMaestro } from "./parseMaestro";
+import { parseMaestro, parseAvalCompleto } from "./parseMaestro";
+import { parseTiposUnidad } from "./parseListaPrecios";
 import { todayISO, nowISO } from "./helpers";
 
 /* ---------------------------------------------------------------------
@@ -29,6 +30,108 @@ function chunk(arr, size) {
   return out;
 }
 
+// Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos
+// (el resto en paralelo, ya que el Aval completo tiene decenas de miles de filas).
+async function fetchPaginado(table, orderCol, columns = "*") {
+  // orderCol puede ser una columna o una lista (clave compuesta): el orden debe
+  // ser único por fila, si no las páginas pueden repetir o saltarse filas.
+  const orden = Array.isArray(orderCol) ? orderCol : [orderCol];
+  const ordenar = (q) => orden.reduce((acc, c) => acc.order(c), q);
+  // La cuenta total y la primera página se piden a la vez.
+  const [conteo, primera] = await Promise.all([
+    supabase.from(table).select(orden[0], { count: "exact", head: true }),
+    ordenar(supabase.from(table).select(columns)).range(0, 999),
+  ]);
+  if (primera.error) return { data: [], error: primera.error };
+  const total = conteo.count || (primera.data || []).length;
+  const out = [...(primera.data || [])];
+  const paginas = [];
+  for (let from = 1000; from < total; from += 1000) paginas.push(from);
+  const resto = await Promise.all(
+    paginas.map((from) => ordenar(supabase.from(table).select(columns)).range(from, from + 999))
+  );
+  for (const r of resto) {
+    if (r.error) return { data: out, error: r.error };
+    out.push(...(r.data || []));
+  }
+  return { data: out, error: null };
+}
+
+// Lee código → Tipo Unidad/Tipología; si la columna tipologia aún no existe
+// (falta la migración v159), lee solo el Tipo Unidad.
+async function fetchTiposUnidad() {
+  const r = await fetchPaginado("lista_tipo_unidad", "codigo", "codigo,tipo_unidad,tipologia");
+  if (!r.error) return r;
+  return fetchPaginado("lista_tipo_unidad", "codigo", "codigo,tipo_unidad");
+}
+
+// Guarda código → Tipo Unidad del listado (todos los proyectos) para el Dashboard.
+// No rompe la carga del listado si la tabla aún no existe.
+export async function guardarTiposUnidadRemote(text) {
+  const filas = parseTiposUnidad(text);
+  if (filas.length === 0) return { filas: 0, tipos: {}, error: "" };
+  try {
+    await upsertInChunks("lista_tipo_unidad", filas.map((f) => objToRow(f)), "codigo");
+    const tipos = {};
+    filas.forEach((f) => { tipos[f.codigo] = { tipoUnidad: f.tipoUnidad, tipologia: f.tipologia }; });
+    return { filas: filas.length, tipos, error: "" };
+  } catch (e) {
+    return { filas: 0, tipos: null, error: e.message || String(e) };
+  }
+}
+
+// ---------- Cuotas y Pagos (migración v167) ----------
+export async function fetchCuotasPago() {
+  const r = await fetchPaginado("cuotas_pago", ["opp", "tipo_financiamiento", "nro_cuota"]);
+  if (r.error) throw r.error;
+  return (r.data || []).map(rowToObj);
+}
+
+// Guarda la foto de cobranza: sube las cuotas nuevas y borra las que ya no
+// vienen, solo de los proyectos que trae el archivo.
+export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
+  const carga = nowISO();
+  const rows = filas.map((f) => objToRow({ ...f, carga }));
+  await upsertInChunks("cuotas_pago", rows, "opp,tipo_financiamiento,nro_cuota");
+  let borradas = 0;
+  for (const proyecto of proyectosEnArchivo || []) {
+    const { data, error } = await supabase
+      .from("cuotas_pago")
+      .delete()
+      .eq("proyecto", proyecto)
+      .neq("carga", carga)
+      .select("opp");
+    if (error) throw error;
+    borradas += (data || []).length;
+  }
+  // Proyectos que no se manejan aquí (SALF, Sendero): se borran siempre.
+  for (const patron of ["%salf%", "%sendero%"]) {
+    const { data, error } = await supabase.from("cuotas_pago").delete().ilike("proyecto", patron).select("opp");
+    if (error) throw error;
+    borradas += (data || []).length;
+  }
+  return { guardadas: rows.length, borradas };
+}
+
+// Cuotas marcadas como "Bono pie" (no se suman a lo adeudado) — migración v173.
+export async function fetchBonosPie() {
+  const { data, error } = await supabase.from("cuotas_bono_pie").select("opp,tipo_financiamiento,nro_cuota");
+  if (error) throw error;
+  return (data || []).map((r) => `${r.opp}|${r.tipo_financiamiento}|${r.nro_cuota}`);
+}
+
+export async function marcarBonoPieRemote({ opp, tipoFinanciamiento, nroCuota }, marcado, usuario) {
+  const q = supabase.from("cuotas_bono_pie");
+  const { error } = marcado
+    ? await q.upsert({ opp, tipo_financiamiento: tipoFinanciamiento, nro_cuota: nroCuota, marcado_por: usuario || "", updated_at: new Date().toISOString() }, { onConflict: "opp,tipo_financiamiento,nro_cuota" })
+    : await q.delete().eq("opp", opp).eq("tipo_financiamiento", tipoFinanciamiento).eq("nro_cuota", nroCuota);
+  if (error) throw error;
+}
+
+export async function guardarAvalCompletoRemote(rows) {
+  await upsertInChunks("aval_completo", rows.map((r) => objToRow(r)), "opp");
+}
+
 async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
   for (const part of chunk(rows, chunkSize)) {
     if (part.length === 0) continue;
@@ -40,7 +143,31 @@ async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {
 /* ---------------------------------------------------------------------
  * Carga inicial de todos los datos
  * ------------------------------------------------------------------- */
-export async function fetchAllData() {
+// Datos pesados que solo usa el Dashboard: se leen aparte para no retrasar
+// la pantalla inicial. Con caché local se muestran al instante al refrescar.
+export async function fetchDatosAval() {
+  const [tiposUnidadRes, avalCompletoRes] = await Promise.all([
+    fetchTiposUnidad(),
+    fetchPaginado("aval_completo", "opp", "opp,rut,cliente,ejecutivo,proyecto,estado,tipologia,region,lote,fecha,fecha_opp,fecha_promesa,fecha_escritura,fecha_desistimiento"),
+  ]);
+  if (avalCompletoRes.error) console.warn("No se pudo cargar aval_completo:", avalCompletoRes.error.message);
+  if (tiposUnidadRes.error) console.warn("No se pudo cargar lista_tipo_unidad:", tiposUnidadRes.error.message);
+  const avalCompleto = (avalCompletoRes.data || []).map(rowToObj);
+  const tiposUnidad = {};
+  (tiposUnidadRes.data || []).forEach((row) => {
+    tiposUnidad[String(row.codigo || "").trim().toUpperCase()] = {
+      tipoUnidad: row.tipo_unidad || "",
+      ...(row.tipologia !== undefined ? { tipologia: row.tipologia || "" } : {}),
+    };
+  });
+  // Si falló la lectura, se devuelve null para no pisar lo que ya había.
+  return {
+    avalCompleto: avalCompletoRes.error ? null : avalCompleto,
+    tiposUnidad: tiposUnidadRes.error ? null : tiposUnidad,
+  };
+}
+
+export async function fetchDatosBase() {
   const [gestionRes, controlRes, cambiosRes, historialRes, cotizacionesRes, listaPreciosRes, metasRes, cambiosEstadoOppRes, cargasRes] = await Promise.all([
     supabase.from("gestion").select("*"),
     supabase.from("control_interno").select("*"),
@@ -100,6 +227,12 @@ export async function fetchAllData() {
   });
 
   return { gestion, control, cambios, historial, cotizaciones, metas, listaPrecios, cambiosEstadoOpp, cargas };
+}
+
+// Carga completa (base + Aval), por si se necesita todo junto.
+export async function fetchAllData() {
+  const [base, aval] = await Promise.all([fetchDatosBase(), fetchDatosAval()]);
+  return { ...base, avalCompleto: aval.avalCompleto || [], tiposUnidad: aval.tiposUnidad || {} };
 }
 
 /* ---------------------------------------------------------------------
@@ -403,12 +536,25 @@ export async function uploadMaestroRemote(text, currentGestion, currentControl, 
     cambiosInsertados = (data || []).map(rowToObj);
   }
 
+  // Aval completo para el Dashboard (todos los proyectos y estados). Si la
+  // tabla aún no existe (falta la migración v147) no rompe la carga normal.
+  let avalCompleto = null;
+  let avalCompletoError = "";
+  try {
+    avalCompleto = parseAvalCompleto(text);
+    await guardarAvalCompletoRemote(avalCompleto);
+  } catch (e) {
+    avalCompleto = null;
+    avalCompletoError = e.message || String(e);
+  }
+
   return {
     gestion: gestionOut,
     control: controlOut,
     cotizaciones: cotizacionesOut,
     cambiosNuevos: cambiosInsertados,
-    summary: { ...summary, filas, clientes, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga },
+    avalCompleto,
+    summary: { ...summary, filas, clientes, filasOtrosProyectos, filasSinOpp, oppsDuplicadosEnCarga, avalCompletoFilas: avalCompleto ? avalCompleto.length : 0, avalCompletoError },
   };
 }
 
@@ -705,6 +851,12 @@ export async function listarPerfilesRemote() {
   const { data, error } = await supabase.rpc("listar_perfiles");
   if (error) throw error;
   return (data || []).map(rowToObj);
+}
+
+// Marca "estoy conectado" (última conexión del usuario). Falla en silencio: no debe molestar a nadie.
+export async function registrarConexionRemote() {
+  const { error } = await supabase.rpc("registrar_conexion");
+  if (error) console.warn("No se pudo registrar la conexión:", error.message);
 }
 
 export async function vincularEjecutivaRemote(email, ejecutivo) {

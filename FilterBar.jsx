@@ -1,5 +1,5 @@
 import { Bloque } from "../lib/layout";
-import { Calendar, Building2, LayoutGrid, ChevronDown } from "lucide-react";
+import { Calendar, Building2, LayoutGrid, ChevronDown, ListFilter } from "lucide-react";
 
 const TODO = "Todo";
 
@@ -9,8 +9,8 @@ const TODO = "Todo";
 function Tarjeta({ icon: Icon, label, bid, orden, span, children }) {
   return (
     <Bloque id={bid} grupo="dash-filtros" orden={orden} span={span} spanM={60}>
-    <div className="bg-white rounded-2xl shadow-card px-4 py-3 flex items-center gap-3">
-      <span className="w-11 h-11 rounded-xl bg-[#EEF3FF] text-[#2563EB] flex items-center justify-center shrink-0">
+    <div className="bg-white rounded-2xl shadow-card px-4 py-3 flex items-center gap-3 overflow-hidden">
+      <span className="w-11 h-11 min-w-[32px] min-h-[32px] rounded-xl bg-[#EEF3FF] text-[#2563EB] flex items-center justify-center shrink-0">
         <Icon size={20} />
       </span>
       <div className="flex flex-col min-w-0 flex-1">
@@ -51,11 +51,14 @@ export default function FilterBar({ filtros, onChange, opciones }) {
           <Selector value={filtros.periodoHasta} onChange={set("periodoHasta")} options={opciones.periodos} />
         </div>
       </Tarjeta>
-      <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={18}>
+      <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={12}>
         <Selector value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />
       </Tarjeta>
-      <Tarjeta icon={LayoutGrid} label="Tipología" bid="filtro-tipologia" orden={2} span={18}>
+      <Tarjeta icon={LayoutGrid} label="Tipo Unidad" bid="filtro-tipologia" orden={2} span={12}>
         <Selector value={filtros.tipologia} onChange={set("tipologia")} options={opciones.tipologias} />
+      </Tarjeta>
+      <Tarjeta icon={ListFilter} label="Estado" bid="filtro-estado" orden={3} span={12}>
+        <Selector value={filtros.estado} onChange={set("estado")} options={opciones.estados} />
       </Tarjeta>
     </div>
   );
