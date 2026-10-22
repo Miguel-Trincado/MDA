@@ -57,6 +57,9 @@ export function fechaIsoDe(v) {
   return d ? d.toISOString().slice(0, 10) : "";
 }
 
+// Proyectos que no se manejan en Cuotas y Pagos (se ignoran al leer el archivo).
+export const esProyectoExcluido = (p) => /\b(salf|sendero)/i.test(stripAccents(String(p || "")));
+
 const esPromesada = (estado) => {
   const e = stripAccents(String(estado || "")).toLowerCase();
   return e.includes("promes") && !e.includes("desist");
@@ -104,6 +107,7 @@ export function parseCuotasPago(matriz) {
     if (!opp || !/^\d+$/.test(opp)) continue;
     totalFilasArchivo++;
     const proyecto = String(get(fila, "proyecto") ?? "").replace(/\s+/g, " ").trim();
+    if (esProyectoExcluido(proyecto)) continue;
     if (proyecto) proyectos.add(proyecto);
     if (!esPromesada(get(fila, "estado"))) continue;
 

@@ -21,11 +21,16 @@ export function ordenTipo(t) {
   return i === -1 ? TIPOS_ORDEN.length : i;
 }
 
+// Pago contra escritura: se paga en la escritura (el cupón del Aval lo cubre por el mismo
+// monto y cualquier diferencia se salda ahí), por lo que nunca cuenta como mora.
+export const esContraEscritura = (tipo) => /contra\s*escritura/i.test(String(tipo || ""));
+
 export function estadoDeCuota(f, hoy) {
   const monto = Number(f.montoCuota) || 0;
   const pag = Number(f.montoPagadoUf) || 0;
   if (pag >= monto - TOLERANCIA_UF) return "pagada";
   if (pag > 0) return "parcial";
+  if (esContraEscritura(f.tipoFinanciamiento)) return "porVencer";
   return f.fechaVencimiento && f.fechaVencimiento < hoy ? "vencida" : "porVencer";
 }
 
@@ -35,7 +40,7 @@ export function enriquecer(f, hoy) {
   const pag = Number(f.montoPagadoUf) || 0;
   const estado = estadoDeCuota(f, hoy);
   const pendiente = estado === "pagada" ? 0 : r3(Math.max(0, monto - pag));
-  const venceAntes = !!f.fechaVencimiento && f.fechaVencimiento < hoy;
+  const venceAntes = !!f.fechaVencimiento && f.fechaVencimiento < hoy && !esContraEscritura(f.tipoFinanciamiento);
   return {
     ...f,
     monto,

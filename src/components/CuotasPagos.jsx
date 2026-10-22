@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Wallet, Users, CalendarClock, AlertTriangle, ArrowLeft, Search, RefreshCw, ChevronDown, ChevronRight,
-  Banknote, PiggyBank, HandCoins, CircleDollarSign,
+  Banknote, PiggyBank, HandCoins, CircleDollarSign, FileSpreadsheet, FileText,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { MESES_ES } from "../lib/constants";
 import { fmtDate, fmtDateTime, esProyectoPilpilen, normalizarBusqueda } from "../lib/helpers";
 import { fetchCuotasPago } from "../lib/db";
+import { esProyectoExcluido } from "../lib/parseCuotas";
+import { exportarExcel, exportarPdf } from "../lib/exportCuotas";
 import { useValorUFHoy } from "../lib/uf";
 import { armarClientes, totalesGenerales, resumenPorTipo, resumenPorMes, hoyChile, TIPOS_ORDEN } from "../lib/cuotas";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
@@ -19,6 +21,7 @@ const fmtUF0 = (n) => `${nf0.format(Number(n) || 0)} UF`;
 const fmtCLP = (n) => `$ ${nf0.format(Math.round(Number(n) || 0))}`;
 const fmtPct = (x) => `${Math.round((Number(x) || 0) * 100)}%`;
 const TODOS = "__todos__";
+const Fila = ({ children }) => <div className="grid-60 gap-5">{children}</div>;
 
 function fmtRut(r) {
   const s = String(r || "").replace(/[^0-9kK]/g, "");
@@ -105,16 +108,16 @@ export function Totales({ clientes, hoy }) {
         ))}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard tone="blue" icon={Users} label="Clientes promesados" value={String(k.clientes)} sub={`${nf0.format(k.nCuotas)} cuotas en total`} />
-        <KpiCard tone="purple" icon={CircleDollarSign} label="Total a cobrar" value={fmtUF0(k.total)} sub={valorUF ? `≈ ${fmtCLP(k.total * valorUF)}` : "en UF"} />
-        <KpiCard tone="green" icon={Wallet} label="Pagado" value={fmtUF0(k.pagado)} sub={`${fmtPct(avance)} del total · ${nf0.format(k.nPagadas)} cuotas`} />
-        <KpiCard tone="amber" icon={CalendarClock} label="Falta por pagar" value={fmtUF0(k.saldo)} sub={valorUF ? `≈ ${fmtCLP(k.saldo * valorUF)}` : "en UF"} />
-        <KpiCard tone="pink" icon={AlertTriangle} label="Vencido sin pagar" value={fmtUF0(k.vencido)} sub={`${nf0.format(k.nVencidas)} cuotas vencidas`} />
-        <KpiCard tone="blue" icon={CalendarClock} label={`Por percibir ${fmtMes(mesActual)}`} value={fmtUF0(esteMes?.pendiente || 0)} sub={valorUF ? `≈ ${fmtCLP((esteMes?.pendiente || 0) * valorUF)}` : "cuotas del mes"} />
+      <div className="grid-60 gap-4">
+        <KpiCard bid="cuo-kpi1" orden={0} tone="blue" icon={Users} label="Clientes promesados" value={String(k.clientes)} sub={`${nf0.format(k.nCuotas)} cuotas en total`} />
+        <KpiCard bid="cuo-kpi2" orden={1} tone="purple" icon={CircleDollarSign} label="Total a cobrar" value={fmtUF0(k.total)} sub={valorUF ? `≈ ${fmtCLP(k.total * valorUF)}` : "en UF"} />
+        <KpiCard bid="cuo-kpi3" orden={2} tone="green" icon={Wallet} label="Pagado" value={fmtUF0(k.pagado)} sub={`${fmtPct(avance)} del total · ${nf0.format(k.nPagadas)} cuotas`} />
+        <KpiCard bid="cuo-kpi4" orden={3} tone="amber" icon={CalendarClock} label="Falta por pagar" value={fmtUF0(k.saldo)} sub={valorUF ? `≈ ${fmtCLP(k.saldo * valorUF)}` : "en UF"} />
+        <KpiCard bid="cuo-kpi5" orden={4} tone="pink" icon={AlertTriangle} label="Vencido sin pagar" value={fmtUF0(k.vencido)} sub={`${nf0.format(k.nVencidas)} cuotas vencidas`} />
+        <KpiCard bid="cuo-kpi6" orden={5} tone="blue" icon={CalendarClock} label={`Por percibir ${fmtMes(mesActual)}`} value={fmtUF0(esteMes?.pendiente || 0)} sub={valorUF ? `≈ ${fmtCLP((esteMes?.pendiente || 0) * valorUF)}` : "cuotas del mes"} />
       </div>
 
-      <Panel>
+      <Fila><Panel bid="cuo-tipos" grupo="cuo-f1" orden={0} span={60}>
         <CardTitle icon={Wallet}>Resumen por tipo de financiamiento</CardTitle>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -139,9 +142,9 @@ export function Totales({ clientes, hoy }) {
           </table>
         </div>
         <p className="text-[11px] text-stone-400 mt-2">Haz clic en un tipo para filtrar todo lo de abajo.</p>
-      </Panel>
+      </Panel></Fila>
 
-      <Panel>
+      <Fila><Panel bid="cuo-meses" grupo="cuo-f2" orden={0} span={60}>
         <CardTitle icon={CalendarClock} right={<Interruptor opciones={[["todos", "Todos los meses"], ["desde", "Desde este mes"]]} valor={rango} onChange={setRango} />}>
           Cuánto se debe percibir por mes
         </CardTitle>
@@ -197,7 +200,7 @@ export function Totales({ clientes, hoy }) {
             <p className="text-[11px] text-stone-400 mt-2">Haz clic en un mes para ver qué cliente paga cada cuota. El monto en pesos es una estimación con la UF de hoy.</p>
           </>
         )}
-      </Panel>
+      </Panel></Fila>
     </div>
   );
 }
@@ -267,7 +270,7 @@ function ListaClientes({ clientes, onAbrir }) {
   const conteo = (s) => clientes.filter((c) => c.situacion === s).length;
 
   return (
-    <Panel>
+    <Fila><Panel bid="cuo-lista" grupo="cuo-f3" orden={0} span={60}>
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <span className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -325,7 +328,7 @@ function ListaClientes({ clientes, onAbrir }) {
         {lista.length === 0 && <p className="text-sm text-stone-400 py-8 text-center">No hay clientes con ese filtro.</p>}
       </div>
       <p className="text-[11px] text-stone-400 mt-2">Las columnas por tipo muestran cuotas pagadas / cuotas pactadas (en rojo si tiene cuotas vencidas). Haz clic en un cliente para ver su ficha.</p>
-    </Panel>
+    </Panel></Fila>
   );
 }
 
@@ -336,7 +339,7 @@ export function Ficha({ cliente: c, onVolver }) {
       <button onClick={onVolver} className="self-start flex items-center gap-1.5 text-sm text-[#2563EB] hover:underline">
         <ArrowLeft size={16} /> Volver a clientes
       </button>
-      <Panel>
+      <Fila><Panel bid="cuo-ficha-cab" grupo="cuo-f4" orden={0} span={60}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-2xl text-[#13234A]">{c.cliente}</h2>
@@ -368,12 +371,12 @@ export function Ficha({ cliente: c, onVolver }) {
           <Barra pct={c.avance} className="flex-1 h-3" />
           <span className="text-sm text-stone-600 w-24 text-right">{fmtPct(c.avance)} pagado</span>
         </div>
-      </Panel>
+      </Panel></Fila>
 
       {c.tipos.map((t) => {
         const Icono = ICONO_TIPO[t.tipo] || Wallet;
         return (
-          <Panel key={t.tipo}>
+          <Fila key={t.tipo}><Panel bid={"cuo-ficha-" + t.tipo.toLowerCase().replace(/[^a-z0-9]+/g, "-")} grupo="cuo-f5" orden={0} span={60}>
             <CardTitle
               icon={Icono}
               right={
@@ -416,7 +419,7 @@ export function Ficha({ cliente: c, onVolver }) {
                 </tbody>
               </table>
             </div>
-          </Panel>
+          </Panel></Fila>
         );
       })}
     </div>
@@ -426,6 +429,7 @@ export function Ficha({ cliente: c, onVolver }) {
 /* ============================ PANTALLA ============================ */
 export function CuotasPagosVista({ filas, cargadoEl, onRecargar, hoy: hoyProp }) {
   const hoy = hoyProp || hoyChile();
+  const { valorUF } = useValorUFHoy();
   const [vista, setVista] = useState("clientes");
   const [proyectoSel, setProyectoSel] = useState(null);
   const [oppSel, setOppSel] = useState("");
@@ -455,6 +459,12 @@ export function CuotasPagosVista({ filas, cargadoEl, onRecargar, hoy: hoyProp })
           </select>
         </label>
         <Interruptor opciones={[["clientes", "Por cliente"], ["totales", "Totales y por mes"]]} valor={vista} onChange={(v) => { setVista(v); setOppSel(""); }} />
+        <button onClick={() => exportarExcel({ clientes, proyecto: proyecto === TODOS ? "Todos los proyectos" : proyecto, hoy, valorUF })} className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50" title="Descargar Excel con totales por mes, por cliente y detalle de cuotas">
+          <FileSpreadsheet size={15} className="text-emerald-600" /> Excel
+        </button>
+        <button onClick={() => exportarPdf({ clientes, proyecto: proyecto === TODOS ? "Todos los proyectos" : proyecto, hoy, valorUF })} className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-2 text-xs font-medium text-stone-600 hover:bg-stone-50" title="Descargar PDF con totales por mes y por cliente">
+          <FileText size={15} className="text-rose-600" /> PDF
+        </button>
         {onRecargar && (
           <button onClick={onRecargar} className="ml-auto flex items-center gap-1.5 text-xs text-stone-500 hover:text-[#2563EB]" title="Volver a leer los datos">
             <RefreshCw size={14} /> Actualizar
@@ -487,7 +497,7 @@ export default function CuotasPagos({ cargas }) {
     setCargando(true);
     setError("");
     try {
-      setFilas(await fetchCuotasPago());
+      setFilas((await fetchCuotasPago()).filter((f) => !esProyectoExcluido(f.proyecto)));
     } catch (e) {
       setError(e.message || String(e));
     } finally {
