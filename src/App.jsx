@@ -11,6 +11,7 @@ const Cotizador = lazy(() => import("./components/Cotizador"));
 const Comisiones = lazy(() => import("./components/Comisiones"));
 const MisComisiones = lazy(() => import("./components/MisComisiones"));
 const UsuariosPanel = lazy(() => import("./components/UsuariosPanel"));
+const CuotasPagos = lazy(() => import("./components/CuotasPagos"));
 import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
@@ -19,7 +20,7 @@ import { cacheLeer, cacheGuardar, cacheBorrar } from "./lib/cacheLocal";
 import {
   fetchDatosBase, fetchDatosAval, saveGestionRemote, markRevisadoRemote,
   uploadMaestroRemote, resolveCambioRemote, setMetaMensualRemote,
-  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote,
+  uploadListaPreciosRemote, guardarDescuentosUnidades, registrarCargaRemote, guardarTiposUnidadRemote, guardarCuotasPagoRemote,
 } from "./lib/db";
 import { parseListaPrecios } from "./lib/parseListaPrecios";
 
@@ -185,6 +186,7 @@ function AppInner() {
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
+    if (view === "cuotas" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
     if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
     if (view === "jefa" && sinJefa) setView("dashboard");
@@ -245,6 +247,12 @@ function AppInner() {
     setDb((d) => ({ ...d, listaPrecios, tiposUnidad: tu.tipos ? { ...d.tiposUnidad, ...tu.tipos } : d.tiposUnidad }));
     anotarCarga("lista_precios", archivo, `${Object.keys(listaPrecios).length} unidades`);
     return { unidades: Object.values(listaPrecios), filasOtrosProyectos, tiposUnidad: { filas: tu.filas, error: tu.error } };
+  }
+
+  async function uploadCuotas(parsed, archivo) {
+    const { guardadas, borradas } = await guardarCuotasPagoRemote(parsed.filas, parsed.proyectosEnArchivo);
+    anotarCarga("cuotas_pago", archivo, `${parsed.clientes} clientes · ${guardadas} cuotas`);
+    return { clientes: parsed.clientes, guardadas, borradas };
   }
 
   async function uploadDescuentosUnidades(filas) {
@@ -326,10 +334,12 @@ function AppInner() {
             onUploadMaestro={uploadMaestro}
             onUploadListaPrecios={uploadListaPrecios}
             onUploadDescuentosUnidades={uploadDescuentosUnidades}
+            onUploadCuotas={uploadCuotas}
           />
         )}
         {view === "cotizador" && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
         {view === "comisiones" && authSession && puedeComisiones && <Comisiones db={db} />}
+        {view === "cuotas" && authSession && puedeComisiones && <CuotasPagos cargas={db.cargas} />}
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}

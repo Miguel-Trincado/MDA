@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   BarChart3, Users, Calculator, UserCog, Database,
-  ChevronsLeft, ChevronsRight, Settings, FileUp, LogOut, LayoutDashboard,
+  ChevronsLeft, ChevronsRight, Settings, FileUp, LogOut, LayoutDashboard, Wallet,
 } from "lucide-react";
 import { Avatar } from "./Shared";
 import { useLayout } from "../lib/layout";
@@ -13,6 +13,7 @@ const ICONS = {
   jefa: UserCog,
   comisiones: Database,
   miscomisiones: Database,
+  cuotas: Wallet,
   usuarios: UserCog,
 };
 
@@ -28,6 +29,7 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
     { key: "ejecutivo", label: "Ejecutivo" },
     { key: "cotizador", label: "Simulador" },
     ...(sinJefa ? [] : [{ key: "jefa", label: "Jefa de Ventas" }]),
+    ...(showComisiones ? [{ key: "cuotas", label: "Cuotas y Pagos" }] : []),
     ...(showComisiones ? [{ key: "comisiones", label: "Comisiones" }] : []),
     ...(esEjecutiva ? [{ key: "miscomisiones", label: "Mis comisiones" }] : []),
   ];
@@ -72,10 +74,10 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
       {/* Cuenta: al final del menú, tipo engranaje — agrupa la sesión de
           administrador y, dentro de ella, la opción de cargar el Maestro
           Aval / listado de precios (antes era su propia pestaña arriba). */}
-      {!colapsado && cargas && (cargas.aval || cargas.aval_completo || cargas.lista_precios) && (
+      {!colapsado && cargas && (cargas.aval || cargas.aval_completo || cargas.lista_precios || cargas.cuotas_pago) && (
         <div className="px-4 py-3 border-t border-white/10 text-[11px] text-slate-400 leading-snug">
           <div className="uppercase tracking-wide text-[10px] text-slate-500 mb-1">Datos al día</div>
-          {[["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"]].map(([k, label]) =>
+          {[["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"], ["cuotas_pago", "Cuotas"]].map(([k, label]) =>
             cargas[k] ? (
               <div key={k}>
                 {label}: {new Date(cargas[k].createdAt).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}

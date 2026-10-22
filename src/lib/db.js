@@ -33,10 +33,14 @@ function chunk(arr, size) {
 // Supabase devuelve como máximo 1000 filas por consulta: se pide por tramos
 // (el resto en paralelo, ya que el Aval completo tiene decenas de miles de filas).
 async function fetchPaginado(table, orderCol, columns = "*") {
+  // orderCol puede ser una columna o una lista (clave compuesta): el orden debe
+  // ser único por fila, si no las páginas pueden repetir o saltarse filas.
+  const orden = Array.isArray(orderCol) ? orderCol : [orderCol];
+  const ordenar = (q) => orden.reduce((acc, c) => acc.order(c), q);
   // La cuenta total y la primera página se piden a la vez.
   const [conteo, primera] = await Promise.all([
-    supabase.from(table).select(orderCol, { count: "exact", head: true }),
-    supabase.from(table).select(columns).order(orderCol).range(0, 999),
+    supabase.from(table).select(orden[0], { count: "exact", head: true }),
+    ordenar(supabase.from(table).select(columns)).range(0, 999),
   ]);
   if (primera.error) return { data: [], error: primera.error };
   const total = conteo.count || (primera.data || []).length;
@@ -44,7 +48,7 @@ async function fetchPaginado(table, orderCol, columns = "*") {
   const paginas = [];
   for (let from = 1000; from < total; from += 1000) paginas.push(from);
   const resto = await Promise.all(
-    paginas.map((from) => supabase.from(table).select(columns).order(orderCol).range(from, from + 999))
+    paginas.map((from) => ordenar(supabase.from(table).select(columns)).range(from, from + 999))
   );
   for (const r of resto) {
     if (r.error) return { data: out, error: r.error };
@@ -74,6 +78,33 @@ export async function guardarTiposUnidadRemote(text) {
   } catch (e) {
     return { filas: 0, tipos: null, error: e.message || String(e) };
   }
+}
+
+// ---------- Cuotas y Pagos (migración v167) ----------
+export async function fetchCuotasPago() {
+  const r = await fetchPaginado("cuotas_pago", ["opp", "tipo_financiamiento", "nro_cuota"]);
+  if (r.error) throw r.error;
+  return (r.data || []).map(rowToObj);
+}
+
+// Guarda la foto de cobranza: sube las cuotas nuevas y borra las que ya no
+// vienen, solo de los proyectos que trae el archivo.
+export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
+  const carga = nowISO();
+  const rows = filas.map((f) => objToRow({ ...f, carga }));
+  await upsertInChunks("cuotas_pago", rows, "opp,tipo_financiamiento,nro_cuota");
+  let borradas = 0;
+  for (const proyecto of proyectosEnArchivo || []) {
+    const { data, error } = await supabase
+      .from("cuotas_pago")
+      .delete()
+      .eq("proyecto", proyecto)
+      .neq("carga", carga)
+      .select("opp");
+    if (error) throw error;
+    borradas += (data || []).length;
+  }
+  return { guardadas: rows.length, borradas };
 }
 
 export async function guardarAvalCompletoRemote(rows) {
