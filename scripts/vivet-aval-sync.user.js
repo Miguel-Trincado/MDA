@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vivet → CRM Pilpilén (Aval completo)
 // @namespace    mda.pilpilen
-// @version      1.6
+// @version      1.7
 // @description  Cuando entras a Vivet, envía el Aval completo al CRM (como máximo 1 vez cada N horas).
 // @match        https://mda.vivetsoft.cl/*
 // @grant        GM_xmlhttpRequest
@@ -29,6 +29,46 @@
     "region", "fechacotizacion", "fechareserva", "fechacierre", "fechapromesa", "fechaescritura", "Fechadesistimiento", "CuponPagoContraEscritura",
   ];
 
+  // Columnas del "Maestro Aval" (CSV de Vivet) que usa el CRM para Ejecutivo, Comisiones, Jefa, etc.
+  // [encabezado del CSV, campo del reporte de Vivet, tipo]  (d = fecha dd/mm/aaaa, dt = fecha y hora)
+  const MAESTRO = [
+    ["Opp", "Id_Oportunidad"], ["Proyecto", "Nombre_Proyecto"], ["Ejecutivo", "Ejecutivo"], ["Fecha Opp", "FechaOportunidad", "dt"],
+    ["Lote", "lote_uni"], ["Tipología", "Tipologiareporte"], ["Estado", "Estado"], ["Precio Lista Opp", "Precio_Lista_Oportunidad"],
+    ["Descuento Uni. Principal", "Descuento_Unidad_Principal"], ["Descuento Estacionamiento", "Descuento_Estacionamiento"],
+    ["RUT Cliente", "Rut_cliente"], ["Nombre Cliente", "Nombre_cliente"], ["Segundo Nombre", "cliente_segundo_nombre"],
+    ["Apellido Paterno", "Apellido_Cliente"], ["Apellido Materno", "Apellido_Materno"], ["Teléfonos", "Telefonos"],
+    ["Renta Cliente", "Rentacliente"], ["Región Cliente", "region"],
+    ["Fecha Cotización", "fechacotizacion", "d"], ["Fecha Reserva", "fechareserva", "d"], ["Fecha Cierre", "fechacierre", "d"],
+    ["Fecha Promesa", "fechapromesa", "d"], ["Fecha Escritura", "fechaescritura", "d"], ["Fecha Desistimiento", "Fechadesistimiento", "d"],
+    ["Cupon Uni. Principal", "CuponUnidadPrincipal"], ["Cupon Estacionamiento", "CuponEstacionamiento"], ["Cupon Bodega", "CuponBodega"],
+    ["Cupon Ahorro Previo", "CuponAhorroPrevio"], ["Cupon Pago Contra Escritura", "CuponPagoContraEscritura"],
+  ];
+
+  // Deja las fechas como las entrega el CSV manual: dd/mm/aaaa, o aaaa-mm-dd hh:mm:ss para la fecha de la Opp.
+  function fechaCsv(v, tipo) {
+    const s = String(v === null || v === undefined ? "" : v).trim();
+    if (!s) return "";
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) return tipo === "dt" ? `${m[1]}-${m[2]}-${m[3]} ${m[4] || "00"}:${m[5] || "00"}:${m[6] || "00"}` : `${m[3]}/${m[2]}/${m[1]}`;
+    m = s.match(/^(\d{2})[-/](\d{2})[-/](\d{4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/);
+    if (m) return tipo === "dt" ? `${m[3]}-${m[2]}-${m[1]} ${m[4] || "00"}:${m[5] || "00"}:${m[6] || "00"}` : `${m[1]}/${m[2]}/${m[3]}`;
+    return s;
+  }
+
+  // Arma el texto (separado por tabulaciones) que el CRM lee igual que el Aval pegado a mano. Solo Pilpilén.
+  function armarMaestro(data) {
+    const pil = data.filter((d) => /pilpil/i.test(String(d.Nombre_Proyecto || "")));
+    const usaCupon = pil.some((d) => String(d.CuponPagoContraEscritura === null || d.CuponPagoContraEscritura === undefined ? "" : d.CuponPagoContraEscritura).trim() !== "");
+    const cols = MAESTRO.filter((c) => usaCupon || c[0] !== "Cupon Pago Contra Escritura");
+    const celda = (d, c) => {
+      const v = d[c[1]];
+      const t = c[2] ? fechaCsv(v, c[2]) : String(v === null || v === undefined ? "" : v);
+      return t.replace(/[\t\r\n]+/g, " ").trim();
+    };
+    const lineas = [cols.map((c) => c[0]).join("\t")].concat(pil.map((d) => cols.map((c) => celda(d, c)).join("\t")));
+    return { texto: lineas.join("\n"), filas: pil.length };
+  }
+
   const meta = document.querySelector('meta[name="csrf-token"]');
   if (!meta) return; // página de login u otra sin sesión
 
@@ -54,7 +94,7 @@
         url: CRM_URL,
         headers: { "Content-Type": "application/json", "x-sync-key": CLAVE },
         data: JSON.stringify(payload),
-        timeout: 120000,
+        timeout: 180000,
         onload: (r) => {
           if (r.status < 200 || r.status >= 300) return reject(new Error(`CRM ${r.status}: ${String(r.responseText).slice(0, 300)}`));
           try { resolve(JSON.parse(r.responseText)); } catch (e) { resolve({}); }
@@ -138,11 +178,27 @@
         guardadas += Number(r.guardadas) || 0;
         if (r.cargaError) cargaError = r.cargaError;
       }
-      GM_setValue("ultima", Date.now());
-      if (cargaError) {
+      // Segundo envío: el mismo Aval en formato "Maestro", para que alimente Ejecutivo, Comisiones, etc.
+      let maestroError = "";
+      let maestroResumen = "";
+      const mae = armarMaestro(data);
+      if (mae.filas > 0) {
+        try {
+          aviso(`Actualizando Ejecutivo y Comisiones en el CRM (${mae.filas} filas de Pilpilén)…`, false, true);
+          const rm = await enviar({ maestro: mae.texto });
+          maestroResumen = rm.resumen || "";
+        } catch (e) {
+          maestroError = e.message || String(e);
+        }
+      }
+      // Si el segundo envío falló, se reintenta en ~15 minutos en vez de esperar las horas completas.
+      GM_setValue("ultima", maestroError ? Date.now() - (HORAS * 3600 * 1000 - 15 * 60 * 1000) : Date.now());
+      if (maestroError) {
+        aviso(`Aval guardado, pero NO se pudo actualizar Ejecutivo/Comisiones: ${maestroError}`, true);
+      } else if (cargaError) {
         aviso(`Aval guardado (${guardadas} filas, Opp más alta ${maxOpp}), pero no se pudo anotar en "Datos al día": ${cargaError}`, true);
       } else {
-        aviso(`Aval guardado en el CRM: ${guardadas} de ${filas.length} filas · Opp más alta de Vivet: ${maxOpp}`);
+        aviso(`Aval guardado en el CRM: ${guardadas} de ${filas.length} filas · Opp más alta de Vivet: ${maxOpp}${maestroResumen ? " · Ejecutivo/Comisiones al día (" + maestroResumen + ")" : ""}`);
       }
     } catch (e) {
       aviso("No se pudo enviar el Aval al CRM: " + (e.message || e), true);

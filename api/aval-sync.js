@@ -21,6 +21,9 @@ function esProyectoExcluidoDashboard(proyecto) {
 
 const TROZO = 400;
 
+// La ingesta del Aval completa puede tardar más que el límite por defecto.
+export const config = { maxDuration: 60 };
+
 function claveOk(recibida, esperada) {
   const a = Buffer.from(String(recibida || ""));
   const b = Buffer.from(String(esperada || ""));
@@ -94,6 +97,15 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+
+    // Aval en formato "Maestro" (solo Pilpilén): alimenta Ejecutivo, Comisiones, Jefa, etc., igual que
+    // subir el archivo a mano en Carga. El código es el mismo de la app (api/_maestro.mjs).
+    if (typeof body.maestro === "string") {
+      const { ingestarMaestro } = await import("./_maestro.mjs");
+      const r = await ingestarMaestro(body.maestro);
+      return res.status(200).json({ ok: true, maestro: true, resumen: r.resumen, ...(r.cargaError ? { cargaError: r.cargaError } : {}) });
+    }
+
     const rows = Array.isArray(body.rows) ? body.rows : [];
     const porOpp = new Map();
     for (const r of rows) {
