@@ -37,7 +37,15 @@ export function estadoDeCuota(f, hoy) {
 // Una cuota con sus montos ya calculados.
 export const claveCuota = (f) => `${f.opp}|${f.tipoFinanciamiento}|${f.nroCuota}`;
 
-export function enriquecer(f, hoy, bonos) {
+// Abono Provisión de Gastos: el reporte trae mal la fecha de vencimiento; cuando la cuota está
+// pagada, se pagó el día de la promesa, así que se ubica en ese día (y en ese mes).
+export const esAbonoGastos = (tipo) => /abono\s*provisi/i.test(String(tipo || ""));
+
+export function enriquecer(f0, hoy, bonos) {
+  let f = f0;
+  if (esAbonoGastos(f0.tipoFinanciamiento) && f0.fechaPromesa && estadoDeCuota(f0, hoy) === "pagada") {
+    f = { ...f0, fechaVencimientoReporte: f0.fechaVencimiento, fechaVencimiento: f0.fechaPromesa };
+  }
   if (bonos && bonos.has(claveCuota(f))) {
     const monto = Number(f.montoCuota) || 0;
     return { ...f, monto, pagado: 0, estado: "bono", bono: true, pendiente: 0, vencido: 0, porVencer: 0, mes: (f.fechaVencimiento || "").slice(0, 7) };
