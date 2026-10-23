@@ -12,6 +12,7 @@ import ComisionesPlanilla from "./ComisionesPlanilla";
 import { parseFechaCompleta, todayISO } from "../lib/helpers";
 import { currencyDecimal } from "../lib/quotePdf";
 import { MESES_ES } from "../lib/constants";
+import { Bloque } from "../lib/layout";
 import { Panel, Field, PageHeader, Avatar, IconStat } from "./Shared";
 
 // Retención de boleta de honorarios: el SII la sube gradualmente cada año
@@ -70,7 +71,7 @@ export default function Comisiones({ db }) {
   const [validaciones, setValidaciones] = useState({});
   const [ventas, setVentas] = useState({});
   const [periodos, setPeriodos] = useState({});
-  const [vista, setVista] = useState("detalle");
+  const [vista, setVista] = useState("planilla");
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState("");
   const [errorGuardado, setErrorGuardado] = useState("");
@@ -294,45 +295,51 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v182</span></>} subtitle="Gestión y validación de comisiones">
-        <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
-          <div className="text-xs text-stone-400 mb-1">Mes</div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <Calendar size={16} className="text-[#0F3D66]" />
-            <input
-              type="month"
-              value={mes}
-              onChange={(e) => setMes(e.target.value)}
-              className="text-sm font-medium text-[#0F3D66] outline-none bg-transparent cursor-pointer"
-            />
-          </label>
-        </div>
-      </PageHeader>
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v183</span></>} subtitle="Gestión y validación de comisiones" />
 
-      <div className="flex items-stretch gap-3 flex-wrap mb-4">
-        <PeriodoEditor
-          mes={mes}
-          periodo={periodo}
-          onGuardar={async (d, h) => {
-            await setComisionesPeriodoRemote(mes, d, h);
-            setPeriodos((p) => ({ ...p, [mes]: { mes, desde: d, hasta: h } }));
-          }}
-          onRestablecer={async () => {
-            await borrarComisionesPeriodoRemote(mes);
-            setPeriodos((p) => { const c = { ...p }; delete c[mes]; return c; });
-          }}
-        />
-        <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
-          <div className="text-xs text-stone-400 mb-1">Vista</div>
-          <span className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
-            {[["detalle", "Detalle"], ["planilla", "Planilla"]].map(([k, l]) => (
-              <button key={k} onClick={() => setVista(k)} className={`px-4 py-1.5 font-medium transition-colors ${vista === k ? "bg-[#0F3D66] text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}>{l}</button>
-            ))}
-          </span>
-        </div>
+      <div className="grid-60 gap-3 mb-2">
+        <Bloque id="com-periodo" grupo="com-f1" orden={0} span={30}>
+          <PeriodoEditor
+            mes={mes}
+            periodo={periodo}
+            onGuardar={async (d, h) => {
+              await setComisionesPeriodoRemote(mes, d, h);
+              setPeriodos((p) => ({ ...p, [mes]: { mes, desde: d, hasta: h } }));
+            }}
+            onRestablecer={async () => {
+              await borrarComisionesPeriodoRemote(mes);
+              setPeriodos((p) => { const c = { ...p }; delete c[mes]; return c; });
+            }}
+          />
+        </Bloque>
+        <Bloque id="com-mes" grupo="com-f1" orden={1} span={15}>
+          <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5 flex items-center">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Calendar size={16} className="text-[#0F3D66]" />
+              <input
+                type="month"
+                value={mes}
+                onChange={(e) => setMes(e.target.value)}
+                className="text-sm font-medium text-[#0F3D66] outline-none bg-transparent cursor-pointer"
+              />
+            </label>
+          </div>
+        </Bloque>
+        <Bloque id="com-vista" grupo="com-f1" orden={2} span={15}>
+          <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
+            <div className="text-xs text-stone-400 mb-1">Vista</div>
+            <span className="flex rounded-lg border border-stone-200 overflow-hidden text-xs w-fit">
+              {[["planilla", "Planilla"], ["detalle", "Detalle"]].map(([k, l]) => (
+                <button key={k} onClick={() => setVista(k)} className={`px-4 py-1.5 font-medium transition-colors ${vista === k ? "bg-[#0F3D66] text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}>{l}</button>
+              ))}
+            </span>
+          </div>
+        </Bloque>
+      </div>
+      <div className="flex justify-end mb-4">
         <button
           onClick={() => fetchComisionesValidacion().then(setValidaciones).catch(() => {})}
-          className="self-center ml-auto flex items-center gap-1.5 text-xs text-stone-500 hover:text-[#0F3D66]"
+          className="flex items-center gap-1.5 text-xs text-stone-500 hover:text-[#0F3D66]"
           title="Volver a leer las validaciones y las respuestas de las ejecutivas"
         >
           <RefreshCw size={14} /> Actualizar respuestas
