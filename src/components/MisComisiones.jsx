@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
-import { fetchComisionesVentas, fetchComisionesValidacion } from "../lib/db";
+import { fetchComisionesVentas, fetchComisionesValidacion, fetchComisionesPeriodos, responderComisionRemote } from "../lib/db";
+import { periodoDe, rangoTexto } from "../lib/comisionesPeriodo";
 import { todayISO } from "../lib/helpers";
 import { currencyDecimal } from "../lib/quotePdf";
 import { MESES_ES } from "../lib/constants";
@@ -26,16 +27,22 @@ export default function MisComisiones({ ejecutivo }) {
   const [mes, setMes] = useState(todayISO().slice(0, 7));
   const [ventas, setVentas] = useState([]);
   const [validaciones, setValidaciones] = useState({});
+  const [periodos, setPeriodos] = useState({});
+  const [rechazando, setRechazando] = useState(false);
+  const [motivo, setMotivo] = useState("");
+  const [respondiendo, setRespondiendo] = useState(false);
+  const [errorRespuesta, setErrorRespuesta] = useState("");
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelado = false;
-    Promise.all([fetchComisionesVentas(), fetchComisionesValidacion()])
-      .then(([v, val]) => {
+    Promise.all([fetchComisionesVentas(), fetchComisionesValidacion(), fetchComisionesPeriodos().catch(() => ({}))])
+      .then(([v, val, pe]) => {
         if (cancelado) return;
         setVentas(Object.values(v));
         setValidaciones(val);
+        setPeriodos(pe);
       })
       .catch((e) => !cancelado && setError(e.message || "No se pudieron cargar tus comisiones"))
       .finally(() => !cancelado && setCargando(false));
@@ -50,6 +57,23 @@ export default function MisComisiones({ ejecutivo }) {
   const valorUf = Number(val?.valorUf) || 0;
   const retencion = Number(val?.retencionPct ?? 0);
   const pctAuto = tramoPct(delMes.length);
+  const periodo = periodoDe(mes, periodos);
+  const aceptacion = val?.aceptacion || "pendiente";
+
+  async function responder(decision) {
+    setRespondiendo(true);
+    setErrorRespuesta("");
+    try {
+      const saved = await responderComisionRemote(mes, decision, motivo);
+      setValidaciones((v) => ({ ...v, [`${mes}__${ejecutivo}`]: saved }));
+      setRechazando(false);
+      setMotivo("");
+    } catch (e) {
+      setErrorRespuesta(/responder_comision|does not exist|schema cache/i.test(e.message || "") ? "Falta activar esta función en el sistema (migración v177). Avisa al administrador." : (e.message || "No se pudo registrar tu respuesta"));
+    } finally {
+      setRespondiendo(false);
+    }
+  }
 
   const filas = delMes.map((v) => {
     const pct = v.tramoPct != null ? Number(v.tramoPct) : pctAuto;
@@ -93,6 +117,35 @@ export default function MisComisiones({ ejecutivo }) {
           </div>
 
           <Panel title={mesLabel(mes)}>
+            <p className="text-xs text-stone-400 mb-3">Período de comisiones: {rangoTexto(periodo)}</p>
+            {validado && (
+              <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${aceptacion === "aceptada" ? "border-emerald-300 bg-emerald-50/60" : aceptacion === "rechazada" ? "border-rose-300 bg-rose-50/60" : "border-sky-300 bg-sky-50/60"}`}>
+                {aceptacion === "aceptada" ? (
+                  <p className="text-emerald-800">✓ Aceptaste esta comisión{val?.aceptadaAt ? ` el ${new Date(val.aceptadaAt).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" })}` : ""}. El ciclo de pago quedó cerrado.</p>
+                ) : aceptacion === "rechazada" ? (
+                  <p className="text-rose-800">✗ Rechazaste esta comisión{val?.motivoRechazo ? `: “${val.motivoRechazo}”` : ""}. El administrador la revisará y volverá a validarla; entonces podrás responder de nuevo.</p>
+                ) : (
+                  <>
+                    <p className="text-sky-900 mb-2">Tu comisión de {mesLabel(mes)} fue validada. Revísala y <strong>acéptala o recházala</strong> para cerrar el ciclo de pago.</p>
+                    {rechazando ? (
+                      <div className="flex flex-col gap-2 max-w-lg">
+                        <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} placeholder="Cuéntanos qué no coincide (obligatorio)" className="ipt" />
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => responder("rechazada")} disabled={respondiendo || !motivo.trim()} className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2 font-medium">{respondiendo ? "Enviando…" : "Confirmar rechazo"}</button>
+                          <button onClick={() => { setRechazando(false); setMotivo(""); setErrorRespuesta(""); }} className="text-xs text-stone-500 underline">Cancelar</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => responder("aceptada")} disabled={respondiendo} className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm rounded-lg px-4 py-2 font-medium">{respondiendo ? "Enviando…" : "Aceptar comisión"}</button>
+                        <button onClick={() => setRechazando(true)} disabled={respondiendo} className="border border-rose-300 text-rose-700 hover:bg-rose-50 text-sm rounded-lg px-4 py-2 font-medium">Rechazar</button>
+                      </div>
+                    )}
+                    {errorRespuesta && <p className="text-xs text-rose-600 mt-2">{errorRespuesta}</p>}
+                  </>
+                )}
+              </div>
+            )}
             <div className="mb-3">
               {validado ? (
                 <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2.5 py-1">

@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { Building2, Layers, Receipt, Pencil, Calendar } from "lucide-react";
+import { Building2, Layers, Receipt, Pencil, Calendar, RefreshCw } from "lucide-react";
 import { useAuthSession } from "../lib/useAuthSession";
 import { useValorUFHoy } from "../lib/uf";
 import {
   fetchComisionesValidacion, setComisionesValidacionRemote,
   fetchComisionesVentas, guardarComisionVentaRemote, eliminarComisionVentaRemote,
+  fetchComisionesPeriodos, setComisionesPeriodoRemote, borrarComisionesPeriodoRemote,
 } from "../lib/db";
+import { periodoDe, periodoPorDefecto, fechaEnPeriodo, rangoTexto, tramoPctPorTotal } from "../lib/comisionesPeriodo";
+import ComisionesPlanilla from "./ComisionesPlanilla";
 import { parseFechaCompleta, todayISO } from "../lib/helpers";
 import { currencyDecimal } from "../lib/quotePdf";
 import { MESES_ES } from "../lib/constants";
@@ -53,11 +56,6 @@ function fechaHoraCl(iso) {
 // un tramo distinto por cada unidad según su orden de venta. Este valor
 // automático puede corregirse a mano caso a caso en cada fila (por
 // ejemplo si el SII o la venta real califica distinto).
-function tramoPctPorTotal(totalUnidades) {
-  if (totalUnidades <= 1) return 0.5;
-  if (totalUnidades === 2) return 0.6;
-  return 0.75;
-}
 
 const normalizarCodigo = (s) => String(s || "").trim().toUpperCase();
 
@@ -71,6 +69,8 @@ export default function Comisiones({ db }) {
   // por (mes, ejecutivo) — ver comisiones_validacion_ejecutivo.
   const [validaciones, setValidaciones] = useState({});
   const [ventas, setVentas] = useState({});
+  const [periodos, setPeriodos] = useState({});
+  const [vista, setVista] = useState("detalle");
   const [loadingDatos, setLoadingDatos] = useState(false);
   const [errorDatos, setErrorDatos] = useState("");
   const [errorGuardado, setErrorGuardado] = useState("");
@@ -82,11 +82,13 @@ export default function Comisiones({ db }) {
     let cancelado = false;
     setLoadingDatos(true);
     setErrorDatos("");
-    Promise.all([fetchComisionesValidacion(), fetchComisionesVentas()])
-      .then(([v, ve]) => {
+    // Los períodos son opcionales: sin la migración v177 se usa el 25→24 de siempre.
+    Promise.all([fetchComisionesValidacion(), fetchComisionesVentas(), fetchComisionesPeriodos().catch(() => ({}))])
+      .then(([v, ve, pe]) => {
         if (cancelado) return;
         setValidaciones(v);
         setVentas(ve);
+        setPeriodos(pe);
       })
       .catch((e) => !cancelado && setErrorDatos(e.message || "No se pudieron cargar los datos de comisiones."))
       .finally(() => !cancelado && setLoadingDatos(false));
@@ -98,13 +100,15 @@ export default function Comisiones({ db }) {
   // Opp que pasaron a "Promesada" durante el mes elegido, con la misma
   // regla que "Promesados del mes" en el panel de la Jefa: solo cuenta
   // si hay una Fecha Promesa real; nunca se usa una fecha de respaldo.
+  const periodo = useMemo(() => periodoDe(mes, periodos), [mes, periodos]);
+
   const promesadasPorEjecutivo = useMemo(() => {
     const vistos = new Map();
     (db.cambiosEstadoOpp || []).forEach((c) => {
       if (c.estadoNuevo !== "Promesada") return;
       const fecha = parseFechaCompleta(c.fechaPromesa);
       if (!fecha) return;
-      if (fecha.toISOString().slice(0, 7) !== mes) return;
+      if (!fechaEnPeriodo(fecha.toISOString().slice(0, 10), periodo)) return;
       if (vistos.has(c.opp)) return;
       vistos.set(c.opp, { opp: c.opp, rut: c.rut, fecha });
     });
@@ -118,7 +122,7 @@ export default function Comisiones({ db }) {
     });
     Object.values(grupos).forEach((arr) => arr.sort((a, b) => a.fecha - b.fecha));
     return grupos;
-  }, [db.cambiosEstadoOpp, db.gestion, mes]);
+  }, [db.cambiosEstadoOpp, db.gestion, periodo]);
 
   const ejecutivosOrdenados = useMemo(
     () => Object.keys(promesadasPorEjecutivo).sort((a, b) => a.localeCompare(b)),
@@ -185,6 +189,8 @@ export default function Comisiones({ db }) {
         }
         if (autoCorregidosRef.current.has(o.opp)) return;
         const cambios = {};
+        // El mes de la venta sigue al período (si cambió el período, la venta se mueve de mes).
+        if (ventaActual.mes !== mes) cambios.mes = mes;
         if (Number(ventaActual.precioUf) === Number(unidad.precio) && Number(ventaActual.precioUf) !== precioEsperado) {
           cambios.precioUf = precioEsperado;
         }
@@ -288,7 +294,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v179</span></>} subtitle="Gestión y validación de comisiones">
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v182</span></>} subtitle="Gestión y validación de comisiones">
         <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
           <div className="text-xs text-stone-400 mb-1">Mes</div>
           <label className="flex items-center gap-2 cursor-pointer">
@@ -302,6 +308,36 @@ export default function Comisiones({ db }) {
           </label>
         </div>
       </PageHeader>
+
+      <div className="flex items-stretch gap-3 flex-wrap mb-4">
+        <PeriodoEditor
+          mes={mes}
+          periodo={periodo}
+          onGuardar={async (d, h) => {
+            await setComisionesPeriodoRemote(mes, d, h);
+            setPeriodos((p) => ({ ...p, [mes]: { mes, desde: d, hasta: h } }));
+          }}
+          onRestablecer={async () => {
+            await borrarComisionesPeriodoRemote(mes);
+            setPeriodos((p) => { const c = { ...p }; delete c[mes]; return c; });
+          }}
+        />
+        <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5">
+          <div className="text-xs text-stone-400 mb-1">Vista</div>
+          <span className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
+            {[["detalle", "Detalle"], ["planilla", "Planilla"]].map(([k, l]) => (
+              <button key={k} onClick={() => setVista(k)} className={`px-4 py-1.5 font-medium transition-colors ${vista === k ? "bg-[#0F3D66] text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}>{l}</button>
+            ))}
+          </span>
+        </div>
+        <button
+          onClick={() => fetchComisionesValidacion().then(setValidaciones).catch(() => {})}
+          className="self-center ml-auto flex items-center gap-1.5 text-xs text-stone-500 hover:text-[#0F3D66]"
+          title="Volver a leer las validaciones y las respuestas de las ejecutivas"
+        >
+          <RefreshCw size={14} /> Actualizar respuestas
+        </button>
+      </div>
 
       {errorDatos && (
         <div className="border border-rose-300 bg-rose-50 text-rose-800 text-sm px-4 py-3 rounded-xl mb-4 flex items-center justify-between gap-3 flex-wrap">
@@ -327,8 +363,10 @@ export default function Comisiones({ db }) {
         <p className="text-stone-400 text-sm">Cargando comisiones…</p>
       ) : ejecutivosOrdenados.length === 0 ? (
         <div className="border border-stone-200 rounded-xl bg-white p-8 text-center text-stone-400 text-sm">
-          No hay Opp promesadas con fecha real de promesa en {mesLabel(mes)}.
+          No hay Opp promesadas con fecha real de promesa en el período de {mesLabel(mes)} ({rangoTexto(periodo)}).
         </div>
+      ) : vista === "planilla" ? (
+        <ComisionesPlanilla grupos={promesadasPorEjecutivo} ventas={ventas} validaciones={validaciones} mes={mes} periodo={periodo} mesTexto={mesLabel(mes)} />
       ) : (
         <div className="flex flex-col gap-5">
           {ejecutivosOrdenados.map((ejecutivo) => (
@@ -359,6 +397,57 @@ export default function Comisiones({ db }) {
             />
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function PeriodoEditor({ mes, periodo, onGuardar, onRestablecer }) {
+  const [editando, setEditando] = useState(false);
+  const [desde, setDesde] = useState(periodo.desde);
+  const [hasta, setHasta] = useState(periodo.hasta);
+  const [error, setError] = useState("");
+  const [trabajando, setTrabajando] = useState(false);
+  useEffect(() => { setDesde(periodo.desde); setHasta(periodo.hasta); setEditando(false); setError(""); }, [mes, periodo.desde, periodo.hasta]);
+
+  async function ejecutar(fn) {
+    setTrabajando(true);
+    setError("");
+    try { await fn(); setEditando(false); } catch (e) {
+      setError(/does not exist|schema cache|42P01|could not find/i.test(e.message || "") ? "Falta crear la tabla de períodos: corre la migración v177 en Supabase." : (e.message || "No se pudo guardar"));
+    } finally { setTrabajando(false); }
+  }
+  function guardar() {
+    if (!desde || !hasta || desde > hasta) { setError("La fecha de inicio debe ser anterior o igual a la de término."); return; }
+    ejecutar(() => onGuardar(desde, hasta));
+  }
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl shadow-sm px-4 py-2.5 flex items-center gap-3 flex-wrap">
+      <div>
+        <div className="text-xs text-stone-400">Período de comisiones de {mesLabel(mes)}</div>
+        {editando ? (
+          <div className="flex items-center gap-2 flex-wrap mt-1">
+            <label className="text-xs text-stone-500">Desde <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} className="ml-1 border border-stone-200 rounded-lg px-2 py-1 text-sm text-[#0F3D66]" /></label>
+            <label className="text-xs text-stone-500">Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} className="ml-1 border border-stone-200 rounded-lg px-2 py-1 text-sm text-[#0F3D66]" /></label>
+            <button onClick={guardar} disabled={trabajando} className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white text-xs rounded-lg px-3 py-1.5 font-medium">{trabajando ? "Guardando…" : "Guardar"}</button>
+            <button onClick={() => { setEditando(false); setDesde(periodo.desde); setHasta(periodo.hasta); setError(""); }} className="text-xs text-stone-400 hover:text-[#0F3D66] underline">Cancelar</button>
+          </div>
+        ) : (
+          <div className="text-sm font-medium text-[#0F3D66]">
+            {rangoTexto(periodo)}
+            <span className="ml-2 text-[11px] font-normal text-stone-400">{periodo.personalizado ? "ajustado a mano" : "por defecto 25 → 24"}</span>
+          </div>
+        )}
+        {error && <div className="text-xs text-rose-600 mt-1">{error}</div>}
+      </div>
+      {!editando && (
+        <span className="flex items-center gap-3">
+          <button onClick={() => setEditando(true)} className="text-xs text-[#1E5AA8] hover:underline font-medium inline-flex items-center gap-1"><Pencil size={12} /> Cambiar fechas</button>
+          {periodo.personalizado && (
+            <button onClick={() => ejecutar(onRestablecer)} disabled={trabajando} className="text-xs text-stone-500 hover:text-[#0F3D66] underline disabled:opacity-50">Volver a 25 → 24</button>
+          )}
+        </span>
       )}
     </div>
   );
@@ -519,6 +608,13 @@ function EjecutivoComisionPanel({
               {validado ? (
                 <span className="ml-2 text-emerald-700 font-medium">
                   ✓ Validado {validacion.validadoAt ? `el ${fechaHoraCl(validacion.validadoAt)}` : ""}
+                  {validacion.aceptacion === "aceptada" ? (
+                    <span className="ml-2 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[11px]">✓ Aceptada por la ejecutiva {validacion.aceptadaAt ? `el ${fechaHoraCl(validacion.aceptadaAt)}` : ""} · ciclo cerrado</span>
+                  ) : validacion.aceptacion === "rechazada" ? (
+                    <span className="ml-2 rounded-full bg-rose-100 text-rose-800 px-2 py-0.5 text-[11px]">✗ Rechazada por la ejecutiva: {validacion.motivoRechazo || "sin motivo"}</span>
+                  ) : (
+                    <span className="ml-2 rounded-full bg-sky-100 text-sky-800 px-2 py-0.5 text-[11px]">Esperando que la ejecutiva acepte o rechace</span>
+                  )}
                 </span>
               ) : (
                 <span className="ml-2 text-amber-700">Guardado, sin validar</span>

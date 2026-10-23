@@ -116,7 +116,7 @@ export function Totales({ clientes, hoy }) {
       <div className="grid-60 gap-4">
         <KpiCard bid="cuo-kpi1" orden={0} tone="blue" icon={Users} label="Clientes promesados" value={String(k.clientes)} sub={`${nf0.format(k.nCuotas)} cuotas en total`} />
         <KpiCard bid="cuo-kpi2" orden={1} tone="purple" icon={CircleDollarSign} label="Total a cobrar" value={fmtUF0(k.total)} sub={valorUF ? `≈ ${fmtCLP(k.total * valorUF)}` : "en UF"} />
-        <KpiCard bid="cuo-kpi3" orden={2} tone="green" icon={Wallet} label="Pagado" value={fmtUF0(k.pagado)} sub={`${fmtPct(avance)} del total · ${nf0.format(k.nPagadas)} cuotas`} />
+        <KpiCard bid="cuo-kpi3" orden={2} tone="green" icon={Wallet} label="Pagado" value={fmtUF0(k.pagado)} sub={`${fmtPct(avance)} pagado`} />
         <KpiCard bid="cuo-kpi4" orden={3} tone="amber" icon={CalendarClock} label="Falta por pagar" value={fmtUF0(k.saldo)} sub={valorUF ? `≈ ${fmtCLP(k.saldo * valorUF)}` : "en UF"} />
         <KpiCard bid="cuo-kpi5" orden={4} tone="pink" icon={AlertTriangle} label="Vencido sin pagar" value={fmtUF0(k.vencido)} sub={`${nf0.format(k.nVencidas)} cuotas vencidas`} />
         <KpiCard bid="cuo-kpi7" orden={6} tone="purple" icon={Banknote} label="Dif. a pagar en escritura" value={fmtUF0(k.difEscritura)} sub={`${nf0.format(k.nDifEscritura)} cuota(s) · cupón neteado ${fmtUF0(k.neteo)}${k.nSinCupon ? ` · ${k.nSinCupon} sin dato` : ""}`} />

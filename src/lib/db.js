@@ -843,13 +843,44 @@ export async function setComisionesValidacionRemote(mes, ejecutivo, { valorUf, r
     validadoAt: validado ? nowISO() : null,
     updatedAt: nowISO(),
   };
-  const { data, error } = await supabase
+  // Cada vez que el administrador guarda o valida de nuevo, la ejecutiva debe responder otra vez.
+  const conRespuesta = { ...payload, aceptacion: "pendiente", aceptadaAt: null, motivoRechazo: null };
+  const guardar = (p) => supabase
     .from("comisiones_validacion_ejecutivo")
-    .upsert(objToRow(payload), { onConflict: "mes,ejecutivo" })
+    .upsert(objToRow(p), { onConflict: "mes,ejecutivo" })
     .select()
     .single();
+  let { data, error } = await guardar(conRespuesta);
+  // Sin la migración v177 (columnas de aceptación): se guarda igual, sin ellas.
+  if (error && /aceptacion|aceptada_at|motivo_rechazo/i.test(error.message || "")) ({ data, error } = await guardar(payload));
   if (error) throw error;
   return rowToObj(data);
+}
+
+// La ejecutiva acepta o rechaza su comisión ya validada (cierra el ciclo de pago) — migración v177.
+export async function responderComisionRemote(mes, decision, motivo) {
+  const { data, error } = await supabase.rpc("responder_comision", { p_mes: mes, p_decision: decision, p_motivo: motivo || null });
+  if (error) throw error;
+  return rowToObj(data);
+}
+
+// Período (desde/hasta) de cada mes de comisiones — migración v177. Sin la tabla, se usa el 25→24.
+export async function fetchComisionesPeriodos() {
+  const { data, error } = await supabase.from("comisiones_periodos").select("*");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((row) => { out[row.mes] = rowToObj(row); });
+  return out;
+}
+
+export async function setComisionesPeriodoRemote(mes, desde, hasta) {
+  const { error } = await supabase.from("comisiones_periodos").upsert({ mes, desde, hasta, updated_at: nowISO() }, { onConflict: "mes" });
+  if (error) throw error;
+}
+
+export async function borrarComisionesPeriodoRemote(mes) {
+  const { error } = await supabase.from("comisiones_periodos").delete().eq("mes", mes);
+  if (error) throw error;
 }
 
 
