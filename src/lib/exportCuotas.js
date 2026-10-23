@@ -4,7 +4,7 @@ import { jsPDF } from "jspdf";
 import { fmtDate } from "./helpers";
 import { TIPOS_ORDEN, resumenPorMes, resumenPorTipo, totalesGenerales } from "./cuotas";
 
-const ESTADO = { pagada: "Pagada", parcial: "Parcial", vencida: "Vencida", porVencer: "Por vencer" };
+const ESTADO = { bono: "Bono pie", pagada: "Pagada", parcial: "Parcial", vencida: "Vencida", porVencer: "Por vencer" };
 const SITUACION = { pagado: "Pagado", aldia: "Al día", mora: "Con mora" };
 const MESES = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
 const mesTxt = (m) => { const [y, mm] = String(m).split("-"); return `${MESES[Number(mm) - 1] || mm} ${y}`; };
@@ -51,7 +51,7 @@ export function exportarExcel({ clientes, proyecto, hoy, valorUF }) {
   add("Por mes y tipo", fmt, [14, 28, 9, 9, 13, 13, 15, 13]);
 
   add("Por tipo", resumenPorTipo(clientes).map((t) => ({
-    Tipo: t.tipo, Clientes: t.clientes, Cuotas: t.nCuotas, Pagadas: t.nPagadas, Vencidas: t.nVencidas, "Por vencer": t.nPorVencer,
+    Tipo: t.tipo + (t.informativo ? " (informativo, no se suma)" : ""), Clientes: t.clientes, Cuotas: t.nCuotas, Pagadas: t.nPagadas, Vencidas: t.nVencidas, "Por vencer": t.nPorVencer,
     "Total UF": r2(t.total), "Pagado UF": r2(t.pagado), "Falta UF": r2(t.saldo), "Vencido UF": r2(t.vencido),
   })), [28, 10, 9, 9, 10, 11, 13, 13, 13, 13]);
 
@@ -69,7 +69,7 @@ export function exportarExcel({ clientes, proyecto, hoy, valorUF }) {
         det.push({
           Proyecto: c.proyecto, Opp: c.opp, Cliente: c.cliente, RUT: c.rut, Unidad: c.unidad, Tipo: t.tipo, "N° cuota": q.nroCuota,
           Vencimiento: fmtDate(q.fechaVencimiento), "Cuota UF": r2(q.monto), "Pagado UF": r2(q.pagado), "Pagado $": Number(q.montoPagadoClp) || 0,
-          "Pendiente UF": r2(q.pendiente), Estado: ESTADO[q.estado],
+          "Pendiente UF": r2(q.pendiente), Estado: q.escritura ? "A escritura (no se suma)" : ESTADO[q.estado],
         });
       }
     }
@@ -151,7 +151,7 @@ export function exportarPdf({ clientes, proyecto, hoy, valorUF }) {
   // Por tipo
   titulo("Resumen por tipo de financiamiento");
   const porTipo = resumenPorTipo(clientes).map((t) => ({
-    tipo: t.tipo, cli: String(t.clientes), cuo: String(t.nCuotas), pag: String(t.nPagadas), ven: String(t.nVencidas), pv: String(t.nPorVencer),
+    tipo: t.tipo + (t.informativo ? " (informativo)" : ""), cli: String(t.clientes), cuo: String(t.nCuotas), pag: String(t.nPagadas), ven: String(t.nVencidas), pv: String(t.nPorVencer),
     tot: nf2.format(t.total), pgd: nf2.format(t.pagado), fal: nf2.format(t.saldo), mor: nf2.format(t.vencido),
   }));
   tabla([
@@ -190,7 +190,7 @@ export function exportarPdf({ clientes, proyecto, hoy, valorUF }) {
     av: `${Math.round(c.avance * 100)}%`, sit: SITUACION[c.situacion],
   })), { totales: { cli: `TOTAL (${clientes.length} clientes)`, tot: nf2.format(tot("total")), pag: nf2.format(tot("pagado")), fal: nf2.format(tot("saldo")), ven: nf2.format(tot("vencido")) } });
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GRIS);
-  doc.text("Pie / Abono / P. c/escritura: cuotas pagadas / cuotas pactadas. Pago contra escritura no se cuenta como mora.", M, y);
+  doc.text("Pie / Abono / P. c/escritura: cuotas pagadas / cuotas pactadas. Pago contra escritura es informativo: no se suma a lo adeudado ni a la mora.", M, y);
 
   const paginas = doc.getNumberOfPages();
   for (let p = 1; p <= paginas; p++) {

@@ -35,7 +35,13 @@ export function estadoDeCuota(f, hoy) {
 }
 
 // Una cuota con sus montos ya calculados.
-export function enriquecer(f, hoy) {
+export const claveCuota = (f) => `${f.opp}|${f.tipoFinanciamiento}|${f.nroCuota}`;
+
+export function enriquecer(f, hoy, bonos) {
+  if (bonos && bonos.has(claveCuota(f))) {
+    const monto = Number(f.montoCuota) || 0;
+    return { ...f, monto, pagado: 0, estado: "bono", bono: true, pendiente: 0, vencido: 0, porVencer: 0, mes: (f.fechaVencimiento || "").slice(0, 7) };
+  }
   const monto = Number(f.montoCuota) || 0;
   const pag = Number(f.montoPagadoUf) || 0;
   const estado = estadoDeCuota(f, hoy);
@@ -46,6 +52,7 @@ export function enriquecer(f, hoy) {
     monto,
     pagado: pag,
     estado,
+    escritura: esContraEscritura(f.tipoFinanciamiento) && estado !== "pagada",
     pendiente,
     vencido: venceAntes ? pendiente : 0, // mora
     porVencer: venceAntes ? 0 : pendiente,
@@ -53,8 +60,11 @@ export function enriquecer(f, hoy) {
   };
 }
 
-function sumarTipo(cuotas) {
+function sumarTipo(todas) {
+  // Las cuotas marcadas "Bono pie" no se suman: son un bono sin pago para el cliente.
+  const cuotas = todas.filter((c) => !c.bono);
   const t = {
+    nBonos: todas.length - cuotas.length, bono: r3(todas.filter((c) => c.bono).reduce((a, c) => a + c.monto, 0)),
     total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0,
     nCuotas: cuotas.length, nPagadas: 0, nParciales: 0, nVencidas: 0, nPorVencer: 0,
   };
@@ -74,11 +84,11 @@ function sumarTipo(cuotas) {
 }
 
 // Agrupa las cuotas por cliente (Opp) y, dentro de cada uno, por tipo de financiamiento.
-export function armarClientes(filas, hoy) {
+export function armarClientes(filas, hoy, bonos) {
   const porOpp = new Map();
   for (const f of filas || []) {
     if (!porOpp.has(f.opp)) porOpp.set(f.opp, []);
-    porOpp.get(f.opp).push(enriquecer(f, hoy));
+    porOpp.get(f.opp).push(enriquecer(f, hoy, bonos));
   }
   const clientes = [];
   for (const [opp, cuotas] of porOpp) {
@@ -102,7 +112,8 @@ export function armarClientes(filas, hoy) {
         };
       })
       .sort((a, b) => ordenTipo(a.tipo) - ordenTipo(b.tipo) || a.tipo.localeCompare(b.tipo));
-    const tot = sumarTipo(cuotas);
+    // Pago contra escritura no se suma a lo adeudado: el cupón del Aval lo cubre y la diferencia se paga en la escritura.
+    const tot = sumarTipo(cuotas.filter((c) => !esContraEscritura(c.tipoFinanciamiento)));
     clientes.push({
       opp,
       cliente: base.cliente,
@@ -144,10 +155,11 @@ export function resumenPorTipo(clientes) {
   const mapa = new Map();
   for (const c of clientes) {
     for (const t of c.tipos) {
-      if (!mapa.has(t.tipo)) mapa.set(t.tipo, { tipo: t.tipo, clientes: 0, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 });
+      if (!mapa.has(t.tipo)) mapa.set(t.tipo, { tipo: t.tipo, informativo: false, nBonos: 0, clientes: 0, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 });
       const m = mapa.get(t.tipo);
       m.clientes++;
-      for (const k of ["total", "pagado", "saldo", "vencido", "porVencer", "nCuotas", "nPagadas", "nVencidas", "nPorVencer"]) m[k] += t[k];
+      m.informativo = esContraEscritura(t.tipo);
+      for (const k of ["total", "pagado", "saldo", "vencido", "porVencer", "nCuotas", "nPagadas", "nVencidas", "nPorVencer", "nBonos"]) m[k] += t[k];
     }
   }
   return [...mapa.values()]
@@ -161,9 +173,9 @@ export function resumenPorMes(clientes, tipo) {
   const mapa = new Map();
   for (const c of clientes) {
     for (const t of c.tipos) {
-      if (tipo && t.tipo !== tipo) continue;
+      if (tipo ? t.tipo !== tipo : esContraEscritura(t.tipo)) continue;
       for (const q of t.cuotas) {
-        if (!q.mes) continue;
+        if (!q.mes || q.bono) continue;
         if (!mapa.has(q.mes)) mapa.set(q.mes, { mes: q.mes, nCuotas: 0, nPagadas: 0, nPendientes: 0, monto: 0, pagado: 0, pendiente: 0, vencido: 0, porVencer: 0, detalle: [] });
         const m = mapa.get(q.mes);
         m.nCuotas++;

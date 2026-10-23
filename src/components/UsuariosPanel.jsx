@@ -4,6 +4,7 @@ import {
   resetearClaveUsuarioRemote, eliminarUsuarioRemote,
 } from "../lib/db";
 import { normalizarBusqueda, fmtDateTime } from "../lib/helpers";
+import { suscribirPresencia } from "../lib/presencia";
 import { Panel, Field, PageHeader } from "./Shared";
 
 const PERFILES = [
@@ -22,21 +23,21 @@ function haceTexto(ms) {
   const d = Math.floor(h / 24);
   return `hace ${d} ${d === 1 ? "día" : "días"}`;
 }
-function EstadoConexion({ ultima, ahora }) {
-  if (!ultima) {
+function EstadoConexion({ ultima, ahora, enLinea }) {
+  if (!ultima && !enLinea) {
     return (
       <span className="flex items-center gap-2 text-xs text-stone-400 w-[230px]">
         <span className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0" /> Nunca ha ingresado
       </span>
     );
   }
-  const ms = Math.max(0, ahora - new Date(ultima).getTime());
-  const activo = ms <= MIN_ACTIVO_MS;
+  const ms = ultima ? Math.max(0, ahora - new Date(ultima).getTime()) : 0;
+  const activo = enLinea || ms <= MIN_ACTIVO_MS;
   return (
     <span className="flex items-center gap-2 text-xs w-[230px]" title={`Última conexión: ${fmtDateTime(ultima)}`}>
       <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${activo ? "bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.2)]" : "bg-rose-500"}`} />
       <span className={activo ? "text-emerald-700 font-medium" : "text-stone-500"}>
-        {activo ? "Activo ahora" : `Inactivo · ${haceTexto(ms)}`}
+        {activo ? (enLinea ? "En línea" : "Activo ahora") : `Inactivo · ${haceTexto(ms)}`}
       </span>
       {!activo && <span className="text-stone-400">({fmtDateTime(ultima)})</span>}
     </span>
@@ -77,6 +78,8 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
     }
   }
   const [ahora, setAhora] = useState(Date.now());
+  const [enLinea, setEnLinea] = useState(() => new Set());
+  useEffect(() => suscribirPresencia((s) => setEnLinea(new Set(s))), []);
   useEffect(() => {
     cargar();
     // Se refresca cada minuto para que los puntos verde/rojo estén al día.
@@ -176,6 +179,11 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
         {error && <p className="text-rose-600 text-xs mt-3">{error}</p>}
       </Panel>
 
+      {usuarios.length > 0 && !("ultimaConexion" in usuarios[0]) && (
+        <p className="mt-6 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Falta ejecutar la migración v171 en Supabase: sin ella solo se ve quién está en línea ahora, no la última conexión.
+        </p>
+      )}
       <Panel title="Usuarios del sistema" className="mt-6">
         <div className="text-sm divide-y divide-stone-100">
           {usuarios.map((u) => {
@@ -185,7 +193,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
                 <span className="flex-1 min-w-[180px] truncate">
                   {u.email} {esYo && <span className="text-xs text-stone-400">(tú)</span>}
                 </span>
-                <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} />
+                <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)} />
                 <select
                   className="ipt !w-40"
                   disabled={esYo || trabajando}

@@ -6,11 +6,11 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { MESES_ES } from "../lib/constants";
 import { fmtDate, fmtDateTime, esProyectoPilpilen, normalizarBusqueda } from "../lib/helpers";
-import { fetchCuotasPago } from "../lib/db";
+import { fetchCuotasPago, fetchBonosPie, marcarBonoPieRemote } from "../lib/db";
 import { esProyectoExcluido } from "../lib/parseCuotas";
 import { exportarExcel, exportarPdf } from "../lib/exportCuotas";
 import { useValorUFHoy } from "../lib/uf";
-import { armarClientes, totalesGenerales, resumenPorTipo, resumenPorMes, hoyChile, TIPOS_ORDEN } from "../lib/cuotas";
+import { armarClientes, totalesGenerales, resumenPorTipo, resumenPorMes, hoyChile, TIPOS_ORDEN, esContraEscritura } from "../lib/cuotas";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 
 /* ----------------------------- formatos ----------------------------- */
@@ -41,7 +41,10 @@ const CHIPS = {
   parcial: ["Parcial", "bg-amber-50 text-amber-700"],
   vencida: ["Vencida", "bg-rose-50 text-rose-700"],
   porVencer: ["Por vencer", "bg-sky-50 text-sky-700"],
+  bono: ["Bono pie", "bg-violet-50 text-violet-700"],
+  escritura: ["A escritura", "bg-stone-100 text-stone-600"],
 };
+const estadoVisible = (q) => (q.escritura ? "escritura" : q.estado);
 function ChipCuota({ estado }) {
   const [txt, cls] = CHIPS[estado] || CHIPS.porVencer;
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>{txt}</span>;
@@ -131,7 +134,7 @@ export function Totales({ clientes, hoy }) {
             <tbody>
               {porTipo.map((t) => (
                 <tr key={t.tipo} onClick={() => setTipoSel(tipoSel === t.tipo ? "" : t.tipo)} className={`border-t border-stone-100 cursor-pointer hover:bg-sky-50/50 ${tipoSel === t.tipo ? "bg-sky-50" : ""}`}>
-                  <td className={`${TD} font-medium`}>{t.tipo}</td>
+                  <td className={`${TD} font-medium`}>{t.tipo}{t.informativo && <span className="ml-2 text-[10px] rounded-full bg-stone-100 text-stone-500 px-2 py-0.5 font-normal">no se suma a lo adeudado</span>}</td>
                   <td className={TDR}>{t.clientes}</td><td className={TDR}>{t.nCuotas}</td><td className={TDR}>{t.nPagadas}</td>
                   <td className={`${TDR} ${t.nVencidas ? "text-rose-600 font-semibold" : ""}`}>{t.nVencidas}</td><td className={TDR}>{t.nPorVencer}</td>
                   <td className={TDR}>{fmtUF(t.total)}</td><td className={TDR}>{fmtUF(t.pagado)}</td><td className={TDR}>{fmtUF(t.saldo)}</td>
@@ -141,7 +144,7 @@ export function Totales({ clientes, hoy }) {
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-stone-400 mt-2">Haz clic en un tipo para filtrar todo lo de abajo.</p>
+        <p className="text-[11px] text-stone-400 mt-2">Haz clic en un tipo para filtrar todo lo de abajo. Pago contra escritura es informativo: no entra en los totales generales ni en lo que se debe percibir.</p>
       </Panel></Fila>
 
       <Fila><Panel bid="cuo-meses" grupo="cuo-f2" orden={0} span={60}>
@@ -231,7 +234,7 @@ function FilaMes({ m, abierto, actual, valorUF, onToggle }) {
                     <td className={TD}>{d.cliente}</td><td className={TD}>{d.unidad}</td><td className={TD}>{d.tipoFinanciamiento}</td>
                     <td className={TDR}>{d.nroCuota}</td><td className={TD}>{fmtDate(d.fechaVencimiento)}</td>
                     <td className={TDR}>{fmtUF(d.monto)}</td><td className={TDR}>{fmtUF(d.pagado)}</td><td className={TDR}>{fmtUF(d.pendiente)}</td>
-                    <td className={TD}><ChipCuota estado={d.estado} /></td>
+                    <td className={TD}><ChipCuota estado={estadoVisible(d)} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -333,7 +336,7 @@ function ListaClientes({ clientes, onAbrir }) {
 }
 
 /* ============================== FICHA ============================== */
-export function Ficha({ cliente: c, onVolver }) {
+export function Ficha({ cliente: c, onVolver, onCambiarBono }) {
   return (
     <div className="flex flex-col gap-5">
       <button onClick={onVolver} className="self-start flex items-center gap-1.5 text-sm text-[#2563EB] hover:underline">
@@ -367,6 +370,11 @@ export function Ficha({ cliente: c, onVolver }) {
             </div>
           ))}
         </div>
+        {c.nBonos > 0 && (
+          <p className="mt-3 text-xs text-violet-700 bg-violet-50 border border-violet-200 rounded-lg px-3 py-2">
+            Bono pie: {c.nBonos} cuota(s) por {fmtUF(c.bono)} UF entregadas sin pago al cliente. No se suman a lo adeudado.
+          </p>
+        )}
         <div className="mt-4 flex items-center gap-3">
           <Barra pct={c.avance} className="flex-1 h-3" />
           <span className="text-sm text-stone-600 w-24 text-right">{fmtPct(c.avance)} pagado</span>
@@ -385,6 +393,7 @@ export function Ficha({ cliente: c, onVolver }) {
                   {t.nParciales > 0 && <span className="rounded-full bg-amber-50 text-amber-700 text-[11px] font-semibold px-2.5 py-0.5">{t.nParciales} parcial</span>}
                   {t.nVencidas > 0 && <span className="rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold px-2.5 py-0.5">{t.nVencidas} vencidas</span>}
                   <span className="rounded-full bg-sky-50 text-sky-700 text-[11px] font-semibold px-2.5 py-0.5">{t.nPorVencer} por vencer</span>
+                  {t.nBonos > 0 && <span className="rounded-full bg-violet-50 text-violet-700 text-[11px] font-semibold px-2.5 py-0.5">{t.nBonos} bono pie</span>}
                 </span>
               }
             >
@@ -396,6 +405,11 @@ export function Ficha({ cliente: c, onVolver }) {
               <div><div className="text-xs text-stone-400">Falta UF</div><div className="font-semibold text-[#13234A]">{fmtUF(t.saldo)}</div></div>
               <div><div className="text-xs text-stone-400">Avance</div><span className="flex items-center gap-2 mt-1"><Barra pct={t.total ? t.pagado / t.total : 0} className="flex-1" /><span className="text-xs text-stone-500">{fmtPct(t.total ? t.pagado / t.total : 0)}</span></span></div>
             </div>
+            {esContraEscritura(t.tipo) && (
+              <p className="text-xs text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mb-3">
+                Informativo: este monto no se suma a lo adeudado. El cupón del Aval lo cubre y cualquier diferencia se paga en la escritura.
+              </p>
+            )}
             {t.difiereTotal && (
               <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
                 El reporte informa un monto total de financiamiento de {fmtUF(t.montoTotalInformado)} UF, distinto de la suma de las cuotas ({fmtUF(t.total)} UF). Aquí se usa la suma de las cuotas.
@@ -408,12 +422,24 @@ export function Ficha({ cliente: c, onVolver }) {
                 </thead>
                 <tbody>
                   {t.cuotas.map((q) => (
-                    <tr key={q.nroCuota} className={`border-t border-stone-100 ${q.estado === "vencida" ? "bg-rose-50/40" : q.estado === "parcial" ? "bg-amber-50/40" : ""}`}>
+                    <tr key={q.nroCuota} className={`border-t border-stone-100 ${q.bono ? "bg-violet-50/40 text-stone-400" : ""} ${q.estado === "vencida" ? "bg-rose-50/40" : q.estado === "parcial" ? "bg-amber-50/40" : ""}`}>
                       <td className={TDR}>{q.nroCuota}</td><td className={TD}>{fmtDate(q.fechaVencimiento)}</td>
                       <td className={TDR}>{fmtUF(q.monto)}</td><td className={TDR}>{q.pagado > 0 ? fmtUF(q.pagado) : <span className="text-stone-300">—</span>}</td>
                       <td className={TDR}>{Number(q.montoPagadoClp) > 0 ? fmtCLP(q.montoPagadoClp) : <span className="text-stone-300">—</span>}</td>
                       <td className={TDR}>{q.pendiente > 0 ? fmtUF(q.pendiente) : <span className="text-stone-300">—</span>}</td>
-                      <td className={TD}><ChipCuota estado={q.estado} /></td>
+                      <td className={TD}>
+                        {onCambiarBono ? (
+                          <select
+                            value={q.bono ? "bono" : "auto"}
+                            onChange={(e) => onCambiarBono(q, e.target.value === "bono")}
+                            title="Elige Bono pie si es un bono entregado al cliente sin pago: no se suma a lo adeudado"
+                            className={`rounded-full border-0 px-2.5 py-0.5 text-[11px] font-semibold cursor-pointer focus:outline-none ${CHIPS[estadoVisible(q)]?.[1] || ""}`}
+                          >
+                            <option value="auto">{q.bono ? "Automático" : CHIPS[estadoVisible(q)]?.[0]}</option>
+                            <option value="bono">Bono pie</option>
+                          </select>
+                        ) : <ChipCuota estado={estadoVisible(q)} />}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -427,14 +453,14 @@ export function Ficha({ cliente: c, onVolver }) {
 }
 
 /* ============================ PANTALLA ============================ */
-export function CuotasPagosVista({ filas, cargadoEl, onRecargar, hoy: hoyProp }) {
+export function CuotasPagosVista({ filas, bonos, onCambiarBono, cargadoEl, onRecargar, hoy: hoyProp }) {
   const hoy = hoyProp || hoyChile();
   const { valorUF } = useValorUFHoy();
   const [vista, setVista] = useState("clientes");
   const [proyectoSel, setProyectoSel] = useState(null);
   const [oppSel, setOppSel] = useState("");
 
-  const todos = useMemo(() => armarClientes(filas, hoy), [filas, hoy]);
+  const todos = useMemo(() => armarClientes(filas, hoy, bonos), [filas, hoy, bonos]);
   const proyectos = useMemo(() => [...new Set(filas.map((f) => f.proyecto))].filter(Boolean).sort(), [filas]);
   const proyecto = proyectoSel ?? proyectos.find((p) => esProyectoPilpilen(p)) ?? proyectos[0] ?? TODOS;
   const clientes = useMemo(() => (proyecto === TODOS ? todos : todos.filter((c) => c.proyecto === proyecto)), [todos, proyecto]);
@@ -477,7 +503,7 @@ export function CuotasPagosVista({ filas, cargadoEl, onRecargar, hoy: hoyProp })
       ) : vista === "totales" ? (
         <Totales clientes={clientes} hoy={hoy} />
       ) : cliente ? (
-        <Ficha cliente={cliente} onVolver={() => setOppSel("")} />
+        <Ficha cliente={cliente} onVolver={() => setOppSel("")} onCambiarBono={onCambiarBono} />
       ) : (
         <ListaClientes clientes={clientes} onAbrir={setOppSel} />
       )}
@@ -487,8 +513,10 @@ export function CuotasPagosVista({ filas, cargadoEl, onRecargar, hoy: hoyProp })
 
 const FALTA_TABLA = /does not exist|schema cache|42P01|could not find the table/i;
 
-export default function CuotasPagos({ cargas }) {
+export default function CuotasPagos({ cargas, usuario }) {
   const [filas, setFilas] = useState(null);
+  const [bonos, setBonos] = useState(() => new Set());
+  const [avisoBono, setAvisoBono] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(true);
   const version = cargas?.cuotas_pago?.createdAt;
@@ -498,6 +526,7 @@ export default function CuotasPagos({ cargas }) {
     setError("");
     try {
       setFilas((await fetchCuotasPago()).filter((f) => !esProyectoExcluido(f.proyecto)));
+      try { setBonos(new Set(await fetchBonosPie())); } catch { setBonos(new Set()); } // sin tabla v173: sin bonos
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -505,6 +534,21 @@ export default function CuotasPagos({ cargas }) {
     }
   }, []);
   useEffect(() => { cargar(); }, [cargar, version]);
+
+  const cambiarBono = async (q, marcado) => {
+    const k = `${q.opp}|${q.tipoFinanciamiento}|${q.nroCuota}`;
+    const antes = bonos;
+    const nuevo = new Set(bonos);
+    if (marcado) nuevo.add(k); else nuevo.delete(k);
+    setBonos(nuevo);
+    setAvisoBono("");
+    try {
+      await marcarBonoPieRemote(q, marcado, usuario);
+    } catch (e) {
+      setBonos(antes);
+      setAvisoBono(FALTA_TABLA.test(e.message || "") ? "Falta crear la tabla de bonos: corre la migración v173 en Supabase." : `No se pudo guardar: ${e.message || e}`);
+    }
+  };
 
   if (cargando && !filas) {
     return <div className={PAGE_CLASS}><PageHeader title="Cuotas y Pagos" subtitle="Plan de cuotas de los clientes promesados" /><Panel className="p-10 text-center text-sm text-stone-500">Cargando cuotas…</Panel></div>;
@@ -532,5 +576,10 @@ export default function CuotasPagos({ cargas }) {
       </div>
     );
   }
-  return <CuotasPagosVista filas={filas} cargadoEl={cargas?.cuotas_pago?.createdAt} onRecargar={cargar} />;
+  return (
+    <>
+      {avisoBono && <div className={PAGE_CLASS}><div className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2">{avisoBono}</div></div>}
+      <CuotasPagosVista filas={filas} bonos={bonos} onCambiarBono={cambiarBono} cargadoEl={cargas?.cuotas_pago?.createdAt} onRecargar={cargar} />
+    </>
+  );
 }

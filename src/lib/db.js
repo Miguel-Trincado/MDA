@@ -113,6 +113,21 @@ export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
   return { guardadas: rows.length, borradas };
 }
 
+// Cuotas marcadas como "Bono pie" (no se suman a lo adeudado) — migración v173.
+export async function fetchBonosPie() {
+  const { data, error } = await supabase.from("cuotas_bono_pie").select("opp,tipo_financiamiento,nro_cuota");
+  if (error) throw error;
+  return (data || []).map((r) => `${r.opp}|${r.tipo_financiamiento}|${r.nro_cuota}`);
+}
+
+export async function marcarBonoPieRemote({ opp, tipoFinanciamiento, nroCuota }, marcado, usuario) {
+  const q = supabase.from("cuotas_bono_pie");
+  const { error } = marcado
+    ? await q.upsert({ opp, tipo_financiamiento: tipoFinanciamiento, nro_cuota: nroCuota, marcado_por: usuario || "", updated_at: new Date().toISOString() }, { onConflict: "opp,tipo_financiamiento,nro_cuota" })
+    : await q.delete().eq("opp", opp).eq("tipo_financiamiento", tipoFinanciamiento).eq("nro_cuota", nroCuota);
+  if (error) throw error;
+}
+
 export async function guardarAvalCompletoRemote(rows) {
   await upsertInChunks("aval_completo", rows.map((r) => objToRow(r)), "opp");
 }

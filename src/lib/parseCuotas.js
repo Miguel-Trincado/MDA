@@ -53,6 +53,8 @@ export function fechaIsoDe(v) {
     if (v < 20000 || v > 80000) return "";
     return new Date(Math.round((v - 25569) * 86400 * 1000)).toISOString().slice(0, 10);
   }
+  const iso = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
   const d = parseFechaCompleta(String(v));
   return d ? d.toISOString().slice(0, 10) : "";
 }
