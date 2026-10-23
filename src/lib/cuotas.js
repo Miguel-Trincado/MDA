@@ -41,7 +41,7 @@ export const claveCuota = (f) => `${f.opp}|${f.tipoFinanciamiento}|${f.nroCuota}
 // pagada, se pagó el día de la promesa, así que se ubica en ese día (y en ese mes).
 export const esAbonoGastos = (tipo) => /abono\s*provisi/i.test(String(tipo || ""));
 
-export function enriquecer(f0, hoy, bonos) {
+export function enriquecer(f0, hoy, bonos, cupones) {
   let f = f0;
   if (esAbonoGastos(f0.tipoFinanciamiento) && f0.fechaPromesa && estadoDeCuota(f0, hoy) === "pagada") {
     f = { ...f0, fechaVencimientoReporte: f0.fechaVencimiento, fechaVencimiento: f0.fechaPromesa };
@@ -55,12 +55,27 @@ export function enriquecer(f0, hoy, bonos) {
   const estado = estadoDeCuota(f, hoy);
   const pendiente = estado === "pagada" ? 0 : r3(Math.max(0, monto - pag));
   const venceAntes = !!f.fechaVencimiento && f.fechaVencimiento < hoy && !esContraEscritura(f.tipoFinanciamiento);
+  // Pago contra escritura: se cruza con el "Cupon Pago Contra Escritura" del Aval (regalo de la inmobiliaria).
+  // El cupón se netea contra la cuota; lo que sobra (diferencia) sí se paga en la escritura.
+  const escritura = esContraEscritura(f.tipoFinanciamiento) && estado !== "pagada";
+  let cupon = null, neteo = 0, diferencia = 0, sinDato = false;
+  if (escritura) {
+    const c = cupones ? cupones.get(String(f.opp)) : undefined;
+    if (c === undefined || c === null) sinDato = true;
+    else {
+      cupon = Number(c) || 0;
+      neteo = r3(Math.min(cupon, pendiente));
+      diferencia = r3(Math.max(0, pendiente - cupon));
+      if (diferencia <= TOLERANCIA_UF) diferencia = 0;
+    }
+  }
   return {
     ...f,
     monto,
     pagado: pag,
     estado,
-    escritura: esContraEscritura(f.tipoFinanciamiento) && estado !== "pagada",
+    escritura,
+    cupon, neteo, diferencia, sinDato,
     pendiente,
     vencido: venceAntes ? pendiente : 0, // mora
     porVencer: venceAntes ? 0 : pendiente,
@@ -72,6 +87,8 @@ function sumarTipo(todas) {
   // Las cuotas marcadas "Bono pie" no se suman: son un bono sin pago para el cliente.
   const cuotas = todas.filter((c) => !c.bono);
   const t = {
+    neteo: r3(cuotas.reduce((a, c) => a + (c.neteo || 0), 0)), difEscritura: r3(cuotas.reduce((a, c) => a + (c.diferencia || 0), 0)),
+    nDifEscritura: cuotas.filter((c) => c.diferencia > 0).length, nSinCupon: cuotas.filter((c) => c.sinDato).length,
     nBonos: todas.length - cuotas.length, bono: r3(todas.filter((c) => c.bono).reduce((a, c) => a + c.monto, 0)),
     total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0,
     nCuotas: cuotas.length, nPagadas: 0, nParciales: 0, nVencidas: 0, nPorVencer: 0,
@@ -92,11 +109,11 @@ function sumarTipo(todas) {
 }
 
 // Agrupa las cuotas por cliente (Opp) y, dentro de cada uno, por tipo de financiamiento.
-export function armarClientes(filas, hoy, bonos) {
+export function armarClientes(filas, hoy, bonos, cupones) {
   const porOpp = new Map();
   for (const f of filas || []) {
     if (!porOpp.has(f.opp)) porOpp.set(f.opp, []);
-    porOpp.get(f.opp).push(enriquecer(f, hoy, bonos));
+    porOpp.get(f.opp).push(enriquecer(f, hoy, bonos, cupones));
   }
   const clientes = [];
   for (const [opp, cuotas] of porOpp) {
@@ -132,6 +149,7 @@ export function armarClientes(filas, hoy, bonos) {
       precioFinal: base.precioFinal,
       tipos,
       ...tot,
+      ...(() => { const e = sumarTipo(cuotas.filter((c) => esContraEscritura(c.tipoFinanciamiento))); return { neteo: e.neteo, difEscritura: e.difEscritura, nDifEscritura: e.nDifEscritura, nSinCupon: e.nSinCupon }; })(),
       avance: tot.total > 0 ? tot.pagado / tot.total : 0,
       situacion: tot.saldo <= TOLERANCIA_UF ? "pagado" : tot.vencido > TOLERANCIA_UF ? "mora" : "aldia",
     });
@@ -141,7 +159,7 @@ export function armarClientes(filas, hoy, bonos) {
 
 // Totales generales de una lista de clientes.
 export function totalesGenerales(clientes) {
-  const t = { clientes: clientes.length, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, conMora: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 };
+  const t = { clientes: clientes.length, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, conMora: 0, neteo: 0, difEscritura: 0, nDifEscritura: 0, nSinCupon: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 };
   for (const c of clientes) {
     t.total += c.total;
     t.pagado += c.pagado;
@@ -152,9 +170,13 @@ export function totalesGenerales(clientes) {
     t.nPagadas += c.nPagadas;
     t.nVencidas += c.nVencidas;
     t.nPorVencer += c.nPorVencer;
+    t.neteo += c.neteo || 0;
+    t.difEscritura += c.difEscritura || 0;
+    t.nDifEscritura += c.nDifEscritura || 0;
+    t.nSinCupon += c.nSinCupon || 0;
     if (c.situacion === "mora") t.conMora++;
   }
-  for (const k of ["total", "pagado", "saldo", "vencido", "porVencer"]) t[k] = r3(t[k]);
+  for (const k of ["total", "pagado", "saldo", "vencido", "porVencer", "neteo", "difEscritura"]) t[k] = r3(t[k]);
   return t;
 }
 
@@ -163,15 +185,15 @@ export function resumenPorTipo(clientes) {
   const mapa = new Map();
   for (const c of clientes) {
     for (const t of c.tipos) {
-      if (!mapa.has(t.tipo)) mapa.set(t.tipo, { tipo: t.tipo, informativo: false, nBonos: 0, clientes: 0, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 });
+      if (!mapa.has(t.tipo)) mapa.set(t.tipo, { tipo: t.tipo, informativo: false, nBonos: 0, neteo: 0, difEscritura: 0, nDifEscritura: 0, nSinCupon: 0, clientes: 0, total: 0, pagado: 0, saldo: 0, vencido: 0, porVencer: 0, nCuotas: 0, nPagadas: 0, nVencidas: 0, nPorVencer: 0 });
       const m = mapa.get(t.tipo);
       m.clientes++;
       m.informativo = esContraEscritura(t.tipo);
-      for (const k of ["total", "pagado", "saldo", "vencido", "porVencer", "nCuotas", "nPagadas", "nVencidas", "nPorVencer", "nBonos"]) m[k] += t[k];
+      for (const k of ["total", "pagado", "saldo", "vencido", "porVencer", "nCuotas", "nPagadas", "nVencidas", "nPorVencer", "nBonos", "neteo", "difEscritura", "nDifEscritura", "nSinCupon"]) m[k] += t[k];
     }
   }
   return [...mapa.values()]
-    .map((m) => ({ ...m, total: r3(m.total), pagado: r3(m.pagado), saldo: r3(m.saldo), vencido: r3(m.vencido), porVencer: r3(m.porVencer) }))
+    .map((m) => ({ ...m, total: r3(m.total), pagado: r3(m.pagado), saldo: r3(m.saldo), vencido: r3(m.vencido), porVencer: r3(m.porVencer), neteo: r3(m.neteo), difEscritura: r3(m.difEscritura) }))
     .sort((a, b) => ordenTipo(a.tipo) - ordenTipo(b.tipo) || a.tipo.localeCompare(b.tipo));
 }
 

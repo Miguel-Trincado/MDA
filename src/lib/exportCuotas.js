@@ -59,8 +59,9 @@ export function exportarExcel({ clientes, proyecto, hoy, valorUF }) {
     Cliente: c.cliente, RUT: c.rut, Opp: c.opp, Proyecto: c.proyecto, Unidad: c.unidad,
     "Cuotas Pie": parcial(c, TIPOS_ORDEN[0]), "Cuotas Abono Gastos": parcial(c, TIPOS_ORDEN[1]), "Cuotas Pago c/escritura": parcial(c, TIPOS_ORDEN[2]),
     "Total UF": r2(c.total), "Pagado UF": r2(c.pagado), "Falta UF": r2(c.saldo), "Vencido UF": r2(c.vencido),
+    "Dif. a pagar en escritura UF": c.nSinCupon ? "s/d" : r2(c.difEscritura),
     "Avance %": Math.round(c.avance * 100), Situación: SITUACION[c.situacion],
-  })), [34, 13, 8, 22, 10, 11, 18, 22, 12, 12, 12, 12, 9, 11]);
+  })), [34, 13, 8, 22, 10, 11, 18, 22, 12, 12, 12, 12, 16, 9, 11]);
 
   const det = [];
   for (const c of clientes) {
@@ -69,12 +70,12 @@ export function exportarExcel({ clientes, proyecto, hoy, valorUF }) {
         det.push({
           Proyecto: c.proyecto, Opp: c.opp, Cliente: c.cliente, RUT: c.rut, Unidad: c.unidad, Tipo: t.tipo, "N° cuota": q.nroCuota,
           Vencimiento: fmtDate(q.fechaVencimiento), "Cuota UF": r2(q.monto), "Pagado UF": r2(q.pagado), "Pagado $": Number(q.montoPagadoClp) || 0,
-          "Pendiente UF": r2(q.pendiente), Estado: q.escritura ? "A escritura (no se suma)" : ESTADO[q.estado],
+          "Pendiente UF": r2(q.pendiente), "Cupón Aval UF": q.cupon === null || q.cupon === undefined ? "" : r2(q.cupon), "Neteado UF": r2(q.neteo), "Diferencia a pagar en escritura UF": r2(q.diferencia), Estado: q.escritura ? (q.sinDato ? "Sin dato de cupón (no se suma)" : q.diferencia > 0 ? "Paga diferencia en escritura" : "Neteada con cupón") : ESTADO[q.estado],
         });
       }
     }
   }
-  add("Detalle cuotas", det, [22, 8, 34, 13, 10, 28, 9, 13, 11, 11, 13, 12, 11]);
+  add("Detalle cuotas", det, [22, 8, 34, 13, 10, 28, 9, 13, 11, 11, 13, 12, 13, 11, 16, 28]);
 
   XLSX.writeFile(wb, `Cuotas_y_Pagos_${slugArchivo(proyecto)}_${fechaArchivo(hoy)}.xlsx`);
 }
@@ -179,18 +180,19 @@ export function exportarPdf({ clientes, proyecto, hoy, valorUF }) {
   titulo("Totales por cliente");
   const tot = (k) => clientes.reduce((a, c) => a + c[k], 0);
   tabla([
-    { h: "Cliente", k: "cli", w: 62 }, { h: "Unidad", k: "uni", w: 20 },
-    { h: "Pie", k: "pie", w: 15, right: true }, { h: "Abono gastos", k: "abo", w: 22, right: true }, { h: "P. c/escritura", k: "esc", w: 22, right: true },
-    { h: "Total UF", k: "tot", w: 26, right: true }, { h: "Pagado UF", k: "pag", w: 26, right: true }, { h: "Falta UF", k: "fal", w: 26, right: true },
-    { h: "Vencido UF", k: "ven", w: 24, right: true, color: (f) => (f.ven && f.ven !== "—" ? [200, 40, 60] : OSCURO) },
-    { h: "Avance", k: "av", w: 14, right: true }, { h: "Situación", k: "sit", w: 20 },
+    { h: "Cliente", k: "cli", w: 46 }, { h: "Unidad", k: "uni", w: 20 },
+    { h: "Pie", k: "pie", w: 14, right: true }, { h: "Abono gastos", k: "abo", w: 20, right: true }, { h: "P. c/escritura", k: "esc", w: 20, right: true },
+    { h: "Dif. escritura UF", k: "dif", w: 24, right: true, color: (f) => (f.dif && f.dif !== "—" && f.dif !== "s/d" ? [180, 100, 0] : OSCURO) },
+    { h: "Total UF", k: "tot", w: 24, right: true }, { h: "Pagado UF", k: "pag", w: 22, right: true }, { h: "Falta UF", k: "fal", w: 24, right: true },
+    { h: "Vencido UF", k: "ven", w: 22, right: true, color: (f) => (f.ven && f.ven !== "—" ? [200, 40, 60] : OSCURO) },
+    { h: "Avance", k: "av", w: 13, right: true }, { h: "Situación", k: "sit", w: 20 },
   ], clientes.map((c) => ({
     cli: c.cliente, uni: c.unidad, pie: parcial(c, TIPOS_ORDEN[0]), abo: parcial(c, TIPOS_ORDEN[1]), esc: parcial(c, TIPOS_ORDEN[2]),
-    tot: nf2.format(c.total), pag: nf2.format(c.pagado), fal: nf2.format(c.saldo), ven: c.vencido > 0.05 ? nf2.format(c.vencido) : "—",
+    dif: c.nSinCupon ? "s/d" : c.difEscritura > 0 ? nf2.format(c.difEscritura) : "—", tot: nf2.format(c.total), pag: nf2.format(c.pagado), fal: nf2.format(c.saldo), ven: c.vencido > 0.05 ? nf2.format(c.vencido) : "—",
     av: `${Math.round(c.avance * 100)}%`, sit: SITUACION[c.situacion],
-  })), { totales: { cli: `TOTAL (${clientes.length} clientes)`, tot: nf2.format(tot("total")), pag: nf2.format(tot("pagado")), fal: nf2.format(tot("saldo")), ven: nf2.format(tot("vencido")) } });
+  })), { totales: { cli: `TOTAL (${clientes.length})`, dif: nf2.format(tot("difEscritura")), tot: nf2.format(tot("total")), pag: nf2.format(tot("pagado")), fal: nf2.format(tot("saldo")), ven: nf2.format(tot("vencido")) } });
   doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...GRIS);
-  doc.text("Pie / Abono / P. c/escritura: cuotas pagadas / cuotas pactadas. Pago contra escritura es informativo: no se suma a lo adeudado ni a la mora.", M, y);
+  doc.text("Pie / Abono / P. c/escritura: cuotas pagadas / cuotas pactadas. Pago contra escritura se netea con el cupón del Aval y no se suma a lo adeudado; Dif. escritura es lo que se pagará en la escritura.", M, y);
 
   const paginas = doc.getNumberOfPages();
   for (let p = 1; p <= paginas; p++) {

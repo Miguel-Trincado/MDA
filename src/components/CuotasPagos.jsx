@@ -6,7 +6,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import { MESES_ES } from "../lib/constants";
 import { fmtDate, fmtDateTime, esProyectoPilpilen, normalizarBusqueda } from "../lib/helpers";
-import { fetchCuotasPago, fetchBonosPie, marcarBonoPieRemote } from "../lib/db";
+import { fetchCuotasPago, fetchBonosPie, marcarBonoPieRemote, fetchCuponesPce } from "../lib/db";
 import { esProyectoExcluido } from "../lib/parseCuotas";
 import { exportarExcel, exportarPdf } from "../lib/exportCuotas";
 import { useValorUFHoy } from "../lib/uf";
@@ -42,9 +42,11 @@ const CHIPS = {
   vencida: ["Vencida", "bg-rose-50 text-rose-700"],
   porVencer: ["Por vencer", "bg-sky-50 text-sky-700"],
   bono: ["Bono pie", "bg-violet-50 text-violet-700"],
-  escritura: ["A escritura", "bg-stone-100 text-stone-600"],
+  neteada: ["Neteada con cupón", "bg-violet-50 text-violet-700"],
+  difEscritura: ["Paga diferencia en escritura", "bg-amber-50 text-amber-700"],
+  sinCupon: ["Sin dato de cupón", "bg-stone-100 text-stone-600"],
 };
-const estadoVisible = (q) => (q.escritura ? "escritura" : q.estado);
+const estadoVisible = (q) => (q.escritura ? (q.sinDato ? "sinCupon" : q.diferencia > 0 ? "difEscritura" : "neteada") : q.estado);
 function ChipCuota({ estado }) {
   const [txt, cls] = CHIPS[estado] || CHIPS.porVencer;
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>{txt}</span>;
@@ -117,6 +119,7 @@ export function Totales({ clientes, hoy }) {
         <KpiCard bid="cuo-kpi3" orden={2} tone="green" icon={Wallet} label="Pagado" value={fmtUF0(k.pagado)} sub={`${fmtPct(avance)} del total · ${nf0.format(k.nPagadas)} cuotas`} />
         <KpiCard bid="cuo-kpi4" orden={3} tone="amber" icon={CalendarClock} label="Falta por pagar" value={fmtUF0(k.saldo)} sub={valorUF ? `≈ ${fmtCLP(k.saldo * valorUF)}` : "en UF"} />
         <KpiCard bid="cuo-kpi5" orden={4} tone="pink" icon={AlertTriangle} label="Vencido sin pagar" value={fmtUF0(k.vencido)} sub={`${nf0.format(k.nVencidas)} cuotas vencidas`} />
+        <KpiCard bid="cuo-kpi7" orden={6} tone="purple" icon={Banknote} label="Dif. a pagar en escritura" value={fmtUF0(k.difEscritura)} sub={`${nf0.format(k.nDifEscritura)} cuota(s) · cupón neteado ${fmtUF0(k.neteo)}${k.nSinCupon ? ` · ${k.nSinCupon} sin dato` : ""}`} />
         <KpiCard bid="cuo-kpi6" orden={5} tone="blue" icon={CalendarClock} label={`Por percibir ${fmtMes(mesActual)}`} value={fmtUF0(esteMes?.pendiente || 0)} sub={valorUF ? `≈ ${fmtCLP((esteMes?.pendiente || 0) * valorUF)}` : "cuotas del mes"} />
       </div>
 
@@ -303,7 +306,7 @@ function ListaClientes({ clientes, onAbrir }) {
               <th className={TH}>Cliente</th><th className={TH}>Unidad</th>
               {TIPOS_ORDEN.map((t) => <th key={t} className={THR} title="Cuotas pagadas / cuotas pactadas">{t === "Abono Provisión de Gastos" ? "Abono gastos" : t === "Pago contra escritura" ? "P. c/escritura" : t}</th>)}
               {hayOtros && <th className={TH}>Otros</th>}
-              <th className={THR}>Total UF</th><th className={THR}>Pagado UF</th><th className={THR}>Falta UF</th><th className={`${TH} w-[120px]`}>Avance</th><th className={TH}>Situación</th>
+              <th className={THR} title="Pago contra escritura menos el cupón del Aval: se paga en la escritura">Dif. escritura UF</th><th className={THR}>Total UF</th><th className={THR}>Pagado UF</th><th className={THR}>Falta UF</th><th className={`${TH} w-[120px]`}>Avance</th><th className={TH}>Situación</th>
             </tr>
           </thead>
           <tbody>
@@ -318,6 +321,7 @@ function ListaClientes({ clientes, onAbrir }) {
                     return <td key={nombre} className={TDR}>{t ? <span className={t.nVencidas ? "text-rose-600 font-semibold" : ""}>{t.nPagadas}/{t.nCuotas}</span> : <span className="text-stone-300">—</span>}</td>;
                   })}
                   {hayOtros && <td className={`${TD} text-xs text-stone-500`}>{c.tipos.filter((t) => !TIPOS_ORDEN.includes(t.tipo)).map((t) => `${t.tipo} ${t.nPagadas}/${t.nCuotas}`).join(", ") || "—"}</td>}
+                  <td className={`${TDR} ${c.difEscritura > 0 ? "text-amber-700 font-semibold" : ""}`}>{c.nSinCupon ? <span className="text-stone-400" title="El Aval no trae el cupón de este cliente">s/d</span> : c.difEscritura > 0 ? fmtUF(c.difEscritura) : <span className="text-stone-300">—</span>}</td>
                   <td className={TDR}>{fmtUF(c.total)}</td><td className={TDR}>{fmtUF(c.pagado)}</td><td className={TDR}>{fmtUF(c.saldo)}</td>
                   <td className={TD}><span className="flex items-center gap-2"><Barra pct={c.avance} className="flex-1" /><span className="text-xs text-stone-500 w-9 text-right">{fmtPct(c.avance)}</span></span></td>
                   <td className={TD}>
@@ -407,7 +411,8 @@ export function Ficha({ cliente: c, onVolver, onCambiarBono }) {
             </div>
             {esContraEscritura(t.tipo) && (
               <p className="text-xs text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 mb-3">
-                Informativo: este monto no se suma a lo adeudado. El cupón del Aval lo cubre y cualquier diferencia se paga en la escritura.
+                Informativo: este monto no se suma a lo adeudado. Se netea con el "Cupón Pago Contra Escritura" del Aval (regalo de la inmobiliaria) y la diferencia, si existe, se paga en la escritura.
+                {t.sinCupon > 0 || t.nSinCupon > 0 ? " El Aval no trae el cupón de este cliente: sube el Aval actualizado." : ` Cupón neteado: ${fmtUF(t.neteo)} UF · Diferencia a pagar en escritura: ${fmtUF(t.difEscritura)} UF.`}
               </p>
             )}
             {t.difiereTotal && (
@@ -418,7 +423,7 @@ export function Ficha({ cliente: c, onVolver, onCambiarBono }) {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr><th className={THR}>N°</th><th className={TH}>Vencimiento</th><th className={THR}>Cuota UF</th><th className={THR}>Pagado UF</th><th className={THR}>Pagado $</th><th className={THR}>Pendiente UF</th><th className={TH}>Estado</th></tr>
+                  <tr><th className={THR}>N°</th><th className={TH}>Vencimiento</th><th className={THR}>Cuota UF</th><th className={THR}>Pagado UF</th><th className={THR}>Pagado $</th><th className={THR}>Pendiente UF</th>{esContraEscritura(t.tipo) && <><th className={THR}>Cupón Aval UF</th><th className={THR}>Neteado UF</th><th className={THR}>Diferencia UF</th></>}<th className={TH}>Estado</th></tr>
                 </thead>
                 <tbody>
                   {t.cuotas.map((q) => (
@@ -427,6 +432,13 @@ export function Ficha({ cliente: c, onVolver, onCambiarBono }) {
                       <td className={TDR}>{fmtUF(q.monto)}</td><td className={TDR}>{q.pagado > 0 ? fmtUF(q.pagado) : <span className="text-stone-300">—</span>}</td>
                       <td className={TDR}>{Number(q.montoPagadoClp) > 0 ? fmtCLP(q.montoPagadoClp) : <span className="text-stone-300">—</span>}</td>
                       <td className={TDR}>{q.pendiente > 0 ? fmtUF(q.pendiente) : <span className="text-stone-300">—</span>}</td>
+                      {esContraEscritura(t.tipo) && (
+                        <>
+                          <td className={TDR}>{q.cupon !== null && q.cupon !== undefined ? fmtUF(q.cupon) : <span className="text-stone-300">s/d</span>}</td>
+                          <td className={TDR}>{q.neteo > 0 ? fmtUF(q.neteo) : <span className="text-stone-300">—</span>}</td>
+                          <td className={`${TDR} ${q.diferencia > 0 ? "text-amber-700 font-semibold" : ""}`}>{q.diferencia > 0 ? fmtUF(q.diferencia) : <span className="text-stone-300">—</span>}</td>
+                        </>
+                      )}
                       <td className={TD}>
                         {onCambiarBono ? (
                           <select
@@ -453,14 +465,14 @@ export function Ficha({ cliente: c, onVolver, onCambiarBono }) {
 }
 
 /* ============================ PANTALLA ============================ */
-export function CuotasPagosVista({ filas, bonos, onCambiarBono, cargadoEl, onRecargar, hoy: hoyProp }) {
+export function CuotasPagosVista({ filas, bonos, cupones, onCambiarBono, cargadoEl, onRecargar, hoy: hoyProp }) {
   const hoy = hoyProp || hoyChile();
   const { valorUF } = useValorUFHoy();
   const [vista, setVista] = useState("clientes");
   const [proyectoSel, setProyectoSel] = useState(null);
   const [oppSel, setOppSel] = useState("");
 
-  const todos = useMemo(() => armarClientes(filas, hoy, bonos), [filas, hoy, bonos]);
+  const todos = useMemo(() => armarClientes(filas, hoy, bonos, cupones), [filas, hoy, bonos, cupones]);
   const proyectos = useMemo(() => [...new Set(filas.map((f) => f.proyecto))].filter(Boolean).sort(), [filas]);
   const proyecto = proyectoSel ?? proyectos.find((p) => esProyectoPilpilen(p)) ?? proyectos[0] ?? TODOS;
   const clientes = useMemo(() => (proyecto === TODOS ? todos : todos.filter((c) => c.proyecto === proyecto)), [todos, proyecto]);
@@ -516,6 +528,7 @@ const FALTA_TABLA = /does not exist|schema cache|42P01|could not find the table/
 export default function CuotasPagos({ cargas, usuario }) {
   const [filas, setFilas] = useState(null);
   const [bonos, setBonos] = useState(() => new Set());
+  const [cupones, setCupones] = useState(() => new Map());
   const [avisoBono, setAvisoBono] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(true);
@@ -525,8 +538,10 @@ export default function CuotasPagos({ cargas, usuario }) {
     setCargando(true);
     setError("");
     try {
-      setFilas((await fetchCuotasPago()).filter((f) => !esProyectoExcluido(f.proyecto)));
+      const filasOk = (await fetchCuotasPago()).filter((f) => !esProyectoExcluido(f.proyecto));
+      setFilas(filasOk);
       try { setBonos(new Set(await fetchBonosPie())); } catch { setBonos(new Set()); } // sin tabla v173: sin bonos
+      try { setCupones(await fetchCuponesPce(filasOk.map((f) => f.opp))); } catch { setCupones(new Map()); } // sin columna v175: sin cupones
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -579,7 +594,7 @@ export default function CuotasPagos({ cargas, usuario }) {
   return (
     <>
       {avisoBono && <div className={PAGE_CLASS}><div className="text-sm text-rose-800 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2">{avisoBono}</div></div>}
-      <CuotasPagosVista filas={filas} bonos={bonos} onCambiarBono={cambiarBono} cargadoEl={cargas?.cuotas_pago?.createdAt} onRecargar={cargar} />
+      <CuotasPagosVista filas={filas} bonos={bonos} cupones={cupones} onCambiarBono={cambiarBono} cargadoEl={cargas?.cuotas_pago?.createdAt} onRecargar={cargar} />
     </>
   );
 }

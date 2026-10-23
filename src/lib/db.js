@@ -129,7 +129,24 @@ export async function marcarBonoPieRemote({ opp, tipoFinanciamiento, nroCuota },
 }
 
 export async function guardarAvalCompletoRemote(rows) {
-  await upsertInChunks("aval_completo", rows.map((r) => objToRow(r)), "opp");
+  try {
+    await upsertInChunks("aval_completo", rows.map((r) => objToRow(r)), "opp");
+  } catch (e) {
+    // Sin la migración v175 (columna del cupón): se guarda igual, sin el cupón.
+    if (!/cupon_contra_escritura/i.test(e.message || "")) throw e;
+    await upsertInChunks("aval_completo", rows.map((r) => { const o = objToRow(r); delete o.cupon_contra_escritura; return o; }), "opp");
+  }
+}
+
+// Cupón Pago Contra Escritura del Aval, por Opp (para cruzarlo con la cuota de Pago contra escritura).
+export async function fetchCuponesPce(opps) {
+  const mapa = new Map();
+  for (const parte of chunk([...new Set(opps)], 150)) {
+    const { data, error } = await supabase.from("aval_completo").select("opp,cupon_contra_escritura").in("opp", parte);
+    if (error) throw error;
+    for (const r of data || []) if (r.cupon_contra_escritura !== null && r.cupon_contra_escritura !== undefined) mapa.set(String(r.opp), Number(r.cupon_contra_escritura));
+  }
+  return mapa;
 }
 
 async function upsertInChunks(table, rows, onConflict, chunkSize = 400) {

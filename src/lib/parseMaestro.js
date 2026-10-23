@@ -218,6 +218,16 @@ export function parseMaestro(text) {
  * los proyectos y en cualquier estado (a diferencia de parseMaestro, que solo
  * conserva Pilpilén para el resto del sistema).
  */
+// "Cupon Pago Contra Escritura" en UF: acepta 354.6, 354,6 o 1.234,56. Vacío = sin dato.
+function numeroCupon(v) {
+  let s = String(v ?? "").trim().replace(/\s/g, "");
+  if (!s) return null;
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function parseAvalCompleto(text) {
   const lines = text.replace(/\r/g, "").split("\n").filter((l) => l.trim().length > 0);
   if (lines.length < 2) return [];
@@ -235,6 +245,7 @@ export function parseAvalCompleto(text) {
   const iLote = col("Lote"), iFCot = col("Fecha Cotización", "Fecha Cotizacion"), iFOpp = col("Fecha Opp");
   const iFRes = col("Fecha Reserva"), iFCierre = col("Fecha Cierre"), iFProm = col("Fecha Promesa");
   const iFEsc = col("Fecha Escritura"), iFDes = col("Fecha Desistimiento");
+  const iCupEsc = col("Cupon Pago Contra Escritura", "Cupón Pago Contra Escritura");
   if (iOpp === -1) return [];
 
   const get = (cols, i) => (i !== -1 && cols[i] ? cols[i].trim() : "");
@@ -262,6 +273,7 @@ export function parseAvalCompleto(text) {
       fechaPromesa: get(cols, iFProm),
       fechaEscritura: get(cols, iFEsc),
       fechaDesistimiento: get(cols, iFDes),
+      cuponContraEscritura: iCupEsc === -1 ? null : numeroCupon(get(cols, iCupEsc)),
     });
   }
   return [...porOpp.values()];

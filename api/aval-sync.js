@@ -29,6 +29,15 @@ function claveOk(recibida, esperada) {
 
 const txt = (v) => (v === null || v === undefined ? "" : String(v).trim());
 
+function numCupon(v) {
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  let s = String(v).trim().replace(/\s/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Una fila del reporte de Vivet → una fila de la tabla aval_completo.
 export function filaDeVivet(r) {
   const opp = txt(r.Id_Oportunidad);
@@ -54,6 +63,7 @@ export function filaDeVivet(r) {
     fecha_promesa: txt(r.fechapromesa),
     fecha_escritura: txt(r.fechaescritura),
     fecha_desistimiento: txt(r.Fechadesistimiento),
+    cupon_contra_escritura: numCupon(r.CuponPagoContraEscritura),
   };
 }
 
@@ -91,18 +101,28 @@ export default async function handler(req, res) {
       if (f) porOpp.set(f.opp, f);
     }
     const filas = [...porOpp.values()];
+    // Si Vivet no entregó el cupón en este envío, no se toca la columna (no pisa lo cargado desde el CSV).
+    if (!filas.some((f) => f.cupon_contra_escritura !== null)) filas.forEach((f) => { delete f.cupon_contra_escritura; });
     if (rows.length > 0 && filas.length === 0) {
       return res.status(422).json({
         error: "Ninguna fila válida: no se reconocieron los campos de Vivet (o todas eran de proyectos excluidos)",
         camposRecibidos: Object.keys(rows[0] || {}).slice(0, 30),
       });
     }
+    const enviar = (lote) => sb(base, key, "aval_completo?on_conflict=opp", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify(lote),
+    });
     for (let i = 0; i < filas.length; i += TROZO) {
-      await sb(base, key, "aval_completo?on_conflict=opp", {
-        method: "POST",
-        headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-        body: JSON.stringify(filas.slice(i, i + TROZO)),
-      });
+      const lote = filas.slice(i, i + TROZO);
+      try {
+        await enviar(lote);
+      } catch (e) {
+        // Sin la migración v175 (columna del cupón): se guarda igual, sin el cupón.
+        if (!/cupon_contra_escritura/i.test(String(e.message || e))) throw e;
+        await enviar(lote.map((f) => { const { cupon_contra_escritura, ...resto } = f; return resto; })); // eslint-disable-line no-unused-vars
+      }
     }
     // Registro visible en "Datos al día". Si falla, no se pierde el Aval ya
     // guardado, pero el motivo se devuelve para que el script lo muestre.

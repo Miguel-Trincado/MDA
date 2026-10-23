@@ -16,6 +16,7 @@ import { useMiPerfil } from "./lib/useMiPerfil";
 import { useAuthSession } from "./lib/useAuthSession";
 import { UfProvider } from "./lib/uf";
 import { LayoutProvider, EditorDiseno } from "./lib/layout";
+import { iniciarPresencia } from "./lib/presencia";
 import { cacheLeer, cacheGuardar, cacheBorrar } from "./lib/cacheLocal";
 import {
   fetchDatosBase, fetchDatosAval, saveGestionRemote, markRevisadoRemote,
@@ -50,7 +51,8 @@ function AppInner() {
     latir();
     const t = setInterval(latir, 2 * 60 * 1000);
     document.addEventListener("visibilitychange", latir);
-    return () => { clearInterval(t); document.removeEventListener("visibilitychange", latir); };
+    const detener = iniciarPresencia(miUserIdLatido, authSession?.user?.email);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", latir); detener(); };
   }, [miUserIdLatido]);
   const esAdmin = rol === "admin";
   const esEjecutiva = rol === "ejecutiva";
@@ -350,7 +352,7 @@ function AppInner() {
         )}
         {view === "cotizador" && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
         {view === "comisiones" && authSession && puedeComisiones && <Comisiones db={db} />}
-        {view === "cuotas" && authSession && puedeComisiones && <CuotasPagos cargas={db.cargas} />}
+        {view === "cuotas" && authSession && puedeComisiones && <CuotasPagos cargas={db.cargas} usuario={authSession?.user?.email} />}
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}
