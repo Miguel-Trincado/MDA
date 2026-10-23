@@ -58,3 +58,28 @@ html {
   .grid-60 { display: flex; }
   .bloque { flex: var(--span, 60) 1 0; grid-column: auto; }
 }
+
+/* ---------- Móvil y tablet (< 1024 px) ---------- */
+@media (max-width: 1023px) {
+  html { scrollbar-gutter: auto; }
+  body { overflow-x: hidden; }
+  .app-main { overflow-x: hidden; }
+  /* Evita el zoom automático de iOS al tocar un campo. */
+  input, select, textarea { font-size: 16px !important; }
+  /* Márgenes más angostos y títulos más chicos. */
+  .app-main [class*="px-5"] { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .app-main h1.font-display { font-size: 1.5rem; line-height: 1.9rem; }
+  .app-main .font-display.text-3xl { font-size: 1.5rem; line-height: 1.9rem; }
+  /* Cualquier tabla ancha se desliza horizontalmente en vez de romper la página. */
+  .app-main table { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  /* Alturas guardadas desde el escritorio no aplican en móvil: el contenido fluye. */
+  .app-main .bloque { height: auto !important; }
+  .app-main .bloque > div { max-width: 100%; height: auto !important; }
+  .app-main .bloque { overflow-wrap: anywhere; }
+  /* Controles y botones cómodos para el dedo. */
+  .app-main button { min-height: 36px; }
+  .app-main [class*="w-[280px]"], .app-main [class*="w-[230px]"] { width: 100% !important; }
+  .app-main .max-w-\[60\%\] { max-width: 100%; }
+  /* El modo de edición de diseño es solo de escritorio. */
+  [data-editor-diseno] { display: none !important; }
+}

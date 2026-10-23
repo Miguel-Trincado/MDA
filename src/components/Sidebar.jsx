@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   BarChart3, Users, Calculator, UserCog, Database,
-  ChevronsLeft, ChevronsRight, Settings, FileUp, LogOut, LayoutDashboard, Wallet,
+  ChevronsLeft, ChevronsRight, Settings, X, FileUp, LogOut, LayoutDashboard, Wallet,
 } from "lucide-react";
 import { Avatar } from "./Shared";
 import { useLayout } from "../lib/layout";
@@ -17,7 +17,7 @@ const ICONS = {
   usuarios: UserCog,
 };
 
-export default function Sidebar({ active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, perfilLabel, cargas, onLogout }) {
+export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, perfilLabel, cargas, onLogout }) {
   const diseno = useLayout();
   const [colapsado, setColapsado] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
@@ -36,15 +36,16 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
 
   return (
     <div
-      className={`shrink-0 sticky top-0 h-screen overflow-y-auto bg-[#0B2547] text-white flex flex-col transition-[width] duration-150 ${
-        colapsado ? "w-[68px]" : "w-[220px]"
-      }`}
+      className={`shrink-0 fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-[100dvh] lg:h-screen overflow-y-auto bg-[#0B2547] text-white flex flex-col transition-[width,transform] duration-200 w-[270px] ${
+        movilAbierto ? "translate-x-0" : "-translate-x-full"
+      } lg:translate-x-0 ${colapsado ? "lg:w-[68px]" : "lg:w-[220px]"}`}
     >
       <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
-        {!colapsado && <span className="font-display text-xl tracking-tight">MDA</span>}
+        <span className={`font-display text-xl tracking-tight ${colapsado ? "lg:hidden" : ""}`}>MDA</span>
+        <button onClick={onCerrarMovil} className="lg:hidden text-white/70 p-1 rounded-md hover:bg-white/10" aria-label="Cerrar menú"><X size={20} /></button>
         <button
           onClick={() => setColapsado((v) => !v)}
-          className="text-white/50 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
+          className="hidden lg:block text-white/50 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
           title={colapsado ? "Expandir menú" : "Colapsar menú"}
         >
           {colapsado ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
@@ -62,10 +63,10 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
               title={colapsado ? t.label : undefined}
               className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
                 isActive ? "bg-[#1E5AA8] text-white font-medium" : "text-slate-300 hover:bg-white/10 hover:text-white"
-              } ${colapsado ? "justify-center" : ""}`}
+              } ${colapsado ? "lg:justify-center" : ""}`}
             >
               <Icon size={18} className="shrink-0" />
-              {!colapsado && <span className="truncate">{t.label}</span>}
+              <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{t.label}</span>
             </button>
           );
         })}
@@ -74,7 +75,7 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
       {/* Cuenta: al final del menú, tipo engranaje — agrupa la sesión de
           administrador y, dentro de ella, la opción de cargar el Maestro
           Aval / listado de precios (antes era su propia pestaña arriba). */}
-      {!colapsado && cargas && (cargas.aval || cargas.aval_completo || cargas.lista_precios || cargas.cuotas_pago) && (
+      {(!colapsado || movilAbierto) && cargas && (cargas.aval || cargas.aval_completo || cargas.lista_precios || cargas.cuotas_pago) && (
         <div className="px-4 py-3 border-t border-white/10 text-[11px] text-slate-400 leading-snug">
           <div className="uppercase tracking-wide text-[10px] text-slate-500 mb-1">Datos al día</div>
           {[["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"], ["cuotas_pago", "Cuotas"]].map(([k, label]) =>
@@ -120,7 +121,7 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
                     setCuentaAbierta(false);
                     diseno.setEditando(!diseno.editando);
                   }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
+                  className="hidden lg:flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
                 >
                   <LayoutDashboard size={14} /> {diseno.editando ? "Terminar edición de diseño" : "Editar diseño"}
                 </button>
@@ -152,11 +153,11 @@ export default function Sidebar({ active, onChange, showComisiones, esEjecutiva,
           onClick={() => setCuentaAbierta((v) => !v)}
           title={colapsado ? "Configuración" : undefined}
           className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors ${
-            colapsado ? "justify-center" : ""
+            colapsado ? "lg:justify-center" : ""
           }`}
         >
           <Settings size={18} className="shrink-0" />
-          {!colapsado && <span className="truncate">Configuración</span>}
+          <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>Configuración</span>
         </button>
       </div>
     </div>

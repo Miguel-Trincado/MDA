@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { Menu } from "lucide-react";
 import { normalizarBusqueda } from "./lib/helpers";
 import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
@@ -29,10 +30,26 @@ import { parseListaPrecios } from "./lib/parseListaPrecios";
 // sin una sesión real de usuario (correo y contraseña creados en la
 // pestaña Usuarios). Ya no existe una clave compartida.
 
+// Pantallas del menú: la actual se guarda en la URL (#cuotas) y en el
+// navegador para que al recargar la página vuelva exactamente a la misma.
+const VISTAS = ["dashboard", "ejecutivo", "carga", "cotizador", "comisiones", "cuotas", "usuarios", "miscomisiones", "jefa"];
+function vistaInicial() {
+  try {
+    const h = window.location.hash.replace(/^#\/?/, "");
+    if (VISTAS.includes(h)) return h;
+    const l = localStorage.getItem("crm_view");
+    if (VISTAS.includes(l)) return l;
+  } catch { /* sin almacenamiento */ }
+  return "dashboard";
+}
+const LABELS_VISTA = { dashboard: "Dashboard", ejecutivo: "Ejecutivo", carga: "Cargar archivo", cotizador: "Simulador", comisiones: "Comisiones", cuotas: "Cuotas y Pagos", usuarios: "Usuarios", miscomisiones: "Mis comisiones", jefa: "Jefa de Ventas" };
+
 function AppInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [view, setView] = useState("dashboard");
+  const [view, setView] = useState(vistaInicial);
+  const [menuMovil, setMenuMovil] = useState(false);
+  const scrollRestaurado = useRef(false);
   const [db, setDb] = useState({ gestion: {}, control: {}, cambios: [], historial: [], metas: {}, cotizaciones: {}, listaPrecios: {}, cambiosEstadoOpp: [], avalCompleto: [], tiposUnidad: {}, cargandoAval: true });
   // Solo se usa para decidir si la pestaña "Comisiones" se muestra en el
   // menú (es privada: solo el administrador debe verla). El contenido de
@@ -65,6 +82,57 @@ function AppInner() {
   // Carga de Aval y listado de precios: administrador y jefe de ventas.
   const sinCarga = logueadoSinAdmin && !esJefe;
   const sinJefa = logueadoSinAdmin && !esJefe;
+
+  // Recordar la pantalla: URL + navegador, y botón "atrás" entre menús.
+  useEffect(() => {
+    try {
+      localStorage.setItem("crm_view", view);
+      if (window.location.hash.replace(/^#\/?/, "") !== view) window.location.hash = view;
+    } catch { /* ignorar */ }
+  }, [view]);
+  useEffect(() => {
+    const f = () => {
+      const h = window.location.hash.replace(/^#\/?/, "");
+      if (VISTAS.includes(h)) setView(h);
+    };
+    window.addEventListener("hashchange", f);
+    return () => window.removeEventListener("hashchange", f);
+  }, []);
+  // Si la pantalla guardada no corresponde al perfil, volver al Dashboard.
+  useEffect(() => {
+    if (!authSession || cargandoPerfil) return;
+    const ok =
+      (view !== "carga" || !sinCarga) &&
+      ((view !== "comisiones" && view !== "cuotas") || puedeComisiones) &&
+      (view !== "usuarios" || esAdmin) &&
+      (view !== "miscomisiones" || esEjecutiva) &&
+      (view !== "jefa" || !sinJefa);
+    if (!ok) setView("dashboard");
+  }, [view, authSession, cargandoPerfil, sinCarga, puedeComisiones, esAdmin, esEjecutiva, sinJefa]);
+  // Guardar la posición de scroll y recuperarla tras recargar.
+  useEffect(() => {
+    let t;
+    const f = () => {
+      clearTimeout(t);
+      t = setTimeout(() => { try { sessionStorage.setItem("crm_scroll_" + view, String(window.scrollY)); } catch { /* ignorar */ } }, 150);
+    };
+    window.addEventListener("scroll", f, { passive: true });
+    return () => { clearTimeout(t); window.removeEventListener("scroll", f); };
+  }, [view]);
+  useEffect(() => {
+    if (loading || scrollRestaurado.current) return undefined;
+    scrollRestaurado.current = true;
+    let y = 0;
+    try { y = Number(sessionStorage.getItem("crm_scroll_" + view)) || 0; } catch { /* ignorar */ }
+    if (!y) return undefined;
+    let n = 0;
+    const id = setInterval(() => {
+      window.scrollTo(0, y);
+      if (Math.abs(window.scrollY - y) < 4 || ++n > 15) clearInterval(id);
+    }, 200);
+    return () => clearInterval(id);
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cambiarVista = (v) => { setView(v); setMenuMovil(false); window.scrollTo(0, 0); };
 
   // Una ejecutiva con su propia cuenta solo ve SUS leads y clientes: se
   // recorta la base en memoria por el nombre de ejecutivo de su perfil
@@ -325,9 +393,17 @@ function AppInner() {
 
   return (
     <div className="min-h-screen app-bg app-surface font-body text-stone-900 flex">
+      <div className="lg:hidden fixed top-0 inset-x-0 z-30 h-14 bg-[#0B2547] text-white flex items-center gap-3 px-3 shadow">
+        <button onClick={() => setMenuMovil(true)} className="p-2 -ml-1 rounded-md hover:bg-white/10" aria-label="Abrir menú"><Menu size={22} /></button>
+        <span className="font-display text-lg tracking-tight">MDA</span>
+        <span className="text-sm text-white/70 truncate">· {LABELS_VISTA[view] || ""}</span>
+      </div>
+      {menuMovil && <div className="lg:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMenuMovil(false)} />}
       <Sidebar
+        movilAbierto={menuMovil}
+        onCerrarMovil={() => setMenuMovil(false)}
         active={view}
-        onChange={setView}
+        onChange={cambiarVista}
         showComisiones={puedeComisiones}
         esEjecutiva={esEjecutiva}
         esAdmin={esAdmin}
@@ -338,7 +414,7 @@ function AppInner() {
         onLogout={handleLogoutCompleto}
         cargas={db.cargas}
       />
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 pt-14 lg:pt-0 app-main">
         <Suspense fallback={<div className="p-10 text-sm text-stone-500">Cargando…</div>}>
         {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
         {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
