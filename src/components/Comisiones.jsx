@@ -295,7 +295,7 @@ export default function Comisiones({ db }) {
 
   return (
     <div className="max-w-6xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v184</span></>} subtitle="Gestión y validación de comisiones" />
+      <PageHeader title={<>Comisiones <span className="text-[10px] align-middle text-stone-300 font-normal normal-case">build v186</span></>} subtitle="Gestión y validación de comisiones" />
 
       <div className="grid-60 gap-3 mb-2">
         <Bloque id="com-periodo" grupo="com-f1" orden={0} span={30}>

@@ -49,6 +49,9 @@ function valorOBlanco(v) {
   return v && v.trim() ? v.trim() : EN_BLANCO;
 }
 
+// Región Metropolitana (con o sin "de Santiago") se muestra como RM.
+const abrevRegion = (n) => (/metropolitana/i.test(n || "") ? "RM" : n);
+
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
   const [filtros, setFiltros] = useState({ periodoDesde: mesActualKey(), periodoHasta: mesActualKey(), proyecto: PROYECTO_DEFECTO, tipologia: TODO, estado: "cotizaciones" });
@@ -317,7 +320,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const hallazgos = [
     `La tipología ${topTipologiaHistorica[0]} concentra el ${Math.round((topTipologiaHistorica[1] / dataTendencia.total) * 100)}% del total histórico de ${sust}.`,
-    topRegionHistorica ? `La región de ${topRegionHistorica[0]} representa el ${Math.round((topRegionHistorica[1] / dataTendencia.total) * 100)}% del histórico de ${sust}.` : null,
+    topRegionHistorica ? `La ${/metropolitana/i.test(topRegionHistorica[0]) ? "RM" : "región de " + topRegionHistorica[0]} representa el ${Math.round((topRegionHistorica[1] / dataTendencia.total) * 100)}% del histórico de ${sust}.` : null,
     mesPicoHistorico ? `El mes de ${mesPicoHistoricoLabel} registró el mayor número de ${sust} (${mesPicoHistorico[1]}).` : null,
     tendenciaTexto,
     pctSinFecha > 0 ? `El ${pctSinFecha}% de las ${sust} no tiene una fecha interpretable.` : null,
@@ -326,7 +329,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
 
   const recomendaciones = [
     `Reforzar la oferta y comunicación de la tipología ${topTipologiaHistorica[0]}, la más demandada según el histórico.`,
-    topRegionHistorica ? `Concentrar esfuerzos comerciales en ${topRegionHistorica[0]}, de donde proviene la mayor parte de la demanda.` : null,
+    topRegionHistorica ? `Concentrar esfuerzos comerciales en ${abrevRegion(topRegionHistorica[0])}, de donde proviene la mayor parte de la demanda.` : null,
     tendenciaTexto && tendenciaTexto.includes("bajaron")
       ? `Investigar las causas de la baja de ${sust} del último mes y reforzar la captación.`
       : "Mantener el ritmo de captación observado en los últimos meses.",
@@ -459,7 +462,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           tone="green"
           icon={MapPin}
           label={esCotizaciones ? "Región con mayor cotización" : `Región con más ${sust}`}
-          value={topRegion ? topRegion[0] : "—"}
+          value={topRegion ? abrevRegion(topRegion[0]) : "—"}
           sub={topRegion ? `${topRegion[1]} ${sust}` : "—"}
           small
           serie={serieReg}
