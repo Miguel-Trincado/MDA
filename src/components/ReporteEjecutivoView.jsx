@@ -1,14 +1,17 @@
 import { useState, useMemo } from "react";
 import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks } from "lucide-react";
+import { FileText, User, LayoutGrid, MapPin, Layers, BarChart3, Lightbulb, ListChecks, TrendingUp, UserX, Building2, BellOff } from "lucide-react";
 import { DONUT_COLORS, LINE_COLOR, MESES_ES, MESES_ES_LARGO } from "../lib/constants";
-import { parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, normalizarTipologia, limpiarTipologiaLista, esProyectoPilpilen, esProyectoExcluidoDashboard, stripAccents } from "../lib/helpers";
+import { formatFechaCorta, parseFechaCompleta, parseFechaAMes, labelPeriodo as labelPeriodoBase, agruparListaPreciosPorCodigo, normalizarCodigo, normalizarTipologia, limpiarTipologiaLista, esProyectoPilpilen, esProyectoExcluidoDashboard, stripAccents } from "../lib/helpers";
 import { KpiCard, PageHeader, PAGE_CLASS, Panel, CardTitle } from "./Shared";
 import RutAnalysisSection from "./RutAnalysisSection";
 import FilterBar from "./FilterBar";
+import KpiDetalle from "./KpiDetalle";
 
 const TODO = "Todo";
 const EN_BLANCO = "(en blanco)";
+// Cotizaciones de clientes activos sin acción registrada hace más de este número de días.
+const DIAS_SIN_GESTION = 7;
 const PROYECTO_DEFECTO = "__pilpilen__"; // hasta que el usuario elige otro, se usa Pilpilén
 
 // Filtro "Estado": qué Opp del Aval se leen y con qué fecha se ubican en el tiempo.
@@ -54,6 +57,7 @@ const abrevRegion = (n) => (/metropolitana/i.test(n || "") ? "RM" : n);
 
 export default function ReporteEjecutivoView({ db, onUpload }) {
   const [modo, setModo] = useState("mes");
+  const [detalle, setDetalle] = useState(null); // ventana flotante de una tarjeta
   const [filtros, setFiltros] = useState({ periodoDesde: mesActualKey(), periodoHasta: mesActualKey(), proyecto: PROYECTO_DEFECTO, tipologia: TODO, estado: "cotizaciones" });
 
   // El Aval a veces trae la Tipología mal o vacía para una Opp (problema
@@ -393,6 +397,188 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const totPromesas = totalEstado("promesas");
   const totEscrituradas = totalEstado("escrituradas");
 
+  // ---- KPI comerciales (independientes del filtro "Estado"; respetan Proyecto, Tipo Unidad y Período) ----
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const claveDeFecha = (str) => {
+    const fm = parseFechaAMes(str);
+    return fm ? `${fm.year}-${pad2(fm.month)}` : null;
+  };
+  const filtraProyTipo = (r) => {
+    if (proyectoEf !== TODO && (r.proyecto && r.proyecto.trim() ? r.proyecto.trim() : EN_BLANCO) !== proyectoEf) return false;
+    if (tipoEf !== TODO && valorOBlanco(tipoUnidadDe(r)) !== tipoEf) return false;
+    return true;
+  };
+  const baseKpi = base.filter(filtraProyTipo).map((r) => ({ r, cot: claveDeFecha(r.fecha || r.fechaOpp), prom: claveDeFecha(r.fechaPromesa), des: claveDeFecha(r.fechaDesistimiento) }));
+  const dentro = (k, desde, hasta) => !!k && k >= desde && k <= hasta;
+  const desdeSel = filtrosEf.periodoDesde === TODO ? "0000-00" : filtrosEf.periodoDesde;
+  const hastaSel = filtrosEf.periodoHasta === TODO ? "9999-99" : filtrosEf.periodoHasta;
+  const prevClaveSel = (() => { const k = filtrosEf.periodoHasta; if (!k || k === TODO) return ""; const [y, m] = k.split("-").map(Number); return `${m === 1 ? y - 1 : y}-${pad2(m === 1 ? 12 : m - 1)}`; })();
+  const hayUnMes = filtrosEf.periodoDesde !== TODO && filtrosEf.periodoDesde === filtrosEf.periodoHasta;
+  const textoRango = filtrosEf.periodoDesde === TODO && filtrosEf.periodoHasta === TODO
+    ? "todo el histórico"
+    : hayUnMes ? labelPeriodo(filtrosEf.periodoDesde, "mes") : `${labelPeriodo(desdeSel, "mes")} – ${labelPeriodo(hastaSel, "mes")}`;
+  const pctDe = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
+  const fmtPct = (v) => (v === null ? "—" : `${String(v).replace(".", ",")}%`);
+
+  // 1) Conversión cotización → promesa (sin pasar por la reserva): de las cotizaciones del período,
+  //    cuántas llegaron a promesa.
+  // Todo se cuenta por RUT único: un cliente con varias cotizaciones cuenta una sola vez.
+  const rutDe = (x) => (x.r.rut && String(x.r.rut).trim() ? String(x.r.rut).trim() : `opp:${x.r.opp}`);
+  const rutsUnicos = (lista) => new Set(lista.map(rutDe));
+  const conversion = (desde, hasta) => {
+    const cot = baseKpi.filter((x) => dentro(x.cot, desde, hasta));
+    const prom = cot.filter((x) => !!x.prom || claseEstado(x.r.estado) === "promesas" || claseEstado(x.r.estado) === "escrituradas");
+    const nCot = rutsUnicos(cot).size;
+    const nProm = rutsUnicos(prom).size;
+    return { cot: nCot, prom: nProm, pct: pctDe(nProm, nCot) };
+  };
+  const convSel = conversion(desdeSel, hastaSel);
+  const convPrev = hayUnMes ? conversion(prevClaveSel, prevClaveSel) : null;
+  const pl = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  const convSub = `${pl(convSel.prom, "cliente con promesa", "clientes con promesa")} de ${pl(convSel.cot, "cliente que cotizó", "clientes que cotizaron")}${convPrev && convPrev.pct !== null ? ` · mes anterior ${fmtPct(convPrev.pct)}` : ""}`;
+  const serieConv = ultimos12.map((k) => ({ v: conversion(k, k).pct || 0 }));
+
+  // 2) Tasa de desistimiento: de las promesas del período, cuántas terminaron desistidas.
+  const desistimiento = (desde, hasta) => {
+    const prom = baseKpi.filter((x) => dentro(x.prom, desde, hasta));
+    const des = prom.filter((x) => claseEstado(x.r.estado) === "desistidas" || !!x.des);
+    // Por unidad (Opp): un cliente con 3 unidades aporta 3 promesas y, si desisten, 3 desistimientos.
+    return { prom: prom.length, des: des.length, pct: pctDe(des.length, prom.length) };
+  };
+  const desSel = desistimiento(desdeSel, hastaSel);
+  const desPrev = hayUnMes ? desistimiento(prevClaveSel, prevClaveSel) : null;
+  const desSub = `${pl(desSel.des, "promesa desistida", "promesas desistidas")} de ${pl(desSel.prom, "promesa", "promesas")}${desPrev && desPrev.pct !== null ? ` · mes anterior ${fmtPct(desPrev.pct)}` : ""}`;
+  const serieDes = ultimos12.map((k) => ({ v: desistimiento(k, k).des }));
+
+  // 3) Unidades del listado de precios (solo departamentos): disponibles, reservadas y vendidas.
+  const unidadesLista = Object.values(db.listaPrecios || {});
+  const deptos = unidadesLista.filter((u) => /depart/i.test(u.tipo || ""));
+  const unidadesBase = deptos.length > 0 ? deptos : unidadesLista;
+  const nEstado = (...nombres) => unidadesBase.filter((u) => nombres.includes(u.estado)).length;
+  const uDisp = nEstado("Disponible");
+  const uRes = nEstado("Reservada", "Pre-reservada");
+  const uVend = nEstado("Vendida", "Promesada");
+  const uTotal = unidadesBase.length;
+  const stockUf = Math.round(unidadesBase.filter((u) => u.estado === "Disponible").reduce((t, u) => t + (Number(u.precio) || 0), 0));
+
+  // 4) Clientes activos sin acción registrada hace más de DIAS_SIN_GESTION días.
+  const msHoy = Date.now();
+  const normProy = (x) => stripAccents(x || "").toUpperCase();
+  const gestionKpi = Object.values(db.gestion || {}).filter((g) => {
+    if ((g.estado || "") !== "Activo") return false;
+    if (proyectoEf !== TODO) {
+      const a = normProy(proyectoEf), b = normProy(g.proyecto || "PILPILEN");
+      if (!a.includes(b) && !b.includes(a)) return false;
+    }
+    return true;
+  }).map((g) => {
+    const fechas = [g.fechaUltimaAccionEfectiva, g.ultimaActualizacionEjecutivo, g.fechaUltimaCotizacion]
+      .map((x) => parseFechaCompleta(x)).filter(Boolean).map((d) => d.getTime());
+    const ref = fechas.length ? Math.max(...fechas) : null;
+    return { g, ref, dias: ref === null ? null : Math.floor((msHoy - ref) / 86400000) };
+  });
+  const sinGestion = gestionKpi.filter((x) => x.dias === null || x.dias > DIAS_SIN_GESTION);
+  const activos = Object.values(db.gestion || {}).filter((g) => (g.estado || "") === "Activo").length;
+
+  // ---- Detalle de cada tarjeta (ventana flotante) ----
+  const fechaTxt = (x) => { const d = parseFechaCompleta(x); return d ? formatFechaCorta(d) : "—"; };
+  const tms = (x) => { const d = parseFechaCompleta(x); return d ? d.getTime() : 0; };
+  const colF = (key, label) => ({ key, label, sort: (f) => f["_" + key] || 0 });
+  const filaOpp = (r, fechaStr, tip) => ({
+    fecha: fechaTxt(fechaStr), _fecha: tms(fechaStr), opp: r.opp, cliente: r.cliente || "—", rut: r.rut || "—",
+    ejecutivo: r.ejecutivo || "—", unidad: r.lote || "—", tipologia: tip !== undefined ? tip : tipologiaDe(r), region: abrevRegion(r.region) || "—",
+  });
+  const COLS_OPP = [colF("fecha", "Fecha"), { key: "opp", label: "Opp" }, { key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "ejecutivo", label: "Ejecutivo" }, { key: "unidad", label: "Unidad" }, { key: "tipologia", label: "Tipología" }, { key: "region", label: "Región" }];
+  const porFechaDesc = (a, b) => b._fecha - a._fecha;
+  const subFiltros = `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · ${textoRango}`;
+  const contar = (lista, fnClave) => {
+    const m = new Map();
+    lista.forEach((r) => {
+      const k = fnClave(r);
+      if (!m.has(k)) m.set(k, { cot: 0, ruts: new Set() });
+      const e = m.get(k);
+      e.cot += 1;
+      e.ruts.add(r.rut || `opp:${r.opp}`);
+    });
+    return [...m.entries()].map(([k, e]) => ({ k, cot: e.cot, clientes: e.ruts.size })).sort((a, b) => b.clientes - a.clientes || b.cot - a.cot);
+  };
+
+  const detCotizaciones = () => {
+    const rows = filasTendencia.filter((r) => claveMes(r) === claveUltimoMes).map((r) => filaOpp(r, r.fecha, r.tipologia)).sort(porFechaDesc);
+    return { titulo: `${sustantivo} de ${labelPeriodo(claveUltimoMes, "mes")}`, subtitulo: subFiltros, resumen: [{ label: "Total", valor: rows.length }], columnas: COLS_OPP, filas: rows, archivo: `Dashboard_${sust}` };
+  };
+  const detClientes = () => {
+    const m = new Map();
+    filas.forEach((r) => {
+      const k = r.rut || `opp:${r.opp}`;
+      const t = tms(r.fecha);
+      const e = m.get(k) || { cliente: r.cliente || "—", rut: r.rut || "—", n: 0, _ult: 0, ejecutivo: r.ejecutivo || "—" };
+      e.n += 1;
+      if (t >= e._ult) { e._ult = t; e.ejecutivo = r.ejecutivo || e.ejecutivo; e.cliente = r.cliente || e.cliente; }
+      m.set(k, e);
+    });
+    const rows = [...m.values()].map((e) => ({ cliente: e.cliente, rut: e.rut, n: e.n, ultima: e._ult ? formatFechaCorta(new Date(e._ult)) : "—", _ultima: e._ult, ejecutivo: e.ejecutivo })).sort((a, b) => b.n - a.n || b._ultima - a._ultima);
+    return { titulo: "Clientes únicos (RUT)", subtitulo: subFiltros, resumen: [{ label: "Clientes únicos", valor: rows.length }, { label: sustantivo, valor: filas.length }], columnas: [{ key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "n", label: sustantivo, align: "right" }, colF("ultima", "Última fecha"), { key: "ejecutivo", label: "Ejecutivo" }], filas: rows, archivo: "Dashboard_clientes_unicos" };
+  };
+  const detTipologia = () => {
+    const rows = contar(filas, (r) => valorOBlanco(r.tipologia)).map((e) => ({ tipologia: e.k, clientes: e.clientes, cot: e.cot }));
+    return { titulo: "Clientes por tipología", subtitulo: subFiltros, resumen: [{ label: "Clientes únicos", valor: analisisRut.clientesUnicos }], columnas: [{ key: "tipologia", label: "Tipología" }, { key: "clientes", label: "Clientes únicos", align: "right" }, { key: "cot", label: sustantivo, align: "right" }], filas: rows, pie: { tipologia: "Total", clientes: analisisRut.clientesUnicos, cot: filas.length }, archivo: "Dashboard_tipologia" };
+  };
+  const detRegion = () => {
+    const rows = contar(filas, (r) => abrevRegion(valorOBlanco(r.region))).sort((a, b) => b.cot - a.cot).map((e) => ({ region: e.k, cot: e.cot, clientes: e.clientes }));
+    return { titulo: `${sustantivo} por región`, subtitulo: subFiltros, columnas: [{ key: "region", label: "Región" }, { key: "cot", label: sustantivo, align: "right" }, { key: "clientes", label: "Clientes únicos", align: "right" }], filas: rows, pie: { region: "Total", cot: filas.length, clientes: analisisRut.clientesUnicos }, archivo: "Dashboard_region" };
+  };
+  const detEstado = (clase, titulo, campo) => {
+    const rows = base.filter((r) => claseEstado(r.estado) === clase && filtraProyTipo(r)).map((r) => filaOpp(r, r[campo])).sort(porFechaDesc);
+    return { titulo, subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · histórico completo`, resumen: [{ label: "Total", valor: rows.length }], columnas: COLS_OPP.map((c) => (c.key === "fecha" ? colF("fecha", clase === "promesas" ? "F. promesa" : "F. escritura") : c)), filas: rows, archivo: `Dashboard_${clase}` };
+  };
+  const detConversion = () => {
+    const rows = ultimos12.map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), cot: c.cot, prom: c.prom, pct: fmtPct(c.pct), _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
+    return {
+      titulo: "Conversión cotización → promesa", subtitulo: `${subFiltros} · clientes por RUT único, sin pasar por la reserva`,
+      resumen: [{ label: "Conversión", valor: fmtPct(convSel.pct) }, { label: "Clientes con promesa", valor: convSel.prom }, { label: "Clientes que cotizaron", valor: convSel.cot }],
+      columnas: [{ key: "mes", label: "Mes de cotización" }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Con promesa", align: "right" }, { key: "pct", label: "Conversión", align: "right" }],
+      filas: rows, archivo: "Dashboard_conversion",
+    };
+  };
+  const detDesistimiento = () => {
+    const rows = baseKpi.filter((x) => dentro(x.prom, desdeSel, hastaSel) && (claseEstado(x.r.estado) === "desistidas" || !!x.des)).map((x) => ({
+      ...filaOpp(x.r, x.r.fechaPromesa), desist: fechaTxt(x.r.fechaDesistimiento), _desist: tms(x.r.fechaDesistimiento), _tono: "rose",
+    })).sort(porFechaDesc);
+    return {
+      titulo: "Tasa de desistimiento", subtitulo: `${subFiltros} · por unidad (cada Opp cuenta)`,
+      resumen: [{ label: "Tasa", valor: fmtPct(desSel.pct) }, { label: "Promesas desistidas", valor: desSel.des }, { label: "Promesas del período", valor: desSel.prom }],
+      columnas: [colF("fecha", "F. promesa"), colF("desist", "F. desistimiento"), { key: "opp", label: "Opp" }, { key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "ejecutivo", label: "Ejecutivo" }, { key: "unidad", label: "Unidad" }, { key: "tipologia", label: "Tipología" }],
+      filas: rows, vacio: "No hay promesas desistidas en el período.", archivo: "Dashboard_desistimientos",
+    };
+  };
+  const detUnidades = () => {
+    const orden = { Disponible: 0, "Pre-reservada": 1, Reservada: 1, Promesada: 2, Vendida: 3 };
+    const rows = unidadesBase.slice().sort((a, b) => (orden[a.estado] ?? 9) - (orden[b.estado] ?? 9) || String(a.unidad).localeCompare(String(b.unidad), "es", { numeric: true })).map((u) => ({
+      unidad: u.unidad, codigo: u.codigo || "—", tipologia: u.tipologia || "—", estado: u.estado || "—", precio: u.precio != null ? Number(u.precio).toLocaleString("es-CL", { maximumFractionDigits: 2 }) : "—", _precio: Number(u.precio) || 0,
+      _tono: u.estado === "Disponible" ? "green" : u.estado === "Reservada" || u.estado === "Pre-reservada" ? "amber" : undefined,
+    }));
+    return {
+      titulo: "Unidades del proyecto", subtitulo: "Según el último listado de precios",
+      resumen: [{ label: "Disponibles", valor: uDisp }, { label: "Reservadas", valor: uRes }, { label: "Vendidas", valor: uVend }, { label: "Total", valor: uTotal }, { label: "Stock disponible", valor: `${stockUf.toLocaleString("es-CL")} UF` }],
+      columnas: [{ key: "unidad", label: "Unidad" }, { key: "codigo", label: "Código" }, { key: "tipologia", label: "Tipología" }, { key: "estado", label: "Estado" }, { key: "precio", label: "Precio UF", align: "right", sort: (f) => f._precio }],
+      filas: rows, vacio: "Aún no hay listado de precios cargado.", archivo: "Dashboard_unidades",
+    };
+  };
+  const detSinGestion = () => {
+    const rows = sinGestion.map(({ g, ref, dias }) => ({
+      cliente: g.cliente || "—", rut: g.rut || "—", ejecutivo: g.ejecutivo || "—", etapa: g.etapaComercial || "—",
+      ultima: ref ? formatFechaCorta(new Date(ref)) : "—", dias: dias === null ? "—" : dias, _dias: dias === null ? 9999 : dias, _tono: dias === null || dias > 30 ? "rose" : "amber",
+    })).sort((a, b) => b._dias - a._dias);
+    return {
+      titulo: `Cotizaciones sin gestión (+${DIAS_SIN_GESTION} días)`, subtitulo: "Clientes activos sin acción registrada",
+      resumen: [{ label: "Sin gestión", valor: rows.length }, { label: "Clientes activos", valor: activos }],
+      columnas: [{ key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "ejecutivo", label: "Ejecutivo" }, { key: "etapa", label: "Etapa" }, colF("ultima", "Última actividad"), { key: "dias", label: "Días", align: "right", sort: (f) => f._dias }],
+      filas: rows, vacio: "Todos los clientes activos tienen gestión reciente.", archivo: "Dashboard_sin_gestion",
+    };
+  };
+
+
   // Variación del mes elegido contra el mes anterior, comparando el ACUMULADO
   // hasta el mismo día del mes (si el mes elegido es el actual, hasta hoy; si ya
   // terminó, el mes completo contra el mes anterior completo).
@@ -438,7 +624,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       {header}
 
       <div className="grid-60 gap-4 mb-5">
-        <KpiCard bid="kpi1" orden={0}
+        <KpiCard bid="kpi1" onClick={() => setDetalle(detCotizaciones())} orden={0}
           tone="blue"
           icon={FileText}
           label={claveUltimoMes === mesActualKey() ? `${sustantivo} mes actual` : `${sustantivo} del mes`}
@@ -448,8 +634,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           deltaInfo={infoMes}
           serie={serieCot}
         />
-        <KpiCard bid="kpi2" orden={1} tone="purple" icon={User} label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" delta={deltaRut} deltaInfo={infoRut} serie={serieRut} />
-        <KpiCard bid="kpi3" orden={2}
+        <KpiCard bid="kpi2" onClick={() => setDetalle(detClientes())} orden={1} tone="purple" icon={User} label="Clientes únicos (RUT)" value={analisisRut.clientesUnicos} sub="Distintos RUT que han cotizado" delta={deltaRut} deltaInfo={infoRut} serie={serieRut} />
+        <KpiCard bid="kpi3" onClick={() => setDetalle(detTipologia())} orden={2}
           tone="pink"
           icon={LayoutGrid}
           label="Tipología con más clientes"
@@ -458,7 +644,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           small
           serie={serieTip}
         />
-        <KpiCard bid="kpi4" orden={3}
+        <KpiCard bid="kpi4" onClick={() => setDetalle(detRegion())} orden={3}
           tone="green"
           icon={MapPin}
           label={esCotizaciones ? "Región con mayor cotización" : `Región con más ${sust}`}
@@ -467,10 +653,18 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
           small
           serie={serieReg}
         />
-        <KpiCard bid="kpi5" orden={4} tone="amber" icon={FileText} label="Total promesas" value={totPromesas.total} sub="Histórico completo" serie={totPromesas.serie} />
+        <KpiCard bid="kpi5" onClick={() => setDetalle(detEstado("promesas", "Promesas (histórico)", "fechaPromesa"))} orden={4} tone="amber" icon={FileText} label="Total promesas" value={totPromesas.total} sub="Histórico completo" serie={totPromesas.serie} />
         {totEscrituradas.total > 0 && (
-          <KpiCard bid="kpi6" orden={5} tone="blue" icon={FileText} label="Total escrituradas" value={totEscrituradas.total} sub="Histórico completo" serie={totEscrituradas.serie} />
+          <KpiCard bid="kpi6" onClick={() => setDetalle(detEstado("escrituradas", "Escrituradas (histórico)", "fechaEscritura"))} orden={5} tone="blue" icon={FileText} label="Total escrituradas" value={totEscrituradas.total} sub="Histórico completo" serie={totEscrituradas.serie} />
         )}
+      </div>
+
+      {/* Segunda fila: indicadores comerciales (conversión, desistimiento, unidades, gestión) */}
+      <div className="grid-60 gap-4 mb-5">
+        <KpiCard bid="kpi7" onClick={() => setDetalle(detConversion())} orden={6} tone="green" icon={TrendingUp} label="Conversión cotización → promesa" value={fmtPct(convSel.pct)} sub={convSub} deltaInfo={`Clientes con promesa ÷ clientes que cotizaron en ${textoRango}, contados por RUT único y sin pasar por la reserva. Incluye promesas escrituradas y desistidas.`} serie={serieConv} />
+        <KpiCard bid="kpi8" onClick={() => setDetalle(detDesistimiento())} orden={7} tone="rose" icon={UserX} label="Tasa de desistimiento" value={fmtPct(desSel.pct)} sub={desSub} deltaInfo={`Promesas desistidas ÷ promesas de ${textoRango}, contadas por unidad (cada Opp cuenta): un cliente con 3 unidades aporta 3 promesas.`} serie={serieDes} />
+        <KpiCard bid="kpi9" onClick={() => setDetalle(detUnidades())} orden={8} tone="blue" icon={Building2} label="Unidades disponibles" value={uTotal ? uDisp : "—"} sub={uTotal ? `${pl(uVend, "vendida", "vendidas")} · ${pl(uRes, "reservada", "reservadas")} · ${pctDe(uVend, uTotal) ?? 0}% vendido de ${uTotal}${stockUf ? ` · stock ${stockUf.toLocaleString("es-CL")} UF` : ""}` : "Carga el listado de precios"} />
+        <KpiCard bid="kpi10" onClick={() => setDetalle(detSinGestion())} orden={9} tone="amber" icon={BellOff} label={`Cotizaciones sin gestión (+${DIAS_SIN_GESTION} días)`} value={sinGestion.length} sub={`de ${activos} clientes activos sin acción registrada en ${DIAS_SIN_GESTION} días`} />
       </div>
 
       <div className="grid-60 gap-5 mb-5">
@@ -607,6 +801,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         <span>Fuente: Maestro Aval</span>
         <span>MDA Inmobiliaria</span>
       </div>
+      {detalle && <KpiDetalle {...detalle} onClose={() => setDetalle(null)} />}
     </div>
   );
 }

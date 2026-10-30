@@ -91,8 +91,20 @@ export async function fetchCuotasPago() {
 // vienen, solo de los proyectos que trae el archivo.
 export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
   const carga = nowISO();
+  const { guardadas } = await guardarCuotasPagoTrozoRemote(filas, carga);
+  const { borradas } = await cerrarCargaCuotasPagoRemote(proyectosEnArchivo, carga);
+  return { guardadas, borradas };
+}
+
+// Versión por trozos (sincronización automática con Vivet): cada trozo sube sus cuotas con la
+// misma marca de carga y, al final, se borran las que ya no vienen.
+export async function guardarCuotasPagoTrozoRemote(filas, carga) {
   const rows = filas.map((f) => objToRow({ ...f, carga }));
   await upsertInChunks("cuotas_pago", rows, "opp,tipo_financiamiento,nro_cuota");
+  return { guardadas: rows.length };
+}
+
+export async function cerrarCargaCuotasPagoRemote(proyectosEnArchivo, carga) {
   let borradas = 0;
   for (const proyecto of proyectosEnArchivo || []) {
     const { data, error } = await supabase
@@ -110,7 +122,7 @@ export async function guardarCuotasPagoRemote(filas, proyectosEnArchivo) {
     if (error) throw error;
     borradas += (data || []).length;
   }
-  return { guardadas: rows.length, borradas };
+  return { borradas };
 }
 
 // Cuotas marcadas como "Bono pie" (no se suman a lo adeudado) — migración v173.

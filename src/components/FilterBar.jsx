@@ -45,11 +45,7 @@ export default function FilterBar({ filtros, onChange, opciones }) {
   return (
     <div className="grid-60 gap-4 mb-5">
       <Tarjeta icon={Calendar} label="Período" bid="filtro-periodo" orden={0} span={24}>
-        <div className="flex items-center gap-2">
-          <Selector value={filtros.periodoDesde} onChange={set("periodoDesde")} options={opciones.periodos} />
-          <span className="text-stone-300 shrink-0">–</span>
-          <Selector value={filtros.periodoHasta} onChange={set("periodoHasta")} options={opciones.periodos} />
-        </div>
+        <Selector value={filtros.periodoHasta} onChange={(v) => onChange({ ...filtros, periodoDesde: v, periodoHasta: v })} options={opciones.periodos} />
       </Tarjeta>
       <Tarjeta icon={Building2} label="Proyecto" bid="filtro-proyecto" orden={1} span={12}>
         <Selector value={filtros.proyecto} onChange={set("proyecto")} options={opciones.proyectos} />

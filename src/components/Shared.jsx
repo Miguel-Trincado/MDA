@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Info } from "lucide-react";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import UfChip from "./UfChip";
-import { T, Bloque } from "../lib/layout";
+import { T, Bloque, useLayout } from "../lib/layout";
 import { ALERT_STYLE } from "../lib/constants";
 
 // Círculo con las iniciales de un nombre o correo — usado en el header de
@@ -65,6 +65,7 @@ const TONOS = {
   pink: { bg: "#FFEAF4", fg: "#EC4899", ico: "#FFDCEC" },
   green: { bg: "#E3F8F0", fg: "#14B8A6", ico: "#CFF1E5" },
   amber: { bg: "#FFF3DD", fg: "#F59E0B", ico: "#FFE6BB" },
+  rose: { bg: "#FFE9EC", fg: "#E11D48", ico: "#FFD6DC" },
 };
 
 function Spark({ data, color, id }) {
@@ -87,13 +88,16 @@ function Spark({ data, color, id }) {
 
 // Tarjeta de indicador: ícono en burbuja, valor grande y, si hay datos,
 // una mini-curva de fondo y una variación (delta, en %).
-export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, deltaInfo, serie, bid, orden }) {
+export function KpiCard({ label, value, sub, small, tone = "blue", icon: Icon, delta, deltaInfo, serie, bid, orden, onClick }) {
   const t = TONOS[tone] || TONOS.blue;
+  const diseno = useLayout();
+  const clicable = !!onClick && !diseno.editando;
   const idGrad = `spark-${tone}-${String(label).replace(/\W/g, "")}`;
   const card = (
     <div
-      className="relative rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1"
+      className={`relative rounded-2xl shadow-card border border-white p-4 flex flex-col gap-1 ${clicable ? "cursor-pointer transition-shadow hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]" : ""}`}
       style={{ background: `linear-gradient(180deg, #ffffff 0%, ${t.bg} 100%)` }}
+      {...(clicable ? { onClick, role: "button", tabIndex: 0, title: "Ver el detalle", onKeyDown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {})}
     >
       <div className="relative z-20 flex items-start justify-between mb-1">
         {Icon ? (
