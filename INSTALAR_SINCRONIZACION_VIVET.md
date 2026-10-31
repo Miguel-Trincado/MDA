@@ -48,3 +48,22 @@ Desde la v178 de la app, además del Aval para el Dashboard, el script envía el
 Nota para quien mantenga el código: la ingesta del servidor está empaquetada en `api/_maestro.mjs`
 (se genera con `npm run build:api`). Si cambias `src/lib/db.js`, `parseMaestro.js` o `helpers.js`,
 vuelve a correr ese comando y sube también el archivo generado.
+
+
+## Actualización v1.9 del script (agrega la Cobranza / Cuotas y Pagos)
+
+Además del Aval, el script ahora descarga el reporte "Detalle de cobranza" de Vivet y actualiza Cuotas y Pagos
+con las mismas reglas que al subir el Excel a mano: solo clientes Promesados (los desistidos desaparecen),
+sin SALF 3 ni Sendero del Monte, y reemplazando las cuotas por proyecto.
+
+1. Despliega el ZIP (incluye la función `api/aval-sync.js` y `api/_maestro.mjs` actualizados).
+2. En Tampermonkey, reemplaza el script por `scripts/vivet-aval-sync.user.js` (v1.9) y vuelve a poner `CLAVE` y `CRM_URL`.
+3. Recarga Vivet. El aviso final dice: "Cobranza al día (N clientes · N cuotas)".
+
+
+## Actualización v2.0 del script (agrega el Listado de precios)
+
+El script ahora también descarga el Excel del Listado de precios de Vivet (el mismo del botón de descarga de
+Comisiones → Listas → Cargar) y reemplaza el listado del CRM igual que al subirlo a mano (solo Pilpilén, y
+actualiza los tipos de unidad). Tras desplegar el ZIP, reemplaza el script por `scripts/vivet-aval-sync.user.js`
+(v2.0). El aviso final dice: "Precios al día (N unidades)".
