@@ -106,6 +106,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, maestro: true, resumen: r.resumen, ...(r.cargaError ? { cargaError: r.cargaError } : {}) });
     }
 
+    if (typeof body.lista === "string") {
+      const { ingestarListaPrecios } = await import("./_maestro.mjs");
+      const r = await ingestarListaPrecios(body.lista);
+      return res.status(200).json({ ok: true, lista: true, resumen: r.resumen, ...(r.tiposError ? { tiposError: r.tiposError } : {}), ...(r.cargaError ? { cargaError: r.cargaError } : {}) });
+    }
+
+    if (body.cuotas && typeof body.cuotas === "object") {
+      const { ingestarCuotas } = await import("./_maestro.mjs");
+      const r = await ingestarCuotas(body.cuotas);
+      return res.status(200).json({ ok: true, cuotas: true, guardadas: r.guardadas, borradas: r.borradas, ...(r.cargaError ? { cargaError: r.cargaError } : {}) });
+    }
+
     const rows = Array.isArray(body.rows) ? body.rows : [];
     const porOpp = new Map();
     for (const r of rows) {

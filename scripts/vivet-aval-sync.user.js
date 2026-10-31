@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Vivet → CRM Pilpilén (Aval completo)
 // @namespace    mda.pilpilen
-// @version      1.7
-// @description  Cuando entras a Vivet, envía el Aval completo al CRM (como máximo 1 vez cada N horas).
+// @version      2.0
+// @description  Cuando entras a Vivet, envía el Aval, la Cobranza (cuotas) y el Listado de precios al CRM (como máximo 1 vez cada N horas).
 // @match        https://mda.vivetsoft.cl/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -22,6 +22,8 @@
   // ====================================
 
   const DATA_URL = "https://mda.vivetsoft.cl/comercial/report/maestro/v7/data";
+  const COBRANZA_URL = "https://mda.vivetsoft.cl/comercial/report/detalle/cobranza/proyecto/data";
+  const LISTA_URL = "https://mda.vivetsoft.cl/comercial/listas/excel";
   const TROZO = 3000; // filas por envío (Vercel acepta hasta ~4,5 MB por petición)
   const CAMPOS = [
     "Id_Oportunidad", "Nombre_Proyecto", "Ejecutivo", "FechaOportunidad", "lote_uni", "Tipologiareporte",
@@ -69,8 +71,15 @@
     return { texto: lineas.join("\n"), filas: pil.length };
   }
 
-  const meta = document.querySelector('meta[name="csrf-token"]');
-  if (!meta) return; // página de login u otra sin sesión
+  // Vivet a veces carga el token de sesión después de que la página "termina": se espera hasta 60 s.
+  let meta = document.querySelector('meta[name="csrf-token"]');
+  async function esperarSesion() {
+    for (let i = 0; i < 60 && !meta; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      meta = document.querySelector('meta[name="csrf-token"]');
+    }
+    return !!meta;
+  }
 
   let caja = null;
   function aviso(texto, error, fijo) {
@@ -105,18 +114,18 @@
     });
   }
 
-  // Pide a Vivet el reporte completo (la misma petición que hace la página al aplicar).
-  async function traerReporte() {
+  // Pide a Vivet un reporte completo (la misma petición que hace la página al aplicar).
+  async function traerReporte(url, cuerpo, nombre) {
     const t0 = Date.now();
     const reloj = setInterval(() => {
-      aviso(`Descargando el reporte de Vivet… ${Math.round((Date.now() - t0) / 1000)} s (puede tardar 1–3 minutos, no cierres esta pestaña)`, false, true);
+      aviso(`Descargando ${nombre} de Vivet… ${Math.round((Date.now() - t0) / 1000)} s (puede tardar 1–3 minutos, no cierres esta pestaña)`, false, true);
     }, 1000);
-    aviso("Descargando el reporte de Vivet…", false, true);
+    aviso(`Descargando ${nombre} de Vivet…`, false, true);
     const ctl = new AbortController();
     const corte = setTimeout(() => ctl.abort(), 6 * 60 * 1000);
     let json;
     try {
-      const resp = await fetch(DATA_URL, {
+      const resp = await fetch(url, {
         method: "POST",
         credentials: "include",
         signal: ctl.signal,
@@ -125,10 +134,10 @@
           "X-Requested-With": "XMLHttpRequest",
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         },
-        body: "id_pro=0&id_eta=0&id_usr=0&id_tci=0&id_cll=0&id_sme=0&id_eop=&fecha_desde=&fecha_hasta=&search=",
+        body: cuerpo,
       });
       if (!resp.ok) throw new Error(`Vivet respondió ${resp.status}`);
-      aviso("Reporte recibido, procesando…", false, true);
+      aviso(`${nombre}: recibido, procesando…`, false, true);
       json = await resp.json();
     } catch (e) {
       throw new Error(e && e.name === "AbortError" ? "Vivet tardó más de 6 minutos en responder" : (e.message || e));
@@ -141,10 +150,64 @@
       const claves = json && typeof json === "object" ? Object.keys(json).slice(0, 8).join(", ") : typeof json;
       const mensaje = json && (json.message || json.msg || json.error);
       throw new Error(
-        `Vivet no entregó datos (status=${json && json.status}, tipo de data=${Array.isArray(json && json.data) ? "lista" : typeof (json && json.data)}, campos=[${claves}]${mensaje ? ", mensaje=" + String(mensaje).slice(0, 120) : ""})`
+        `Vivet no entregó datos de ${nombre} (status=${json && json.status}, tipo de data=${Array.isArray(json && json.data) ? "lista" : typeof (json && json.data)}, campos=[${claves}]${mensaje ? ", mensaje=" + String(mensaje).slice(0, 120) : ""})`
       );
     }
     return json.data;
+  }
+  const traerAval = () => traerReporte(DATA_URL, "id_pro=0&id_eta=0&id_usr=0&id_tci=0&id_cll=0&id_sme=0&id_eop=&fecha_desde=&fecha_hasta=&search=", "el Aval");
+  const traerCobranza = () => traerReporte(COBRANZA_URL, "id_pro=", "la Cobranza");
+
+  // Listado de precios: Vivet lo entrega como Excel (formulario POST); se envía al CRM en base64.
+  async function traerLista() {
+    aviso("Descargando el Listado de precios de Vivet…", false, true);
+    const resp = await fetch(LISTA_URL, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-CSRF-TOKEN": meta.content },
+      body: "_token=" + encodeURIComponent(meta.content) + "&id_pro=&id_eta=",
+    });
+    if (!resp.ok) throw new Error(`Vivet respondió ${resp.status}`);
+    const buf = new Uint8Array(await resp.arrayBuffer());
+    if (buf.length < 200) throw new Error("el listado de precios vino vacío");
+    if (buf.length > 3 * 1024 * 1024) throw new Error("el listado de precios pesa más de 3 MB");
+    let bin = "";
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  // Cobranza → cuotas de clientes PROMESADOS (sin SALF ni Sendero), en trozos que no parten una Opp.
+  // El CRM las lee con el mismo código que el Excel "reporte_detalle_cobranza" subido a mano.
+  function armarCobranza(data) {
+    const sinTildes = (x) => String(x === null || x === undefined ? "" : x).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const nz = (v) => /[1-9]/.test(String(v === null || v === undefined ? "" : v));
+    const proyectos = new Set();
+    const porOpp = new Map();
+    let total = 0;
+    for (const d of data) {
+      const opp = String(d.NumeroOportunidad === null || d.NumeroOportunidad === undefined ? "" : d.NumeroOportunidad).trim().replace(/\.0+$/, "");
+      if (!/^\d+$/.test(opp)) continue;
+      const proyecto = String(d.Proyecto || "").replace(/\s+/g, " ").trim();
+      if (/\b(salf|sendero)/i.test(sinTildes(proyecto))) continue;
+      if (proyecto) proyectos.add(proyecto);
+      const est = sinTildes(d.Estado).toLowerCase();
+      if (!(est.includes("promes") && !est.includes("desist"))) continue;
+      if (!nz(d.ufcuota) && !nz(d.MontoUFPagado)) continue;
+      const fila = [opp, proyecto, d.Cliente, d.RutCliente, d.Estado, d.fecha_promesa_opp, d.precio_final_opp, d.unidad,
+        d.TipoFinanciamiento, d.MontoUFTotalFinanciamiento, d.NUmeroCuotasPactadas, d.FechaDeVencimiento,
+        d.ufcuota, d.MontoUFPagado, d.pesospago].map((v) => (v === null || v === undefined ? "" : v));
+      if (!porOpp.has(opp)) porOpp.set(opp, []);
+      porOpp.get(opp).push(fila);
+      total++;
+    }
+    const trozos = [];
+    let actual = [];
+    for (const opp of [...porOpp.keys()].sort((a, b) => Number(a) - Number(b))) {
+      actual = actual.concat(porOpp.get(opp));
+      if (actual.length >= TROZO) { trozos.push(actual); actual = []; }
+    }
+    if (actual.length || trozos.length === 0) trozos.push(actual);
+    return { trozos, proyectos: [...proyectos], total, clientes: porOpp.size };
   }
 
   function opMasAltas(data, n) {
@@ -154,12 +217,24 @@
   async function sincronizar(forzar) {
     const ahora = Date.now();
     if (!forzar) {
-      if (ahora - Number(GM_getValue("ultima", 0)) < HORAS * 3600 * 1000) return;
+      const desde = ahora - Number(GM_getValue("ultima", 0));
+      if (desde < HORAS * 3600 * 1000) {
+        const faltan = Math.max(1, Math.round((HORAS * 3600 * 1000 - desde) / 60000));
+        aviso(`Sincronización con el CRM activa. Último envío hace ${Math.round(desde / 60000)} min; el próximo automático en ${faltan >= 90 ? Math.round(faltan / 60) + " h" : faltan + " min"}.`);
+        return;
+      }
     }
-    if (ahora - Number(GM_getValue("corriendo", 0)) < 10 * 60 * 1000) return; // ya corre en otra pestaña
+    if (ahora - Number(GM_getValue("corriendo", 0)) < 10 * 60 * 1000) {
+      aviso("Ya hay un envío en curso (en esta u otra pestaña de Vivet).");
+      return; // ya corre en otra pestaña
+    }
+    if (!(await esperarSesion())) {
+      aviso("No encontré tu sesión de Vivet: inicia sesión y el envío se hará solo.", true);
+      return;
+    }
     GM_setValue("corriendo", ahora);
     try {
-      const data = await traerReporte();
+      const data = await traerAval();
       const maxOpp = opMasAltas(data, 1)[0] || 0;
       aviso(`Vivet entregó ${data.length} filas · Opp más alta: ${maxOpp}. Enviando al CRM…`, false, true);
       const filas = data.map((d) => {
@@ -191,14 +266,45 @@
           maestroError = e.message || String(e);
         }
       }
-      // Si el segundo envío falló, se reintenta en ~15 minutos en vez de esperar las horas completas.
-      GM_setValue("ultima", maestroError ? Date.now() - (HORAS * 3600 * 1000 - 15 * 60 * 1000) : Date.now());
-      if (maestroError) {
-        aviso(`Aval guardado, pero NO se pudo actualizar Ejecutivo/Comisiones: ${maestroError}`, true);
+      // Tercer envío: la Cobranza (Cuotas y Pagos), solo clientes promesados.
+      let cobranzaError = "";
+      let cobranzaResumen = "";
+      try {
+        const cob = armarCobranza(await traerCobranza());
+        if (cob.total === 0) throw new Error("la Cobranza no trae cuotas de clientes promesados");
+        const carga = new Date().toISOString();
+        for (let i = 0; i < cob.trozos.length; i++) {
+          const fin = i === cob.trozos.length - 1;
+          aviso(`Enviando la Cobranza al CRM… ${i + 1} de ${cob.trozos.length}`, false, true);
+          await enviar({ cuotas: { rows: cob.trozos[i], carga, fin, total: cob.total, ...(fin ? { proyectos: cob.proyectos } : {}) } });
+        }
+        cobranzaResumen = `${cob.clientes} clientes · ${cob.total} cuotas`;
+      } catch (e) {
+        cobranzaError = e.message || String(e);
+      }
+      // Cuarto envío: el Listado de precios.
+      let listaError = "";
+      let listaResumen = "";
+      try {
+        const b64 = await traerLista();
+        aviso("Enviando el Listado de precios al CRM…", false, true);
+        const rl = await enviar({ lista: b64 });
+        listaResumen = rl.resumen || "";
+      } catch (e) {
+        listaError = e.message || String(e);
+      }
+      // Si algún envío falló, se reintenta en ~15 minutos en vez de esperar las horas completas.
+      GM_setValue("ultima", maestroError || cobranzaError || listaError ? Date.now() - (HORAS * 3600 * 1000 - 15 * 60 * 1000) : Date.now());
+      if (listaError && !cobranzaError && !maestroError) {
+        aviso(`Aval y Cobranza guardados, pero NO se pudo actualizar el Listado de precios: ${listaError}`, true);
+      } else if (cobranzaError && !maestroError) {
+        aviso(`Aval guardado, pero NO se pudo actualizar la Cobranza (Cuotas y Pagos): ${cobranzaError}`, true);
+      } else if (maestroError) {
+        aviso(`Aval guardado, pero NO se pudo actualizar Ejecutivo/Comisiones: ${maestroError}${cobranzaError ? " · Cobranza: " + cobranzaError : ""}`, true);
       } else if (cargaError) {
         aviso(`Aval guardado (${guardadas} filas, Opp más alta ${maxOpp}), pero no se pudo anotar en "Datos al día": ${cargaError}`, true);
       } else {
-        aviso(`Aval guardado en el CRM: ${guardadas} de ${filas.length} filas · Opp más alta de Vivet: ${maxOpp}${maestroResumen ? " · Ejecutivo/Comisiones al día (" + maestroResumen + ")" : ""}`);
+        aviso(`Aval guardado en el CRM: ${guardadas} de ${filas.length} filas · Opp más alta de Vivet: ${maxOpp}${maestroResumen ? " · Ejecutivo/Comisiones al día (" + maestroResumen + ")" : ""} · Cobranza al día (${cobranzaResumen}) · Precios al día (${listaResumen})`);
       }
     } catch (e) {
       aviso("No se pudo enviar el Aval al CRM: " + (e.message || e), true);
@@ -210,7 +316,7 @@
   // Diagnóstico: guarda en tu PC lo mismo que el script le enviaría al CRM (sin enviar nada).
   async function descargarAPc() {
     try {
-      const data = await traerReporte();
+      const data = await traerAval();
       const celda = (v) => {
         const t = v === null || v === undefined ? "" : String(v).replace(/\r?\n/g, " ");
         return /[";]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
@@ -233,6 +339,10 @@
   }
 
   GM_registerMenuCommand("Enviar el Aval al CRM ahora", () => sincronizar(true));
+  GM_registerMenuCommand("Reiniciar el contador (enviar en la próxima carga)", () => { GM_setValue("ultima", 0); GM_setValue("corriendo", 0); aviso("Contador reiniciado: se enviará al recargar Vivet."); });
   GM_registerMenuCommand("Descargar el Aval a mi PC (diagnóstico)", () => descargarAPc());
+  aviso("Sincronización Vivet → CRM iniciada (v2.0)…");
   sincronizar(false);
+  // Si dejas Vivet abierto, revisa cada 15 minutos si ya toca enviar.
+  setInterval(() => { sincronizar(false); }, 15 * 60 * 1000);
 })();
