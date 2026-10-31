@@ -443,12 +443,14 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   // Todo se cuenta por RUT único: un cliente con varias cotizaciones cuenta una sola vez.
   const rutDe = (x) => (x.r.rut && String(x.r.rut).trim() ? String(x.r.rut).trim() : `opp:${x.r.opp}`);
   const rutsUnicos = (lista) => new Set(lista.map(rutDe));
+  // Universo de promesas por ESTADO: promesadas/escrituradas + desistidas que alcanzaron a tener promesa (fecha de promesa).
+  const esPromUniv = (x) => x.esP || (x.esD && !!x.prom);
   const conversion = (desde, hasta) => {
     const cot = baseKpi.filter((x) => dentro(x.cot, desde, hasta));
     const prom = cot.filter((x) => x.esP);
     const nCot = rutsUnicos(cot).size;
     const nProm = rutsUnicos(prom).size;
-    return { cot: nCot, prom: nProm, pct: pctDe(nProm, nCot) };
+    return { cot: nCot, prom: nProm, unid: prom.length, pct: pctDe(nProm, nCot) };
   };
   const convSel = conversion(desdeSel, hastaSel);
   const convPrev = hayUnMes ? conversion(prevClaveSel, prevClaveSel) : null;
@@ -457,8 +459,6 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const serieConv = ultimos12.map((k) => ({ v: conversion(k, k).pct || 0 }));
 
   // 2) Tasa de desistimiento: de las promesas del período, cuántas terminaron desistidas.
-  // Universo de promesas por ESTADO: promesadas/escrituradas + desistidas que alcanzaron a tener promesa (fecha de promesa).
-  const esPromUniv = (x) => x.esP || (x.esD && !!x.prom);
   const desistimiento = (desde, hasta) => {
     // Cada cifra usa su propia fecha: promesas por fecha de promesa, desistidas por fecha de desistimiento.
     const prom = baseKpi.filter((x) => esPromUniv(x) && dentro(x.pm, desde, hasta));
@@ -558,17 +558,17 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const detConversion = () => {
     // Total sobre TODAS las filas (también las sin fecha de cotización o con fecha futura),
     // para que ninguna promesa quede fuera del conteo.
-    const esProm = (x) => x.esP;
+    const esProm = (x) => x.esP; // promesa = estado Promesada o Escriturada (la desistida ya no lo es)
     const totProm = baseKpi.filter(esProm);
     const totCot = rutsUnicos(baseKpi).size, totPromN = rutsUnicos(totProm).size;
     const tot = { cot: totCot, prom: totPromN, pct: pctDe(totPromN, totCot) };
     const mk = mesActualKey();
     const fuera = baseKpi.filter((x) => !x.cot || x.cot > mk);
     const fueraProm = fuera.filter(esProm);
-    const rows = mesesDe("cot").map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, cot: c.cot, prom: c.prom, pct: fmtPct(c.pct), _pct: c.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
+    const rows = mesesDe("cot").map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, cot: c.cot, prom: c.prom, unid: c.unid, pct: fmtPct(c.pct), _pct: c.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
     if (fuera.length) {
       const nc = rutsUnicos(fuera).size, np = rutsUnicos(fueraProm).size;
-      rows.push({ mes: "Sin fecha de cotización", _mes: "9999-99", cot: nc, prom: np, pct: fmtPct(pctDe(np, nc)), _pct: pctDe(np, nc) || 0 });
+      rows.push({ mes: "Sin fecha de cotización", _mes: "9999-99", cot: nc, prom: np, unid: fueraProm.length, pct: fmtPct(pctDe(np, nc)), _pct: pctDe(np, nc) || 0 });
     }
     return {
       titulo: "Conversión cotización → promesa", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · clientes por RUT único, sin pasar por la reserva`,
@@ -579,8 +579,8 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
         { label: "Clientes que cotizaron (total)", valor: tot.cot },
         { label: `Período (${textoRango})`, valor: fmtPct(convSel.pct) },
       ],
-      columnas: [{ key: "mes", label: "Mes de cotización", sort: (f) => f._mes }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Con promesa", align: "right" }, { key: "pct", label: "Conversión", align: "right", sort: (f) => f._pct }],
-      filas: rows, pie: { mes: "Total (clientes únicos)", cot: tot.cot, prom: tot.prom, pct: fmtPct(tot.pct) }, archivo: "Dashboard_conversion",
+      columnas: [{ key: "mes", label: "Mes de cotización", sort: (f) => f._mes }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Clientes con promesa", align: "right" }, { key: "unid", label: "Promesas (unidades)", align: "right" }, { key: "pct", label: "Conversión", align: "right", sort: (f) => f._pct }],
+      filas: rows, pie: { mes: "Total (clientes únicos)", cot: tot.cot, prom: tot.prom, unid: totProm.length, pct: fmtPct(tot.pct) }, archivo: "Dashboard_conversion",
     };
   };
   const detDesistimiento = () => {
