@@ -408,7 +408,25 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     if (tipoEf !== TODO && valorOBlanco(tipoUnidadDe(r)) !== tipoEf) return false;
     return true;
   };
-  const baseKpi = base.filter(filtraProyTipo).map((r) => ({ r, cot: claveDeFecha(r.fecha || r.fechaOpp), prom: claveDeFecha(r.fechaPromesa), des: claveDeFecha(r.fechaDesistimiento) }));
+  // Prioridad de los datos: 1º N° de Opp (una fila = una unidad), 2º ESTADO, 3º fechas (solo para ubicar el mes).
+  const oppVistas = new Set();
+  const baseKpi = base.filter(filtraProyTipo).filter((r) => {
+    const o = r.opp != null ? String(r.opp).trim() : "";
+    if (!o) return true;
+    if (oppVistas.has(o)) return false;
+    oppVistas.add(o);
+    return true;
+  }).map((r) => {
+    const ce = claseEstado(r.estado);
+    const cot = claveDeFecha(r.fecha || r.fechaOpp);
+    const prom = claveDeFecha(r.fechaPromesa);
+    const esP = ce === "promesas" || ce === "escrituradas"; // promesa vigente o escriturada, por estado
+    const esD = ce === "desistidas";
+    // Mes de la promesa: exactamente la fecha de promesa (sin sustituirla por otra). Sin fecha -> fila "Sin fecha".
+    const pm = prom;
+    const des = claveDeFecha(r.fechaDesistimiento);
+    return { r, cot, prom, pm, esP, esD, des, dm: des };
+  });
   const dentro = (k, desde, hasta) => !!k && k >= desde && k <= hasta;
   const desdeSel = filtrosEf.periodoDesde === TODO ? "0000-00" : filtrosEf.periodoDesde;
   const hastaSel = filtrosEf.periodoHasta === TODO ? "9999-99" : filtrosEf.periodoHasta;
@@ -427,7 +445,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const rutsUnicos = (lista) => new Set(lista.map(rutDe));
   const conversion = (desde, hasta) => {
     const cot = baseKpi.filter((x) => dentro(x.cot, desde, hasta));
-    const prom = cot.filter((x) => !!x.prom || claseEstado(x.r.estado) === "promesas" || claseEstado(x.r.estado) === "escrituradas");
+    const prom = cot.filter((x) => x.esP);
     const nCot = rutsUnicos(cot).size;
     const nProm = rutsUnicos(prom).size;
     return { cot: nCot, prom: nProm, pct: pctDe(nProm, nCot) };
@@ -439,9 +457,12 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const serieConv = ultimos12.map((k) => ({ v: conversion(k, k).pct || 0 }));
 
   // 2) Tasa de desistimiento: de las promesas del período, cuántas terminaron desistidas.
+  // Universo de promesas por ESTADO: promesadas/escrituradas + desistidas que alcanzaron a tener promesa (fecha de promesa).
+  const esPromUniv = (x) => x.esP || (x.esD && !!x.prom);
   const desistimiento = (desde, hasta) => {
-    const prom = baseKpi.filter((x) => dentro(x.prom, desde, hasta));
-    const des = prom.filter((x) => claseEstado(x.r.estado) === "desistidas" || !!x.des);
+    // Cada cifra usa su propia fecha: promesas por fecha de promesa, desistidas por fecha de desistimiento.
+    const prom = baseKpi.filter((x) => esPromUniv(x) && dentro(x.pm, desde, hasta));
+    const des = baseKpi.filter((x) => esPromUniv(x) && x.esD && dentro(x.dm, desde, hasta));
     // Por unidad (Opp): un cliente con 3 unidades aporta 3 promesas y, si desisten, 3 desistimientos.
     return { prom: prom.length, des: des.length, pct: pctDe(des.length, prom.length) };
   };
@@ -535,13 +556,26 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const TODO_DESDE = "0000-00", TODO_HASTA = "9999-99";
   const mesesDe = (campo) => [...new Set(baseKpi.map((x) => x[campo]).filter((k) => k && k <= mesActualKey()))].sort();
   const detConversion = () => {
-    const tot = conversion(TODO_DESDE, TODO_HASTA);
+    // Total sobre TODAS las filas (también las sin fecha de cotización o con fecha futura),
+    // para que ninguna promesa quede fuera del conteo.
+    const esProm = (x) => x.esP;
+    const totProm = baseKpi.filter(esProm);
+    const totCot = rutsUnicos(baseKpi).size, totPromN = rutsUnicos(totProm).size;
+    const tot = { cot: totCot, prom: totPromN, pct: pctDe(totPromN, totCot) };
+    const mk = mesActualKey();
+    const fuera = baseKpi.filter((x) => !x.cot || x.cot > mk);
+    const fueraProm = fuera.filter(esProm);
     const rows = mesesDe("cot").map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, cot: c.cot, prom: c.prom, pct: fmtPct(c.pct), _pct: c.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
+    if (fuera.length) {
+      const nc = rutsUnicos(fuera).size, np = rutsUnicos(fueraProm).size;
+      rows.push({ mes: "Sin fecha de cotización", _mes: "9999-99", cot: nc, prom: np, pct: fmtPct(pctDe(np, nc)), _pct: pctDe(np, nc) || 0 });
+    }
     return {
       titulo: "Conversión cotización → promesa", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · clientes por RUT único, sin pasar por la reserva`,
       resumen: [
         { label: "Conversión total", valor: fmtPct(tot.pct) },
         { label: "Clientes con promesa (total)", valor: tot.prom },
+        { label: "Promesas (unidades)", valor: totProm.length },
         { label: "Clientes que cotizaron (total)", valor: tot.cot },
         { label: `Período (${textoRango})`, valor: fmtPct(convSel.pct) },
       ],
@@ -550,13 +584,19 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     };
   };
   const detDesistimiento = () => {
-    const tot = desistimiento(TODO_DESDE, TODO_HASTA);
-    const meses = mesesDe("prom").map((k) => { const d = desistimiento(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, prom: d.prom, des: d.des, pct: fmtPct(d.pct), _pct: d.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "rose" : undefined }; });
-    const rows = baseKpi.filter((x) => (claseEstado(x.r.estado) === "desistidas" || !!x.des) && !!x.prom).map((x) => ({
-      ...filaOpp(x.r, x.r.fechaPromesa), desist: fechaTxt(x.r.fechaDesistimiento), _desist: tms(x.r.fechaDesistimiento), _tono: dentro(x.prom, desdeSel, hastaSel) ? "rose" : undefined,
+    const univ = baseKpi.filter(esPromUniv);
+    const totD = univ.filter((x) => x.esD);
+    const tot = { prom: univ.length, des: totD.length, pct: pctDe(totD.length, univ.length) };
+    const mk = mesActualKey();
+    const meses = [...new Set([...mesesDe("pm"), ...mesesDe("dm")])].sort().map((k) => { const d = desistimiento(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, prom: d.prom, des: d.des, pct: fmtPct(d.pct), _pct: d.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "rose" : undefined }; });
+    const sinP = univ.filter((x) => !x.pm || x.pm > mk).length;
+    const sinD = totD.filter((x) => !x.dm || x.dm > mk).length;
+    if (sinP || sinD) meses.push({ mes: "Sin fecha", _mes: "9999-99", prom: sinP, des: sinD, pct: fmtPct(pctDe(sinD, sinP)), _pct: pctDe(sinD, sinP) || 0 });
+    const rows = totD.map((x) => ({
+      ...filaOpp(x.r, x.r.fechaPromesa), desist: fechaTxt(x.r.fechaDesistimiento), _desist: tms(x.r.fechaDesistimiento), _tono: dentro(x.dm, desdeSel, hastaSel) ? "rose" : undefined,
     })).sort(porFechaDesc);
     return {
-      titulo: "Tasa de desistimiento", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · por unidad (cada Opp cuenta), según el mes de la promesa`,
+      titulo: "Tasa de desistimiento", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · por unidad (cada Opp cuenta), promesas por su fecha de promesa y desistidas por su fecha de desistimiento`,
       resumen: [
         { label: "Desistimiento total", valor: fmtPct(tot.pct) },
         { label: "Desistidas (total)", valor: tot.des },
@@ -566,7 +606,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       vistas: [
         {
           nombre: "Por mes", archivo: "Dashboard_desistimiento_mensual", vacio: "Aún no hay promesas.",
-          columnas: [{ key: "mes", label: "Mes de promesa", sort: (f) => f._mes }, { key: "prom", label: "Promesas", align: "right" }, { key: "des", label: "Desistidas", align: "right" }, { key: "pct", label: "Desistimiento", align: "right", sort: (f) => f._pct }],
+          columnas: [{ key: "mes", label: "Mes", sort: (f) => f._mes }, { key: "prom", label: "Promesas", align: "right" }, { key: "des", label: "Desistidas", align: "right" }, { key: "pct", label: "Desistimiento", align: "right", sort: (f) => f._pct }],
           filas: meses, pie: { mes: "Total", prom: tot.prom, des: tot.des, pct: fmtPct(tot.pct) },
         },
         {
