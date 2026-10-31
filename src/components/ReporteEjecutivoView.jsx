@@ -532,24 +532,49 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
     const rows = base.filter((r) => claseEstado(r.estado) === clase && filtraProyTipo(r)).map((r) => filaOpp(r, r[campo])).sort(porFechaDesc);
     return { titulo, subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · histórico completo`, resumen: [{ label: "Total", valor: rows.length }], columnas: COLS_OPP.map((c) => (c.key === "fecha" ? colF("fecha", clase === "promesas" ? "F. promesa" : "F. escritura") : c)), filas: rows, archivo: `Dashboard_${clase}` };
   };
+  const TODO_DESDE = "0000-00", TODO_HASTA = "9999-99";
+  const mesesDe = (campo) => [...new Set(baseKpi.map((x) => x[campo]).filter((k) => k && k <= mesActualKey()))].sort();
   const detConversion = () => {
-    const rows = ultimos12.map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), cot: c.cot, prom: c.prom, pct: fmtPct(c.pct), _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
+    const tot = conversion(TODO_DESDE, TODO_HASTA);
+    const rows = mesesDe("cot").map((k) => { const c = conversion(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, cot: c.cot, prom: c.prom, pct: fmtPct(c.pct), _pct: c.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "green" : undefined }; });
     return {
-      titulo: "Conversión cotización → promesa", subtitulo: `${subFiltros} · clientes por RUT único, sin pasar por la reserva`,
-      resumen: [{ label: "Conversión", valor: fmtPct(convSel.pct) }, { label: "Clientes con promesa", valor: convSel.prom }, { label: "Clientes que cotizaron", valor: convSel.cot }],
-      columnas: [{ key: "mes", label: "Mes de cotización" }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Con promesa", align: "right" }, { key: "pct", label: "Conversión", align: "right" }],
-      filas: rows, archivo: "Dashboard_conversion",
+      titulo: "Conversión cotización → promesa", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · clientes por RUT único, sin pasar por la reserva`,
+      resumen: [
+        { label: "Conversión total", valor: fmtPct(tot.pct) },
+        { label: "Clientes con promesa (total)", valor: tot.prom },
+        { label: "Clientes que cotizaron (total)", valor: tot.cot },
+        { label: `Período (${textoRango})`, valor: fmtPct(convSel.pct) },
+      ],
+      columnas: [{ key: "mes", label: "Mes de cotización", sort: (f) => f._mes }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Con promesa", align: "right" }, { key: "pct", label: "Conversión", align: "right", sort: (f) => f._pct }],
+      filas: rows, pie: { mes: "Total (clientes únicos)", cot: tot.cot, prom: tot.prom, pct: fmtPct(tot.pct) }, archivo: "Dashboard_conversion",
     };
   };
   const detDesistimiento = () => {
-    const rows = baseKpi.filter((x) => dentro(x.prom, desdeSel, hastaSel) && (claseEstado(x.r.estado) === "desistidas" || !!x.des)).map((x) => ({
-      ...filaOpp(x.r, x.r.fechaPromesa), desist: fechaTxt(x.r.fechaDesistimiento), _desist: tms(x.r.fechaDesistimiento), _tono: "rose",
+    const tot = desistimiento(TODO_DESDE, TODO_HASTA);
+    const meses = mesesDe("prom").map((k) => { const d = desistimiento(k, k); return { mes: labelPeriodo(k, "mes"), _mes: k, prom: d.prom, des: d.des, pct: fmtPct(d.pct), _pct: d.pct || 0, _tono: dentro(k, desdeSel, hastaSel) ? "rose" : undefined }; });
+    const rows = baseKpi.filter((x) => (claseEstado(x.r.estado) === "desistidas" || !!x.des) && !!x.prom).map((x) => ({
+      ...filaOpp(x.r, x.r.fechaPromesa), desist: fechaTxt(x.r.fechaDesistimiento), _desist: tms(x.r.fechaDesistimiento), _tono: dentro(x.prom, desdeSel, hastaSel) ? "rose" : undefined,
     })).sort(porFechaDesc);
     return {
-      titulo: "Tasa de desistimiento", subtitulo: `${subFiltros} · por unidad (cada Opp cuenta)`,
-      resumen: [{ label: "Tasa", valor: fmtPct(desSel.pct) }, { label: "Promesas desistidas", valor: desSel.des }, { label: "Promesas del período", valor: desSel.prom }],
-      columnas: [colF("fecha", "F. promesa"), colF("desist", "F. desistimiento"), { key: "opp", label: "Opp" }, { key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "ejecutivo", label: "Ejecutivo" }, { key: "unidad", label: "Unidad" }, { key: "tipologia", label: "Tipología" }],
-      filas: rows, vacio: "No hay promesas desistidas en el período.", archivo: "Dashboard_desistimientos",
+      titulo: "Tasa de desistimiento", subtitulo: `${proyectoEf === TODO ? "Todos los proyectos" : proyectoEf} · por unidad (cada Opp cuenta), según el mes de la promesa`,
+      resumen: [
+        { label: "Desistimiento total", valor: fmtPct(tot.pct) },
+        { label: "Desistidas (total)", valor: tot.des },
+        { label: "Promesas (total)", valor: tot.prom },
+        { label: `Período (${textoRango})`, valor: fmtPct(desSel.pct) },
+      ],
+      vistas: [
+        {
+          nombre: "Por mes", archivo: "Dashboard_desistimiento_mensual", vacio: "Aún no hay promesas.",
+          columnas: [{ key: "mes", label: "Mes de promesa", sort: (f) => f._mes }, { key: "prom", label: "Promesas", align: "right" }, { key: "des", label: "Desistidas", align: "right" }, { key: "pct", label: "Desistimiento", align: "right", sort: (f) => f._pct }],
+          filas: meses, pie: { mes: "Total", prom: tot.prom, des: tot.des, pct: fmtPct(tot.pct) },
+        },
+        {
+          nombre: "Detalle de desistidas", archivo: "Dashboard_desistimientos", vacio: "No hay promesas desistidas.",
+          columnas: [colF("fecha", "F. promesa"), colF("desist", "F. desistimiento"), { key: "opp", label: "Opp" }, { key: "cliente", label: "Cliente" }, { key: "rut", label: "RUT" }, { key: "ejecutivo", label: "Ejecutivo" }, { key: "unidad", label: "Unidad" }, { key: "tipologia", label: "Tipología" }],
+          filas: rows,
+        },
+      ],
     };
   };
   const detUnidades = () => {

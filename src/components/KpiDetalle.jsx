@@ -5,9 +5,13 @@ import { X, Search, Download, ArrowUp, ArrowDown } from "lucide-react";
 // descarga a Excel. En el celular ocupa toda la pantalla.
 //   columnas: [{ key, label, align?: "right", num?: boolean }]   filas: [{ [key]: valor, _tono?: "rose"|"green"|"amber" }]
 //   pie: fila opcional de totales (mismas claves)
-export default function KpiDetalle({ titulo, subtitulo, resumen, columnas, filas, pie, vacio, archivo, onClose }) {
+export default function KpiDetalle({ titulo, subtitulo, resumen, columnas: columnas0, filas: filas0, pie: pie0, vacio: vacio0, archivo: archivo0, vistas, onClose }) {
   const [q, setQ] = useState("");
   const [orden, setOrden] = useState(null); // { key, dir }
+  const [vi, setVi] = useState(0); // pestaña activa cuando hay varias vistas
+  const v = vistas && vistas.length ? vistas[Math.min(vi, vistas.length - 1)] : { columnas: columnas0, filas: filas0, pie: pie0, vacio: vacio0, archivo: archivo0 };
+  const { columnas, filas, pie, vacio, archivo } = v;
+  const cambiarVista = (i) => { setVi(i); setQ(""); setOrden(null); };
 
   useEffect(() => {
     const f = (e) => { if (e.key === "Escape") onClose(); };
@@ -66,6 +70,14 @@ export default function KpiDetalle({ titulo, subtitulo, resumen, columnas, filas
               <span key={r.label} className="rounded-full bg-[#EEF3FF] text-[#13234A] text-xs px-3 py-1">
                 <span className="text-stone-500">{r.label}: </span><b>{r.valor}</b>
               </span>
+            ))}
+          </div>
+        )}
+
+        {vistas && vistas.length > 1 && (
+          <div className="flex gap-1 px-5 pt-3">
+            {vistas.map((x, i) => (
+              <button key={x.nombre} onClick={() => cambiarVista(i)} className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${i === vi ? "bg-[#0F3D66] text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}>{x.nombre}</button>
             ))}
           </div>
         )}
