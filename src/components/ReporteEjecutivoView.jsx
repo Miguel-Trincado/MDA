@@ -575,11 +575,11 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       resumen: [
         { label: "Conversión total", valor: fmtPct(tot.pct) },
         { label: "Clientes con promesa (total)", valor: tot.prom },
-        { label: "Promesas (unidades)", valor: totProm.length },
+        { label: "Unidades promesadas (total)", valor: totProm.length },
         { label: "Clientes que cotizaron (total)", valor: tot.cot },
         { label: `Período (${textoRango})`, valor: fmtPct(convSel.pct) },
       ],
-      columnas: [{ key: "mes", label: "Mes de cotización", sort: (f) => f._mes }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "prom", label: "Clientes con promesa", align: "right" }, { key: "unid", label: "Promesas (unidades)", align: "right" }, { key: "pct", label: "Conversión", align: "right", sort: (f) => f._pct }],
+      columnas: [{ key: "mes", label: "Mes de cotización", sort: (f) => f._mes }, { key: "cot", label: "Clientes que cotizaron", align: "right" }, { key: "unid", label: "Unidades Promesadas", align: "right" }, { key: "pct", label: "Conversión", align: "right", sort: (f) => f._pct }],
       filas: rows, pie: { mes: "Total (clientes únicos)", cot: tot.cot, prom: tot.prom, unid: totProm.length, pct: fmtPct(tot.pct) }, archivo: "Dashboard_conversion",
     };
   };
