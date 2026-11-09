@@ -84,9 +84,9 @@ function AppInner() {
   const verMisComisiones = ver("miscomisiones") && !!miEjecutivo;
   const menus = {
     dashboard: ver("dashboard"), ejecutivo: ver("ejecutivo"), cotizador: ver("cotizador"), jefa: ver("jefa"),
-    cuotas: puedeCuotas, comisiones: puedeComisiones, miscomisiones: verMisComisiones, carga: ver("carga"),
+    cuotas: puedeCuotas, comisiones: puedeComisiones, miscomisiones: verMisComisiones, carga: ver("carga"), usuarios: ver("usuarios"),
   };
-  const vistaPermitida = (v) => (v === "usuarios" ? esAdmin : v === "miscomisiones" ? verMisComisiones : !!menus[v]);
+  const vistaPermitida = (v) => (v === "miscomisiones" ? verMisComisiones : !!menus[v]);
   const primeraVista = ["dashboard", "ejecutivo", "cotizador", "jefa", "cuotas", "comisiones", "miscomisiones", "carga"].find((v) => vistaPermitida(v)) || "dashboard";
   // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
   // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
@@ -427,9 +427,10 @@ function AppInner() {
         {view === "cotizador" && menus.cotizador && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
         {view === "comisiones" && authSession && menus.comisiones && <Comisiones db={db} />}
         {view === "cuotas" && authSession && menus.cuotas && <CuotasPagos cargas={db.cargas} usuario={authSession?.user?.email} />}
-        {view === "usuarios" && esAdmin && (
+        {view === "usuarios" && menus.usuarios && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}
+            esAdmin={esAdmin}
             db={db}
             ejecutivos={nombresEjecutivos}
           />

@@ -100,7 +100,7 @@ export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange,
 
           {configAbierta && !colapsado && (
             <div className="mt-1 ml-3 pl-2 border-l border-white/10 flex flex-col gap-0.5">
-              {esAdmin && <Item sub icon={UserCog} label="Usuarios" activo={active === "usuarios"} onClick={() => { onChange("usuarios"); }} />}
+              {menus.usuarios && <Item sub icon={UserCog} label="Usuarios" activo={active === "usuarios"} onClick={() => { onChange("usuarios"); }} />}
               {esAdmin && (
                 <div className="hidden lg:block">
                   <Item sub icon={LayoutDashboard} label={diseno.editando ? "Terminar edición de diseño" : "Editar diseño"} activo={diseno.editando} onClick={() => diseno.setEditando(!diseno.editando)} />

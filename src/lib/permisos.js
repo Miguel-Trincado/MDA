@@ -10,7 +10,7 @@ export const MENUS = [
   { key: "comisiones", label: "Comisiones" },
   { key: "miscomisiones", label: "Mis comisiones" },
   { key: "carga", label: "Cargar archivo" },
-  { key: "usuarios", label: "Usuarios", soloAdmin: true },
+  { key: "usuarios", label: "Usuarios" },
 ];
 
 const BASICOS = ["dashboard", "ejecutivo", "cotizador"];
@@ -28,8 +28,7 @@ export function permisosEfectivos(rol, permisos) {
   const def = permisosPorDefecto(rol);
   if (rol === "admin" || !permisos || typeof permisos !== "object") return def;
   const out = { ...def };
-  // "Usuarios" es exclusivo del administrador: la base solo deja gestionar usuarios a un admin.
-  for (const m of MENUS) if (!m.soloAdmin && typeof permisos[m.key] === "boolean") out[m.key] = permisos[m.key];
+  for (const m of MENUS) if (typeof permisos[m.key] === "boolean") out[m.key] = permisos[m.key];
   return out;
 }
 

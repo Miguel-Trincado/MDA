@@ -78,8 +78,10 @@ function Seccion({ titulo, children, derecha }) {
 
 // Ficha completa del usuario (ventana flotante): datos, perfil, acceso a menús y
 // seguridad. Solo la modifica el administrador (la base rechaza a cualquier otro).
-function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea, trabajando, msg, error, onCerrar, onGuardarMenus, onGuardarNombre, onCambiarPerfil, onResetear, onEliminar }) {
+function FichaUsuario({ esAdmin, usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea, trabajando, msg, error, onCerrar, onGuardarMenus, onGuardarNombre, onCambiarPerfil, onResetear, onEliminar }) {
   const esAdminU = usuario.rol === "admin";
+  // Nadie puede modificar al administrador (salvo él mismo); los accesos a menús solo los define el administrador.
+  const cuentaProtegida = esAdminU && !esAdmin;
   const def = permisosPorDefecto(usuario.rol);
   const [vals, setVals] = useState(() => permisosEfectivos(usuario.rol, usuario.permisos));
   const [nombre, setNombre] = useState(usuario.nombre || "");
@@ -118,16 +120,16 @@ function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea
               <Seccion titulo="Datos personales">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label="Nombre">
-                    <input className="ipt" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Camila" />
+                    <input className="ipt" disabled={cuentaProtegida} value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej. Camila" />
                   </Field>
                   <Field label="Apellido">
-                    <input className="ipt" value={apellido} onChange={(e) => setApellido(e.target.value)} placeholder="Ej. Finschi" />
+                    <input className="ipt" disabled={cuentaProtegida} value={apellido} onChange={(e) => setApellido(e.target.value)} placeholder="Ej. Finschi" />
                   </Field>
                   <Field label="Correo" className="sm:col-span-2">
                     <div className="ipt !bg-stone-50 !text-stone-600 truncate">{usuario.email}</div>
                   </Field>
                 </div>
-                {nombreCambiado && (
+                {nombreCambiado && !cuentaProtegida && (
                   <div className="flex justify-end mt-3">
                     <button disabled={trabajando} onClick={() => onGuardarNombre(usuario, nombre, apellido)} className="px-4 py-2 text-xs rounded-lg bg-[#0F3D66] hover:bg-[#1E5AA8] text-white font-medium disabled:opacity-50">Guardar nombre</button>
                   </div>
@@ -137,16 +139,16 @@ function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea
               <Seccion titulo="Perfil">
                 <div className="grid grid-cols-1 gap-3">
                   <Field label="Perfil">
-                    <select className="ipt" disabled={esYo || trabajando} value={usuario.rol === "sin perfil" ? "" : usuario.rol} onChange={(e) => onCambiarPerfil(usuario, e.target.value, usuario.ejecutivo)}>
+                    <select className="ipt" disabled={esYo || trabajando || cuentaProtegida} value={usuario.rol === "sin perfil" ? "" : usuario.rol} onChange={(e) => onCambiarPerfil(usuario, e.target.value, usuario.ejecutivo)}>
                       {usuario.rol === "sin perfil" && <option value="">Sin perfil</option>}
-                      {PERFILES.map((p) => (
+                      {PERFILES.filter((p) => esAdmin || p.value !== "admin" || usuario.rol === "admin").map((p) => (
                         <option key={p.value} value={p.value}>{p.label}</option>
                       ))}
                     </select>
                   </Field>
                   {usuario.rol === "ejecutiva" && (
                     <Field label="Ejecutivo vinculado">
-                      <select className="ipt" disabled={trabajando} value={usuario.ejecutivo || ""} onChange={(e) => onCambiarPerfil(usuario, "ejecutiva", e.target.value)}>
+                      <select className="ipt" disabled={trabajando || cuentaProtegida} value={usuario.ejecutivo || ""} onChange={(e) => onCambiarPerfil(usuario, "ejecutiva", e.target.value)}>
                         {!ejecutivos.includes(usuario.ejecutivo) && usuario.ejecutivo && <option value={usuario.ejecutivo}>{usuario.ejecutivo}</option>}
                         {ejecutivos.map((n) => (
                           <option key={n} value={n}>{n}</option>
@@ -161,9 +163,10 @@ function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea
               </Seccion>
 
               <Seccion titulo="Seguridad">
+                {cuentaProtegida && <p className="text-xs text-stone-500 mb-2">Esta cuenta es de administrador: solo él puede modificarla.</p>}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => onResetear(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white transition-colors">Cambiar contraseña</button>
-                  {!esYo && <button onClick={() => onEliminar(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors">Eliminar usuario</button>}
+                  {!cuentaProtegida && <button onClick={() => onResetear(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white transition-colors">Cambiar contraseña</button>}
+                  {!esYo && !cuentaProtegida && <button onClick={() => onEliminar(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors">Eliminar usuario</button>}
                 </div>
               </Seccion>
             </div>
@@ -173,13 +176,12 @@ function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea
                 {esAdminU && <p className="text-xs text-stone-500 mb-2">El administrador siempre tiene acceso a todo; esta ficha no se modifica.</p>}
                 <div className="divide-y divide-stone-100">
                   {MENUS.map((m) => {
-                    const bloqueado = esAdminU || (m.soloAdmin && !esAdminU);
+                    const bloqueado = esAdminU || !esAdmin;
                     return (
                       <div key={m.key} className="flex items-center justify-between gap-3 py-2">
                         <div className="min-w-0">
                           <div className="text-sm text-stone-800">{m.label}</div>
-                          {m.soloAdmin && !esAdminU && <div className="text-[10px] text-stone-400">Solo administradores</div>}
-                          {!m.soloAdmin && !esAdminU && vals[m.key] !== def[m.key] && <div className="text-[10px] text-amber-600">Distinto al perfil ({def[m.key] ? "Sí" : "No"})</div>}
+                          {!esAdminU && vals[m.key] !== def[m.key] && <div className="text-[10px] text-amber-600">Distinto al perfil ({def[m.key] ? "Sí" : "No"})</div>}
                         </div>
                         <div className="flex items-center gap-2.5">
                           <span className={`text-xs w-6 text-right font-medium ${vals[m.key] ? "text-emerald-700" : "text-stone-400"}`}>{vals[m.key] ? "Sí" : "No"}</span>
@@ -189,7 +191,8 @@ function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea
                     );
                   })}
                 </div>
-                {!esAdminU && (
+                {!esAdmin && !esAdminU && <p className="text-xs text-stone-500 mt-2">Los accesos a menús solo los define el administrador.</p>}
+                {!esAdminU && esAdmin && (
                   <div className="flex items-center justify-end gap-2 mt-3">
                     <button disabled={trabajando || (!personalizado && !usuario.permisos)} onClick={() => onGuardarMenus(usuario, null)} className="px-3 py-2 text-xs rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40">Volver al perfil</button>
                     <button disabled={trabajando} onClick={() => onGuardarMenus(usuario, personalizado ? vals : null)} className="px-4 py-2 text-xs rounded-lg bg-[#0F3D66] hover:bg-[#1E5AA8] text-white font-medium disabled:opacity-50">{trabajando ? "Guardando…" : "Guardar accesos"}</button>
@@ -212,7 +215,7 @@ const etiquetaPerfil = (rol) => PERFILES.find((p) => p.value === rol)?.label || 
 // Panel de administrador: alta y mantención de usuarios sin entrar a
 // Supabase. Las operaciones corren como funciones seguras en la base
 // (migración v121) que solo acepta si quien llama es administrador.
-export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
+export default function UsuariosPanel({ ejecutivos, miUserId, db, esAdmin = false }) {
   // Cruce usuario ↔ operaciones: se cuenta, por nombre de ejecutivo (el de la
   // columna "Ejecutivo" del Aval), cuántos clientes y cotizaciones tiene.
   const cruce = (nombre) => {
@@ -364,7 +367,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
             </Field>
             <Field label="Perfil">
               <select className="ipt" value={rol} onChange={(e) => setRol(e.target.value)}>
-                {PERFILES.map((p) => (
+                {PERFILES.filter((p) => esAdmin || p.value !== "admin").map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
@@ -444,7 +447,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
         return (
           <FichaUsuario
             key={u.userId + u.rol}
-            usuario={u} esYo={esYo} ejecutivos={ejecutivos} cruce={cruce}
+            esAdmin={esAdmin} usuario={u} esYo={esYo} ejecutivos={ejecutivos} cruce={cruce}
             ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)}
             trabajando={trabajando} msg={msg} error={error}
             onCerrar={() => setFichaDe(null)}
