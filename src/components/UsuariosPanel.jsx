@@ -4,10 +4,10 @@ import {
   resetearClaveUsuarioRemote, eliminarUsuarioRemote, establecerPermisosUsuarioRemote,
 } from "../lib/db";
 import { MENUS, permisosPorDefecto, permisosEfectivos } from "../lib/permisos";
-import { X } from "lucide-react";
+import { X, Plus, Search } from "lucide-react";
 import { normalizarBusqueda, fmtDateTime } from "../lib/helpers";
 import { suscribirPresencia } from "../lib/presencia";
-import { Panel, Field, PageHeader } from "./Shared";
+import { Panel, Field, PageHeader, Avatar } from "./Shared";
 
 const PERFILES = [
   { value: "ejecutiva", label: "Ejecutivo" },
@@ -155,6 +155,8 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
   const [error, setError] = useState("");
   const [trabajando, setTrabajando] = useState(false);
   const [fichaDe, setFichaDe] = useState(null);
+  const [mostrarNuevo, setMostrarNuevo] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
 
   async function cargar() {
     try {
@@ -200,6 +202,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
       setEmail("");
       setPassword("");
       setEjecutivo("");
+      setMostrarNuevo(false);
     }
   }
 
@@ -229,59 +232,94 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
 
   return (
     <div className="max-w-7xl mx-auto px-5 pt-4 pb-6">
-      <PageHeader title="Usuarios" subtitle="Crea usuarios, asígnales un perfil y revisa su última conexión" />
+      <PageHeader title="Usuarios" subtitle="Crea usuarios, asígnales un perfil y define qué menús puede ver cada uno">
+        <button
+          onClick={() => setMostrarNuevo((v) => !v)}
+          className="inline-flex items-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] text-white px-4 py-2.5 text-sm font-medium rounded-xl shadow-sm transition-colors"
+        >
+          {mostrarNuevo ? <X size={16} /> : <Plus size={16} />} {mostrarNuevo ? "Cerrar" : "Nuevo usuario"}
+        </button>
+      </PageHeader>
 
-      <Panel title="Nuevo usuario">
-        <form onSubmit={crear} className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-          <Field label="Correo">
-            <input className="ipt" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field label="Contraseña (mín. 8 caracteres)">
-            <input className="ipt" type="text" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
-          </Field>
-          <Field label="Perfil">
-            <select className="ipt" value={rol} onChange={(e) => setRol(e.target.value)}>
-              {PERFILES.map((p) => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </Field>
-          {rol === "ejecutiva" ? (
-            <Field label="Ejecutivo (nombre de la columna Ejecutivo)">
-              <select className="ipt" required value={ejecutivo} onChange={(e) => setEjecutivo(e.target.value)}>
-                <option value="">Selecciona…</option>
-                {ejecutivos.map((n) => (
-                  <option key={n} value={n}>{n}</option>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        {[
+          ["Usuarios", usuarios.length, "text-[#13234A]"],
+          ["En línea ahora", usuarios.filter((u) => u.userId === miUserId || enLinea.has(u.userId)).length, "text-emerald-600"],
+          ["Ejecutivos", usuarios.filter((u) => u.rol === "ejecutiva").length, "text-[#13234A]"],
+          ["Jefes y administradores", usuarios.filter((u) => u.rol === "jefe" || u.rol === "admin").length, "text-[#13234A]"],
+        ].map(([l, v, c]) => (
+          <div key={l} className="bg-white border border-[#EEF1F8] rounded-2xl shadow-card px-4 py-3">
+            <div className="text-[11px] uppercase tracking-wide text-stone-400">{l}</div>
+            <div className={`text-2xl font-semibold tabular-nums mt-0.5 ${c}`}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {(msg || error) && !fichaDe && (
+        <p className={`mb-4 text-xs rounded-xl px-3.5 py-2.5 ${error ? "text-rose-700 bg-rose-50" : "text-emerald-700 bg-emerald-50"}`}>{error || msg}</p>
+      )}
+
+      {mostrarNuevo && (
+        <Panel title="Nuevo usuario" className="mb-5">
+          <form onSubmit={crear} className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3 items-end">
+            <Field label="Correo">
+              <input className="ipt" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            </Field>
+            <Field label="Contraseña (mín. 8 caracteres)">
+              <input className="ipt" type="text" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" />
+            </Field>
+            <Field label="Perfil">
+              <select className="ipt" value={rol} onChange={(e) => setRol(e.target.value)}>
+                {PERFILES.map((p) => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
             </Field>
-          ) : (
-            <div />
-          )}
-          <button
-            type="submit"
-            disabled={trabajando}
-            className="md:col-span-2 bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-4 py-2.5 text-sm font-medium rounded-lg"
-          >
-            {trabajando ? "Procesando…" : "Crear usuario"}
-          </button>
-        </form>
-        {msg && <p className="text-emerald-700 text-xs mt-3">{msg}</p>}
-        {error && <p className="text-rose-600 text-xs mt-3">{error}</p>}
-      </Panel>
+            {rol === "ejecutiva" ? (
+              <Field label="Ejecutivo (nombre de la columna Ejecutivo)">
+                <select className="ipt" required value={ejecutivo} onChange={(e) => setEjecutivo(e.target.value)}>
+                  <option value="">Selecciona…</option>
+                  {ejecutivos.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </Field>
+            ) : (
+              <div />
+            )}
+            <button
+              type="submit"
+              disabled={trabajando}
+              className="md:col-span-2 bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-4 py-2.5 text-sm font-medium rounded-xl"
+            >
+              {trabajando ? "Procesando…" : "Crear usuario"}
+            </button>
+          </form>
+        </Panel>
+      )}
 
       {usuarios.length > 0 && !("ultimaConexion" in usuarios[0]) && (
-        <p className="mt-6 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <p className="mb-4 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
           Falta ejecutar la migración v171 en Supabase: sin ella solo se ve quién está en línea ahora, no la última conexión.
         </p>
       )}
-      <Panel title="Usuarios del sistema" className="mt-6">
+      <Panel
+        title={
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span>Usuarios del sistema</span>
+            <div className="relative w-full sm:w-64 font-body normal-case">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+              <input className="ipt !pl-8 !py-2 !text-[13px]" placeholder="Buscar por correo…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+            </div>
+          </div>
+        }
+      >
         <div className="text-sm">
           <div className={`hidden lg:grid ${COLS} gap-x-4 px-1 pb-2 text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-200`}>
             <span>Usuario</span><span>Conexión</span><span>Perfil</span><span>Ejecutivo vinculado</span><span>Menús</span><span className="text-right">Acciones</span>
           </div>
           <div className="divide-y divide-stone-100">
-            {usuarios.map((u) => {
+            {usuarios.filter((u) => !busqueda.trim() || normalizarBusqueda(u.email).includes(normalizarBusqueda(busqueda))).map((u) => {
               const esYo = u.userId === miUserId;
               const efec = permisosEfectivos(u.rol, u.permisos);
               const nSi = MENUS.filter((m) => efec[m.key]).length;
@@ -291,7 +329,10 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
               return (
                 <div key={u.userId} className={`grid grid-cols-1 ${COLS} gap-x-4 gap-y-2 py-3 px-1 items-center`}>
                   <div className="min-w-0">
-                    <div className="truncate text-stone-800" title={u.email}>{u.email} {esYo && <span className="text-xs text-stone-400">(tú)</span>}</div>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <Avatar name={u.email} />
+                      <span className="truncate text-stone-800" title={u.email}>{u.email} {esYo && <span className="text-xs text-stone-400">(tú)</span>}</span>
+                    </div>
                   </div>
                   <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)} />
                   <select

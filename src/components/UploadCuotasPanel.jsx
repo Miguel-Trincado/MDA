@@ -1,6 +1,7 @@
+import { Wallet } from "lucide-react";
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Stat } from "./Shared";
+import { Stat, TarjetaCarga } from "./Shared";
 import { parseCuotasPago } from "../lib/parseCuotas";
 
 const pausa = () => new Promise((r) => setTimeout(r, 60));
@@ -73,20 +74,18 @@ export default function UploadCuotasPanel({ onUpload }) {
   }
 
   return (
-    <div className="border border-stone-300 bg-white p-5">
-      <h3 className="font-display text-lg text-[#0F3D66] mb-2">Cuotas y pagos (reporte de cobranza)</h3>
-      <p className="text-stone-500 text-sm mb-4">
+    <TarjetaCarga icon={Wallet} titulo="Cuotas y pagos (reporte de cobranza)" descripcion={<>
         Sube el reporte "detalle de cobranza" de Vivet (una fila por cuota: Opp, Cliente, Tipo Financiamiento, Fecha de
         Vencimiento, Monto Cuota, Monto Pagado…). Se guardan solo los clientes Promesados. Cada carga reemplaza las
         cuotas de los proyectos que trae el archivo, así que siempre es la foto actual de lo pagado y lo pendiente.
-      </p>
+      </>}>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={!!busy}
-          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium"
+          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium rounded-xl shadow-sm inline-flex items-center gap-2"
         >
           {busy ? "Procesando…" : "Elegir archivo y subir"}
         </button>
@@ -94,7 +93,7 @@ export default function UploadCuotasPanel({ onUpload }) {
         {fileName && !busy && <span className="text-xs text-stone-500">Último archivo: {fileName}</span>}
       </div>
 
-      {error && <div className="mt-4 border border-rose-300 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+      {error && <div className="mt-4 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       {result && (
         <div className="mt-5 border-t border-stone-200 pt-4">
@@ -110,6 +109,6 @@ export default function UploadCuotasPanel({ onUpload }) {
           </p>
         </div>
       )}
-    </div>
+    </TarjetaCarga>
   );
 }

@@ -222,3 +222,28 @@ export function AlertGroup({ tipo, lista, onClickCliente }) {
     </div>
   );
 }
+
+
+// Tarjeta de la pantalla Cargar archivo: ícono, título y las instrucciones
+// plegadas ("Cómo funciona") para que la pantalla se vea limpia.
+export function TarjetaCarga({ icon: Icon, titulo, descripcion, children }) {
+  return (
+    <div className="bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-5 flex flex-col">
+      <div className="flex items-center gap-3 mb-3">
+        <span className="w-10 h-10 rounded-xl bg-[#EAF1FF] text-[#2563EB] inline-flex items-center justify-center shrink-0">
+          {Icon && <Icon size={19} />}
+        </span>
+        <h3 className="font-display text-base text-[#13234A] leading-tight">{titulo}</h3>
+      </div>
+      {descripcion && (
+        <details className="group mb-4">
+          <summary className="cursor-pointer select-none text-xs text-[#1E5AA8] hover:underline list-none">
+            <span className="group-open:hidden">Ver cómo funciona</span><span className="hidden group-open:inline">Ocultar instrucciones</span>
+          </summary>
+          <div className="text-stone-500 text-[13px] leading-relaxed mt-2 pl-3 border-l-2 border-stone-100">{descripcion}</div>
+        </details>
+      )}
+      {children}
+    </div>
+  );
+}

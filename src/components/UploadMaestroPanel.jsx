@@ -1,6 +1,7 @@
+import { FileSpreadsheet } from "lucide-react";
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Stat } from "./Shared";
+import { Stat, TarjetaCarga } from "./Shared";
 
 export default function UploadMaestroPanel({ onUpload }) {
   const fileInputRef = useRef(null);
@@ -70,13 +71,11 @@ export default function UploadMaestroPanel({ onUpload }) {
   }
 
   return (
-    <div className="border border-stone-300 bg-white p-5">
-      <h3 className="font-display text-lg text-[#0F3D66] mb-2">Maestro Aval</h3>
-      <p className="text-stone-500 text-sm mb-4">
+    <TarjetaCarga icon={FileSpreadsheet} titulo="Maestro Aval" descripcion={<>
         Sube el archivo Excel (.xlsx o .csv) del Maestro Aval tal como lo exportas, con el encabezado incluido. El
         sistema toma solo las filas del proyecto <strong>Pilpilén</strong> y las compara por RUT contra lo que ya
         existe en la base de datos.
-      </p>
+      </>}>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
@@ -84,14 +83,14 @@ export default function UploadMaestroPanel({ onUpload }) {
         <button
           onClick={pickFile}
           disabled={busy}
-          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium"
+          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium rounded-xl shadow-sm inline-flex items-center gap-2"
         >
           {busy ? "Procesando…" : "Elegir archivo y subir"}
         </button>
         {fileName && !busy && <span className="text-xs text-stone-500">Último archivo: {fileName}</span>}
       </div>
 
-      {error && <div className="mt-4 border border-rose-300 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+      {error && <div className="mt-4 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       {result && (
         <div className="mt-5 border-t border-stone-200 pt-4">
@@ -112,18 +111,18 @@ export default function UploadMaestroPanel({ onUpload }) {
             <p className="text-xs text-emerald-700 mt-3">Dashboard: se guardaron {result.avalCompletoFilas} Opp del Aval completo (todos los proyectos y estados).</p>
           )}
           {result.avalCompletoError && (
-            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+            <div className="mt-3 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-xs px-3 py-2">
               ⚠ No se pudo guardar el Aval completo para el Dashboard: {result.avalCompletoError}. ¿Corriste la migración v147 en Supabase?
             </div>
           )}
           {result.filasSinOpp > 0 && (
-            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+            <div className="mt-3 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-xs px-3 py-2">
               ⚠ Se rechazaron {result.filasSinOpp} fila(s) de Pilpilén por no traer número de Opp — esto no
               debería pasar nunca; revisa el Aval en el origen.
             </div>
           )}
           {result.oppsDuplicadosEnCarga && result.oppsDuplicadosEnCarga.length > 0 && (
-            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+            <div className="mt-3 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-xs px-3 py-2">
               <div className="font-medium mb-1">
                 ⚠ {result.oppsDuplicadosEnCarga.length} número(s) de Opp aparecen repetidos en este archivo (no debería pasar, es un error de origen en el Aval):
               </div>
@@ -142,6 +141,6 @@ export default function UploadMaestroPanel({ onUpload }) {
           )}
         </div>
       )}
-    </div>
+    </TarjetaCarga>
   );
 }

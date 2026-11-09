@@ -1,6 +1,7 @@
+import { Tag } from "lucide-react";
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { Stat } from "./Shared";
+import { Stat, TarjetaCarga } from "./Shared";
 
 export default function UploadListaPreciosPanel({ onUpload }) {
   const fileInputRef = useRef(null);
@@ -47,15 +48,13 @@ export default function UploadListaPreciosPanel({ onUpload }) {
   }
 
   return (
-    <div className="border border-stone-300 bg-white p-5">
-      <h3 className="font-display text-lg text-[#0F3D66] mb-2">Listado de precios</h3>
-      <p className="text-stone-500 text-sm mb-4">
+    <TarjetaCarga icon={Tag} titulo="Listado de precios" descripcion={<>
         Sube el Excel con las unidades disponibles (Unidad, Tipología, Orientación, m², Precio en UF, Descuento
         máximo, Estado, Codigo). Si trae una columna "Tipología Reporte", el Dashboard la usa para corregir la
         tipología de cada Opp cuando el Aval la trae mal o vacía. Reemplaza por completo el listado anterior — es
         siempre la foto actual de lo disponible. Si el archivo trae varios proyectos juntos, solo se toman las filas
         de Pilpilén.
-      </p>
+      </>}>
 
       <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileChange} />
 
@@ -63,14 +62,14 @@ export default function UploadListaPreciosPanel({ onUpload }) {
         <button
           onClick={pickFile}
           disabled={busy}
-          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium"
+          className="bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-50 text-white px-5 py-2.5 text-sm font-medium rounded-xl shadow-sm inline-flex items-center gap-2"
         >
           {busy ? "Procesando…" : "Elegir archivo y subir"}
         </button>
         {fileName && !busy && <span className="text-xs text-stone-500">Último archivo: {fileName}</span>}
       </div>
 
-      {error && <div className="mt-4 border border-rose-300 bg-rose-50 text-rose-800 text-sm px-3 py-2">{error}</div>}
+      {error && <div className="mt-4 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-sm px-3 py-2">{error}</div>}
 
       {result && (
         <div className="mt-5 border-t border-stone-200 pt-4">
@@ -82,7 +81,7 @@ export default function UploadListaPreciosPanel({ onUpload }) {
             <p className="text-xs text-emerald-700 mt-3">Dashboard: se guardó el Tipo Unidad de {result.tiposUnidad.filas} códigos (todos los proyectos).</p>
           )}
           {result.tiposUnidad && result.tiposUnidad.error && (
-            <div className="mt-3 border border-rose-300 bg-rose-50 text-rose-800 text-xs px-3 py-2">
+            <div className="mt-3 border border-rose-200 bg-rose-50 rounded-xl text-rose-800 text-xs px-3 py-2">
               ⚠ No se pudo guardar el Tipo Unidad para el Dashboard: {result.tiposUnidad.error}. ¿Corriste la migración v158 en Supabase?
             </div>
           )}
@@ -93,6 +92,6 @@ export default function UploadListaPreciosPanel({ onUpload }) {
           )}
         </div>
       )}
-    </div>
+    </TarjetaCarga>
   );
 }

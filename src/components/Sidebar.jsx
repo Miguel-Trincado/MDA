@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
-  BarChart3, Users, Calculator, UserCog, Database,
-  ChevronsLeft, ChevronsRight, Settings, X, FileUp, LogOut, LayoutDashboard, Wallet,
+  BarChart3, Users, Calculator, UserCog, Percent, BadgeDollarSign, Wallet,
+  ChevronsLeft, ChevronsRight, ChevronDown, Settings, X, FileUp, LogOut, LayoutDashboard, Database,
 } from "lucide-react";
 import { Avatar } from "./Shared";
 import { useLayout } from "../lib/layout";
@@ -11,20 +11,36 @@ const ICONS = {
   ejecutivo: Users,
   cotizador: Calculator,
   jefa: UserCog,
-  comisiones: Database,
-  miscomisiones: Database,
   cuotas: Wallet,
-  usuarios: UserCog,
+  comisiones: Percent,
+  miscomisiones: BadgeDollarSign,
 };
+
+const CARGAS = [["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"], ["cuotas_pago", "Cuotas"]];
+const fmtCarga = (iso) => new Date(iso).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+const reciente = (iso) => Date.now() - new Date(iso).getTime() < 36 * 3600 * 1000;
+
+// Fila de menú (principal o submenú). `activo` pinta la barra lateral de acento.
+function Item({ icon: Icon, label, activo, onClick, colapsado, sub, tono, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={colapsado ? label : title}
+      className={`group relative w-full flex items-center gap-3 rounded-xl text-[13px] transition-colors ${sub ? "pl-3 pr-3 py-2" : "px-3 py-2.5"} ${
+        activo ? "bg-white/[0.09] text-white font-medium" : tono === "rose" ? "text-rose-300 hover:bg-rose-500/10" : "text-slate-300/80 hover:bg-white/[0.06] hover:text-white"
+      } ${colapsado ? "lg:justify-center lg:px-0" : ""}`}
+    >
+      {activo && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-sky-400" />}
+      <Icon size={sub ? 15 : 17} className={`shrink-0 ${activo ? "text-sky-300" : tono === "rose" ? "" : "text-slate-400 group-hover:text-slate-200"}`} />
+      <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{label}</span>
+    </button>
+  );
+}
 
 export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange, menus = {}, esAdmin, email, perfilLabel, cargas, onLogout }) {
   const diseno = useLayout();
   const [colapsado, setColapsado] = useState(false);
-  const [cuentaAbierta, setCuentaAbierta] = useState(false);
-  // "Carga" (subir Maestro Aval / listado de precios) ya no es una pestaña
-  // más del menú: es una acción de administrador, así que vive dentro del
-  // menú de Cuenta al final del sidebar, junto con la sesión.
-  const sinCarga = !menus.carga;
+  const [configAbierta, setConfigAbierta] = useState(active === "usuarios" || active === "carga");
   const tabs = [
     { key: "dashboard", label: "Dashboard" },
     { key: "ejecutivo", label: "Ejecutivo" },
@@ -34,132 +50,95 @@ export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange,
     { key: "comisiones", label: "Comisiones" },
     { key: "miscomisiones", label: "Mis comisiones" },
   ].filter((t) => menus[t.key]);
+  const datosCarga = cargas ? CARGAS.filter(([k]) => cargas[k]) : [];
+
+  function alternarConfig() {
+    if (colapsado) { setColapsado(false); setConfigAbierta(true); return; }
+    setConfigAbierta((v) => !v);
+  }
 
   return (
     <div
-      className={`shrink-0 fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-[100dvh] lg:h-screen overflow-y-auto bg-[#0B2547] text-white flex flex-col transition-[width,transform] duration-200 w-[270px] ${
+      className={`shrink-0 fixed lg:sticky top-0 left-0 z-50 lg:z-auto h-[100dvh] lg:h-screen overflow-y-auto text-white flex flex-col transition-[width,transform] duration-200 w-[270px] bg-gradient-to-b from-[#0C2A52] via-[#0B2547] to-[#081C38] ${
         movilAbierto ? "translate-x-0" : "-translate-x-full"
-      } lg:translate-x-0 ${colapsado ? "lg:w-[68px]" : "lg:w-[220px]"}`}
+      } lg:translate-x-0 ${colapsado ? "lg:w-[68px]" : "lg:w-[236px]"}`}
     >
-      <div className="flex items-center justify-between px-4 h-16 border-b border-white/10">
+      <div className="flex items-center justify-between px-4 h-16">
         <span className={`font-display text-xl tracking-tight ${colapsado ? "lg:hidden" : ""}`}>MDA</span>
         <button onClick={onCerrarMovil} className="lg:hidden text-white/70 p-1 rounded-md hover:bg-white/10" aria-label="Cerrar menú"><X size={20} /></button>
         <button
           onClick={() => setColapsado((v) => !v)}
-          className="hidden lg:block text-white/50 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors"
+          className={`hidden lg:block text-white/40 hover:text-white p-1 rounded-md hover:bg-white/10 transition-colors ${colapsado ? "mx-auto" : ""}`}
           title={colapsado ? "Expandir menú" : "Colapsar menú"}
         >
           {colapsado ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         </button>
       </div>
 
-      <nav className="flex-1 px-2.5 py-4 flex flex-col gap-1">
-        {tabs.map((t) => {
-          const Icon = ICONS[t.key];
-          const isActive = active === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => onChange(t.key)}
-              title={colapsado ? t.label : undefined}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                isActive ? "bg-[#1E5AA8] text-white font-medium" : "text-slate-300 hover:bg-white/10 hover:text-white"
-              } ${colapsado ? "lg:justify-center" : ""}`}
-            >
-              <Icon size={18} className="shrink-0" />
-              <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>{t.label}</span>
-            </button>
-          );
-        })}
+      <nav className="px-3 pt-2 flex flex-col gap-0.5">
+        <div className={`px-3 pb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 ${colapsado ? "lg:hidden" : ""}`}>Menú</div>
+        {tabs.map((t) => (
+          <Item key={t.key} icon={ICONS[t.key]} label={t.label} activo={active === t.key} onClick={() => onChange(t.key)} colapsado={colapsado} />
+        ))}
       </nav>
 
-      {/* Cuenta: al final del menú, tipo engranaje — agrupa la sesión de
-          administrador y, dentro de ella, la opción de cargar el Maestro
-          Aval / listado de precios (antes era su propia pestaña arriba). */}
-      {(!colapsado || movilAbierto) && cargas && (cargas.aval || cargas.aval_completo || cargas.lista_precios || cargas.cuotas_pago) && (
-        <div className="px-4 py-3 border-t border-white/10 text-[11px] text-slate-400 leading-snug">
-          <div className="uppercase tracking-wide text-[10px] text-slate-500 mb-1">Datos al día</div>
-          {[["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"], ["cuotas_pago", "Cuotas"]].map(([k, label]) =>
-            cargas[k] ? (
-              <div key={k}>
-                {label}: {new Date(cargas[k].createdAt).toLocaleString("es-CL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-              </div>
-            ) : null
-          )}
-        </div>
-      )}
-      <div className="px-2.5 py-3 border-t border-white/10 relative">
-        {cuentaAbierta && (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setCuentaAbierta(false)} />
-            <div className="absolute left-2.5 right-2.5 bottom-full mb-2 z-20 bg-white border border-stone-200 rounded-lg shadow-lg py-1 text-stone-700 overflow-hidden">
-              {email && (
-                <div className="px-3 py-2.5 border-b border-stone-100">
-                  <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-1.5">Mi cuenta</div>
-                  <div className="flex items-center gap-2.5">
-                    <Avatar name={email} />
-                    <div className="min-w-0">
-                      <div className="text-xs text-stone-700 truncate">{email}</div>
-                      {perfilLabel && <div className="text-[11px] text-stone-400">{perfilLabel}</div>}
-                    </div>
+      {/* Configuración: se despliega aquí mismo con todos sus submenús. */}
+      <div className="mt-auto px-3 pt-4 pb-3">
+        <div className="border-t border-white/10 pt-3">
+          <button
+            onClick={alternarConfig}
+            title={colapsado ? "Configuración" : undefined}
+            aria-expanded={configAbierta}
+            className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-colors ${
+              configAbierta ? "text-white" : "text-slate-300/80 hover:bg-white/[0.06] hover:text-white"
+            } ${colapsado ? "lg:justify-center lg:px-0" : ""}`}
+          >
+            <Settings size={17} className="shrink-0 text-slate-400" />
+            <span className={`truncate flex-1 text-left ${colapsado ? "lg:hidden" : ""}`}>Configuración</span>
+            <ChevronDown size={14} className={`shrink-0 text-slate-500 transition-transform ${configAbierta ? "rotate-180" : ""} ${colapsado ? "lg:hidden" : ""}`} />
+          </button>
+
+          {configAbierta && !colapsado && (
+            <div className="mt-1 ml-3 pl-2 border-l border-white/10 flex flex-col gap-0.5">
+              {esAdmin && <Item sub icon={UserCog} label="Usuarios" activo={active === "usuarios"} onClick={() => { onChange("usuarios"); }} />}
+              {esAdmin && (
+                <div className="hidden lg:block">
+                  <Item sub icon={LayoutDashboard} label={diseno.editando ? "Terminar edición de diseño" : "Editar diseño"} activo={diseno.editando} onClick={() => diseno.setEditando(!diseno.editando)} />
+                </div>
+              )}
+              {menus.carga && <Item sub icon={FileUp} label="Cargar archivo" activo={active === "carga"} onClick={() => onChange("carga")} />}
+
+              {datosCarga.length > 0 && (
+                <div className="mt-1.5 mb-0.5 rounded-xl bg-white/[0.04] px-3 py-2.5">
+                  <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-500 mb-1.5">
+                    <Database size={12} /> Datos al día
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {datosCarga.map(([k, label]) => (
+                      <div key={k} className="flex items-center gap-2 text-[11px] text-slate-300/90">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${reciente(cargas[k].createdAt) ? "bg-emerald-400" : "bg-amber-400"}`} />
+                        <span className="flex-1">{label}</span>
+                        <span className="tabular-nums text-slate-400">{fmtCarga(cargas[k].createdAt)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-              {esAdmin && (
-                <button
-                  onClick={() => {
-                    setCuentaAbierta(false);
-                    onChange("usuarios");
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
-                >
-                  <UserCog size={14} /> Usuarios
-                </button>
-              )}
-              {esAdmin && (
-                <button
-                  onClick={() => {
-                    setCuentaAbierta(false);
-                    diseno.setEditando(!diseno.editando);
-                  }}
-                  className="hidden lg:flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
-                >
-                  <LayoutDashboard size={14} /> {diseno.editando ? "Terminar edición de diseño" : "Editar diseño"}
-                </button>
-              )}
-              {!sinCarga && (
-                <button
-                  onClick={() => {
-                    setCuentaAbierta(false);
-                    onChange("carga");
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 transition-colors"
-                >
-                  <FileUp size={14} /> Cargar archivo
-                </button>
-              )}
-              <button
-                onClick={() => {
-                  setCuentaAbierta(false);
-                  onLogout && onLogout();
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors"
-              >
-                <LogOut size={14} /> Cerrar sesión
-              </button>
+
+              <Item sub icon={LogOut} label="Cerrar sesión" tono="rose" onClick={() => onLogout && onLogout()} />
             </div>
-          </>
+          )}
+        </div>
+
+        {email && (
+          <div className={`mt-3 flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-3 py-2.5 ${colapsado ? "lg:justify-center lg:px-0 lg:bg-transparent" : ""}`} title={email}>
+            <Avatar name={email} />
+            <div className={`min-w-0 ${colapsado ? "lg:hidden" : ""}`}>
+              <div className="text-[12px] text-slate-100 truncate">{email}</div>
+              {perfilLabel && <div className="text-[10px] text-slate-400">{perfilLabel}</div>}
+            </div>
+          </div>
         )}
-        <button
-          onClick={() => setCuentaAbierta((v) => !v)}
-          title={colapsado ? "Configuración" : undefined}
-          className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-300 hover:bg-white/10 hover:text-white transition-colors ${
-            colapsado ? "lg:justify-center" : ""
-          }`}
-        >
-          <Settings size={18} className="shrink-0" />
-          <span className={`truncate ${colapsado ? "lg:hidden" : ""}`}>Configuración</span>
-        </button>
       </div>
     </div>
   );
