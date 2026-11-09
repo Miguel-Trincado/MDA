@@ -4,6 +4,7 @@ import { normalizarBusqueda } from "./lib/helpers";
 import { EJECUTIVOS } from "./lib/constants";
 import Sidebar from "./components/Sidebar";
 import SiteGate from "./components/SiteGate";
+import { puedeVer } from "./lib/permisos";
 import EjecutivoView from "./components/EjecutivoView";
 import JefaView from "./components/JefaView";
 import ReporteEjecutivoView from "./components/ReporteEjecutivoView";
@@ -58,7 +59,7 @@ function AppInner() {
   const desbloqueado = !!authSession;
   // Rol: "admin" ve todo; "ejecutiva" solo ve sus comisiones (y no Jefa ni
   // Carga); "sinperfil" (usuario creado pero sin vincular) queda limitado.
-  const { rol, ejecutivo: miEjecutivo, cargando: cargandoPerfil } = useMiPerfil(authSession);
+  const { rol, ejecutivo: miEjecutivo, permisos: misPermisos, cargando: cargandoPerfil } = useMiPerfil(authSession);
 
   // Latido de actividad: al entrar y cada 2 minutos mientras la pestaña esté a la vista.
   const miUserIdLatido = authSession?.user?.id;
@@ -75,13 +76,24 @@ function AppInner() {
   const esEjecutiva = rol === "ejecutiva";
   const esJefe = rol === "jefe";
   // Comisiones (editar, aceptar/validar): solo administrador y jefe de ventas.
-  const puedeComisiones = esAdmin || esJefe;
+  // Menús: lo que dice la ficha del usuario (Usuarios → Ficha); sin ficha, lo del perfil.
+  // Mientras carga el perfil solo se muestran los menús básicos.
+  const ver = (k) => (cargandoPerfil ? ["dashboard", "ejecutivo", "cotizador"].includes(k) : puedeVer(rol, misPermisos, k));
+  const puedeComisiones = ver("comisiones");
+  const puedeCuotas = ver("cuotas");
+  const verMisComisiones = ver("miscomisiones") && !!miEjecutivo;
+  const menus = {
+    dashboard: ver("dashboard"), ejecutivo: ver("ejecutivo"), cotizador: ver("cotizador"), jefa: ver("jefa"),
+    cuotas: puedeCuotas, comisiones: puedeComisiones, miscomisiones: verMisComisiones, carga: ver("carga"),
+  };
+  const vistaPermitida = (v) => (v === "usuarios" ? esAdmin : v === "miscomisiones" ? verMisComisiones : !!menus[v]);
+  const primeraVista = ["dashboard", "ejecutivo", "cotizador", "jefa", "cuotas", "comisiones", "miscomisiones", "carga"].find((v) => vistaPermitida(v)) || "dashboard";
   // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
   // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
   const logueadoSinAdmin = !!authSession && !cargandoPerfil && !esAdmin;
   // Carga de Aval y listado de precios: administrador y jefe de ventas.
-  const sinCarga = logueadoSinAdmin && !esJefe;
-  const sinJefa = logueadoSinAdmin && !esJefe;
+  const sinCarga = !ver("carga");
+  const sinJefa = !ver("jefa");
 
   // Recordar la pantalla: URL + navegador, y botón "atrás" entre menús.
   useEffect(() => {
@@ -101,14 +113,8 @@ function AppInner() {
   // Si la pantalla guardada no corresponde al perfil, volver al Dashboard.
   useEffect(() => {
     if (!authSession || cargandoPerfil) return;
-    const ok =
-      (view !== "carga" || !sinCarga) &&
-      ((view !== "comisiones" && view !== "cuotas") || puedeComisiones) &&
-      (view !== "usuarios" || esAdmin) &&
-      (view !== "miscomisiones" || esEjecutiva) &&
-      (view !== "jefa" || !sinJefa);
-    if (!ok) setView("dashboard");
-  }, [view, authSession, cargandoPerfil, sinCarga, puedeComisiones, esAdmin, esEjecutiva, sinJefa]);
+    if (!vistaPermitida(view)) setView(primeraVista);
+  }, [view, authSession, cargandoPerfil, rol, misPermisos, miEjecutivo]);
   // Guardar la posición de scroll y recuperarla tras recargar.
   useEffect(() => {
     let t;
@@ -267,13 +273,8 @@ function AppInner() {
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
-    if (view === "cuotas" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
-    if (view === "comisiones" && (authSession === null || (!cargandoPerfil && !puedeComisiones))) setView("dashboard");
-    if (view === "miscomisiones" && !cargandoPerfil && !esEjecutiva) setView("dashboard");
-    if (view === "jefa" && sinJefa) setView("dashboard");
-    if (view === "usuarios" && logueadoSinAdmin) setView("dashboard");
-    if (view === "carga" && sinCarga) setView("dashboard");
-  }, [view, authSession, cargandoPerfil, esAdmin, puedeComisiones, esEjecutiva, sinJefa, sinCarga, logueadoSinAdmin]);
+    if (authSession === null && ["cuotas", "comisiones", "miscomisiones", "usuarios", "carga", "jefa"].includes(view)) setView("dashboard");
+  }, [view, authSession]);
 
   async function saveGestion(rut, updates) {
     const prev = db.gestion[rut];
@@ -404,11 +405,8 @@ function AppInner() {
         onCerrarMovil={() => setMenuMovil(false)}
         active={view}
         onChange={cambiarVista}
-        showComisiones={puedeComisiones}
-        esEjecutiva={esEjecutiva}
+        menus={menus}
         esAdmin={esAdmin}
-        sinJefa={sinJefa}
-        sinCarga={sinCarga}
         email={authSession?.user?.email}
         perfilLabel={esAdmin ? "Administrador" : esJefe ? "Jefe de ventas" : esEjecutiva ? `Ejecutivo${miEjecutivo ? " · " + miEjecutivo : ""}` : ""}
         onLogout={handleLogoutCompleto}
@@ -416,9 +414,9 @@ function AppInner() {
       />
       <div className="flex-1 min-w-0 pt-14 lg:pt-0 app-main">
         <Suspense fallback={<div className="p-10 text-sm text-stone-500">Cargando…</div>}>
-        {view === "dashboard" && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
-        {view === "ejecutivo" && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
-        {view === "carga" && !sinCarga && (
+        {view === "dashboard" && menus.dashboard && <ReporteEjecutivoView db={dbParaVista} onUpload={uploadMaestro} />}
+        {view === "ejecutivo" && menus.ejecutivo && <EjecutivoView db={dbParaVista} onSave={saveGestion} onRevisado={markRevisado} ejecutivoFijo={esEjecutiva ? miEjecutivo : undefined} />}
+        {view === "carga" && menus.carga && (
           <CargaPage
             onUploadMaestro={uploadMaestro}
             onUploadListaPrecios={uploadListaPrecios}
@@ -426,9 +424,9 @@ function AppInner() {
             onUploadCuotas={uploadCuotas}
           />
         )}
-        {view === "cotizador" && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
-        {view === "comisiones" && authSession && puedeComisiones && <Comisiones db={db} />}
-        {view === "cuotas" && authSession && puedeComisiones && <CuotasPagos cargas={db.cargas} usuario={authSession?.user?.email} />}
+        {view === "cotizador" && menus.cotizador && <Cotizador db={dbParaVista} puedeEliminar={!esEjecutiva} />}
+        {view === "comisiones" && authSession && menus.comisiones && <Comisiones db={db} />}
+        {view === "cuotas" && authSession && menus.cuotas && <CuotasPagos cargas={db.cargas} usuario={authSession?.user?.email} />}
         {view === "usuarios" && esAdmin && (
           <UsuariosPanel
             miUserId={authSession?.user?.id}
@@ -436,8 +434,8 @@ function AppInner() {
             ejecutivos={nombresEjecutivos}
           />
         )}
-        {view === "miscomisiones" && esEjecutiva && <MisComisiones ejecutivo={miEjecutivo} />}
-        {view === "jefa" && !sinJefa && (
+        {view === "miscomisiones" && menus.miscomisiones && <MisComisiones ejecutivo={miEjecutivo} />}
+        {view === "jefa" && menus.jefa && (
           <JefaView
             db={db}
             onResolveCambio={resolveCambio}

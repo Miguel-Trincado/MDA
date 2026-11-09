@@ -944,6 +944,12 @@ export async function cambiarPerfilUsuarioRemote(userId, rol, ejecutivo) {
   if (error) throw error;
 }
 
+// Ficha de permisos por menú (migración v201). permisos = null vuelve a lo del perfil.
+export async function establecerPermisosUsuarioRemote(userId, permisos) {
+  const { error } = await supabase.rpc("establecer_permisos_usuario", { p_user_id: userId, p_permisos: permisos });
+  if (error) throw error;
+}
+
 export async function resetearClaveUsuarioRemote(userId, password) {
   const { error } = await supabase.rpc("resetear_clave_usuario", { p_user_id: userId, p_password: password });
   if (error) throw error;

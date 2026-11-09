@@ -17,22 +17,23 @@ const ICONS = {
   usuarios: UserCog,
 };
 
-export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange, showComisiones, esEjecutiva, esAdmin, sinJefa, sinCarga, email, perfilLabel, cargas, onLogout }) {
+export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange, menus = {}, esAdmin, email, perfilLabel, cargas, onLogout }) {
   const diseno = useLayout();
   const [colapsado, setColapsado] = useState(false);
   const [cuentaAbierta, setCuentaAbierta] = useState(false);
   // "Carga" (subir Maestro Aval / listado de precios) ya no es una pestaña
   // más del menú: es una acción de administrador, así que vive dentro del
   // menú de Cuenta al final del sidebar, junto con la sesión.
+  const sinCarga = !menus.carga;
   const tabs = [
     { key: "dashboard", label: "Dashboard" },
     { key: "ejecutivo", label: "Ejecutivo" },
     { key: "cotizador", label: "Simulador" },
-    ...(sinJefa ? [] : [{ key: "jefa", label: "Jefa de Ventas" }]),
-    ...(showComisiones ? [{ key: "cuotas", label: "Cuotas y Pagos" }] : []),
-    ...(showComisiones ? [{ key: "comisiones", label: "Comisiones" }] : []),
-    ...(esEjecutiva ? [{ key: "miscomisiones", label: "Mis comisiones" }] : []),
-  ];
+    { key: "jefa", label: "Jefa de Ventas" },
+    { key: "cuotas", label: "Cuotas y Pagos" },
+    { key: "comisiones", label: "Comisiones" },
+    { key: "miscomisiones", label: "Mis comisiones" },
+  ].filter((t) => menus[t.key]);
 
   return (
     <div
