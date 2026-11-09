@@ -4,7 +4,7 @@ import {
   resetearClaveUsuarioRemote, eliminarUsuarioRemote, establecerPermisosUsuarioRemote,
 } from "../lib/db";
 import { MENUS, permisosPorDefecto, permisosEfectivos } from "../lib/permisos";
-import { X, Plus, Search } from "lucide-react";
+import { X, Plus, Search, ChevronRight } from "lucide-react";
 import { normalizarBusqueda, fmtDateTime } from "../lib/helpers";
 import { suscribirPresencia } from "../lib/presencia";
 import { Panel, Field, PageHeader, Avatar } from "./Shared";
@@ -61,9 +61,23 @@ function Interruptor({ valor, onChange, disabled }) {
   );
 }
 
-// Ficha del usuario: Sí/No por cada menú. Solo la modifica el administrador
-// (la base rechaza el cambio de cualquier otro usuario).
-function FichaUsuario({ usuario, onCerrar, onGuardar, guardando, error }) {
+const nombreDe = (u) => u.ejecutivo || u.email;
+
+function Seccion({ titulo, children, derecha }) {
+  return (
+    <div className="px-5 py-4 border-b border-stone-100 last:border-b-0">
+      <div className="flex items-center justify-between gap-2 mb-2.5">
+        <div className="text-[11px] uppercase tracking-[0.12em] text-stone-400 font-medium">{titulo}</div>
+        {derecha}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// Ficha completa del usuario (ventana flotante): datos, perfil, acceso a menús y
+// seguridad. Solo la modifica el administrador (la base rechaza a cualquier otro).
+function FichaUsuario({ usuario, esYo, ejecutivos, cruce, ultima, ahora, enLinea, trabajando, msg, error, onCerrar, onGuardarMenus, onCambiarPerfil, onResetear, onEliminar }) {
   const esAdminU = usuario.rol === "admin";
   const def = permisosPorDefecto(usuario.rol);
   const [vals, setVals] = useState(() => permisosEfectivos(usuario.rol, usuario.permisos));
@@ -74,61 +88,96 @@ function FichaUsuario({ usuario, onCerrar, onGuardar, guardando, error }) {
   }, [onCerrar]);
   const personalizado = MENUS.some((m) => vals[m.key] !== def[m.key]);
   const nSi = MENUS.filter((m) => vals[m.key]).length;
+  const c = usuario.rol === "ejecutiva" && usuario.ejecutivo ? cruce(usuario.ejecutivo) : null;
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3" onClick={onCerrar}>
-      <div role="dialog" aria-label={`Ficha de ${usuario.email}`} className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3 border-b border-stone-100">
-          <div className="min-w-0">
-            <div className="font-display text-base text-[#0F3D66]">Ficha de usuario</div>
-            <div className="text-sm text-stone-700 truncate">{usuario.email}</div>
-            <div className="text-xs text-stone-400">
-              {etiquetaPerfil(usuario.rol)}{usuario.ejecutivo ? ` · ${usuario.ejecutivo}` : ""}
+      <div role="dialog" aria-label={`Ficha de ${nombreDe(usuario)}`} className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start gap-3.5 px-5 pt-5 pb-4 border-b border-stone-100">
+          <Avatar name={nombreDe(usuario)} size="lg" />
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-base text-[#13234A] leading-tight truncate">{nombreDe(usuario)}</div>
+            <div className="text-xs text-stone-500 truncate">{usuario.email}</div>
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-50 text-[#1E5AA8] font-medium">{etiquetaPerfil(usuario.rol)}</span>
+              <EstadoConexion ultima={ultima} ahora={ahora} enLinea={enLinea} />
             </div>
           </div>
           <button onClick={onCerrar} className="p-1 rounded-md hover:bg-stone-100 text-stone-500" aria-label="Cerrar"><X size={18} /></button>
         </div>
-        <div className="px-5 py-3 overflow-y-auto">
-          <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-1">Menús que puede ver</div>
-          {esAdminU && <p className="text-xs text-stone-500 mb-2">El administrador siempre tiene acceso a todo; esta ficha no se modifica.</p>}
-          <div className="divide-y divide-stone-100">
-            {MENUS.map((m) => (
-              <div key={m.key} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="text-sm text-stone-800">{m.label}</div>
-                  {!esAdminU && vals[m.key] !== def[m.key] && <div className="text-[10px] text-amber-600">Distinto al perfil ({def[m.key] ? "Sí" : "No"})</div>}
+
+        <div className="overflow-y-auto">
+          {(msg || error) && (
+            <p className={`mx-5 mt-3 text-xs rounded-xl px-3.5 py-2.5 ${error ? "text-rose-700 bg-rose-50" : "text-emerald-700 bg-emerald-50"}`}>{error || msg}</p>
+          )}
+
+          <Seccion titulo="Datos">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="Correo">
+                <div className="ipt !bg-stone-50 !text-stone-600 truncate">{usuario.email}</div>
+              </Field>
+              <Field label="Perfil">
+                <select className="ipt" disabled={esYo || trabajando} value={usuario.rol === "sin perfil" ? "" : usuario.rol} onChange={(e) => onCambiarPerfil(usuario, e.target.value, usuario.ejecutivo)}>
+                  {usuario.rol === "sin perfil" && <option value="">Sin perfil</option>}
+                  {PERFILES.map((p) => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
+                </select>
+              </Field>
+              {usuario.rol === "ejecutiva" && (
+                <Field label="Ejecutivo vinculado" className="sm:col-span-2">
+                  <select className="ipt" disabled={trabajando} value={usuario.ejecutivo || ""} onChange={(e) => onCambiarPerfil(usuario, "ejecutiva", e.target.value)}>
+                    {!ejecutivos.includes(usuario.ejecutivo) && usuario.ejecutivo && <option value={usuario.ejecutivo}>{usuario.ejecutivo}</option>}
+                    {ejecutivos.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  {c && (c.clientes === 0
+                    ? <span className="text-[11px] text-rose-600">Sin cruce: ningún cliente con ese nombre</span>
+                    : <span className="text-[11px] text-emerald-700">{c.clientes} clientes · {c.cotizaciones} cotizaciones</span>)}
+                </Field>
+              )}
+            </div>
+          </Seccion>
+
+          <Seccion titulo={`Acceso a menús · ${nSi} de ${MENUS.length}${!esAdminU && personalizado ? " · personalizado" : ""}`}>
+            {esAdminU && <p className="text-xs text-stone-500 mb-2">El administrador siempre tiene acceso a todo; esta ficha no se modifica.</p>}
+            <div className="divide-y divide-stone-100">
+              {MENUS.map((m) => (
+                <div key={m.key} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <div className="text-sm text-stone-800">{m.label}</div>
+                    {!esAdminU && vals[m.key] !== def[m.key] && <div className="text-[10px] text-amber-600">Distinto al perfil ({def[m.key] ? "Sí" : "No"})</div>}
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className={`text-xs w-6 text-right font-medium ${vals[m.key] ? "text-emerald-700" : "text-stone-400"}`}>{vals[m.key] ? "Sí" : "No"}</span>
+                    <Interruptor valor={vals[m.key]} disabled={esAdminU || trabajando} onChange={(v) => setVals((x) => ({ ...x, [m.key]: v }))} />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2.5">
-                  <span className={`text-xs w-6 text-right font-medium ${vals[m.key] ? "text-emerald-700" : "text-stone-400"}`}>{vals[m.key] ? "Sí" : "No"}</span>
-                  <Interruptor valor={vals[m.key]} disabled={esAdminU || guardando} onChange={(v) => setVals((x) => ({ ...x, [m.key]: v }))} />
-                </div>
+              ))}
+            </div>
+            {!esAdminU && (
+              <div className="flex items-center justify-end gap-2 mt-3">
+                <button disabled={trabajando || (!personalizado && !usuario.permisos)} onClick={() => onGuardarMenus(usuario, null)} className="px-3 py-2 text-xs rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40">Volver al perfil</button>
+                <button disabled={trabajando} onClick={() => onGuardarMenus(usuario, personalizado ? vals : null)} className="px-4 py-2 text-xs rounded-lg bg-[#0F3D66] hover:bg-[#1E5AA8] text-white font-medium disabled:opacity-50">{trabajando ? "Guardando…" : "Guardar accesos"}</button>
               </div>
-            ))}
-          </div>
-          {error && <p className="text-rose-600 text-xs mt-3">{error}</p>}
-          <p className="text-[11px] text-stone-400 mt-3">
-            Esto controla qué menús se muestran. Los datos siguen protegidos según el perfil (un ejecutivo solo ve lo suyo aunque se le active un menú).
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-t border-stone-100">
-          <span className="text-xs text-stone-500 mr-auto">{nSi} de {MENUS.length} menús{personalizado ? " · personalizado" : " · según perfil"}</span>
-          {!esAdminU && (
-            <button disabled={guardando || !personalizado && !usuario.permisos} onClick={() => onGuardar(usuario, null)} className="px-3 py-2 text-xs rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 disabled:opacity-40">
-              Volver al perfil
-            </button>
-          )}
-          {!esAdminU && (
-            <button disabled={guardando} onClick={() => onGuardar(usuario, personalizado ? vals : null)} className="px-4 py-2 text-xs rounded-lg bg-[#0F3D66] hover:bg-[#1E5AA8] text-white font-medium disabled:opacity-50">
-              {guardando ? "Guardando…" : "Guardar"}
-            </button>
-          )}
+            )}
+            <p className="text-[11px] text-stone-400 mt-2.5">
+              Esto controla qué menús se muestran. Los datos siguen protegidos según el perfil (un ejecutivo solo ve lo suyo aunque se le active un menú).
+            </p>
+          </Seccion>
+
+          <Seccion titulo="Seguridad">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => onResetear(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white transition-colors">Cambiar contraseña</button>
+              {!esYo && <button onClick={() => onEliminar(usuario)} className="px-3.5 py-2 text-xs rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors">Eliminar usuario</button>}
+            </div>
+          </Seccion>
         </div>
       </div>
     </div>
   );
 }
 
-// Columnas de la lista de usuarios (escritorio); en móvil cada usuario es una tarjeta apilada.
-const COLS = "lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.2fr)_150px_minmax(0,1.3fr)_100px_auto]";
 const etiquetaPerfil = (rol) => PERFILES.find((p) => p.value === rol)?.label || "Sin perfil";
 
 // Panel de administrador: alta y mantención de usuarios sin entrar a
@@ -215,8 +264,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
   }
 
   async function guardarFicha(u, permisos) {
-    const ok = await ejecutar(() => establecerPermisosUsuarioRemote(u.userId, permisos), `Ficha de ${u.email} actualizada.`);
-    if (ok) setFichaDe(null);
+    await ejecutar(() => establecerPermisosUsuarioRemote(u.userId, permisos), `Accesos de ${u.email} actualizados.`);
   }
 
   function resetear(u) {
@@ -225,9 +273,9 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
     ejecutar(() => resetearClaveUsuarioRemote(u.userId, nueva), `Contraseña de ${u.email} actualizada.`);
   }
 
-  function eliminar(u) {
-    if (!window.confirm(`¿Eliminar definitivamente el usuario ${u.email}?`)) return;
-    ejecutar(() => eliminarUsuarioRemote(u.userId), `Usuario ${u.email} eliminado.`);
+  async function eliminar(u) {
+    if (!window.confirm(`¿Eliminar definitivamente el usuario ${u.email}?`)) return false;
+    return ejecutar(() => eliminarUsuarioRemote(u.userId), `Usuario ${u.email} eliminado.`);
   }
 
   return (
@@ -309,83 +357,57 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db }) {
             <span>Usuarios del sistema</span>
             <div className="relative w-full sm:w-64 font-body normal-case">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-              <input className="ipt !pl-8 !py-2 !text-[13px]" placeholder="Buscar por correo…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+              <input className="ipt !pl-8 !py-2 !text-[13px]" placeholder="Buscar usuario…" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
             </div>
           </div>
         }
       >
         <div className="text-sm">
-          <div className={`hidden lg:grid ${COLS} gap-x-4 px-1 pb-2 text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-200`}>
-            <span>Usuario</span><span>Conexión</span><span>Perfil</span><span>Ejecutivo vinculado</span><span>Menús</span><span className="text-right">Acciones</span>
+          <div className="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_16px] gap-x-4 px-3 pb-2 text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-200">
+            <span>Usuario</span><span>Conexión</span><span />
           </div>
           <div className="divide-y divide-stone-100">
-            {usuarios.filter((u) => !busqueda.trim() || normalizarBusqueda(u.email).includes(normalizarBusqueda(busqueda))).map((u) => {
-              const esYo = u.userId === miUserId;
-              const efec = permisosEfectivos(u.rol, u.permisos);
-              const nSi = MENUS.filter((m) => efec[m.key]).length;
-              const def = permisosPorDefecto(u.rol);
-              const pers = u.rol !== "admin" && MENUS.some((m) => efec[m.key] !== def[m.key]);
-              const c = u.rol === "ejecutiva" && u.ejecutivo ? cruce(u.ejecutivo) : null;
-              return (
-                <div key={u.userId} className={`grid grid-cols-1 ${COLS} gap-x-4 gap-y-2 py-3 px-1 items-center`}>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <Avatar name={u.email} />
-                      <span className="truncate text-stone-800" title={u.email}>{u.email} {esYo && <span className="text-xs text-stone-400">(tú)</span>}</span>
-                    </div>
-                  </div>
-                  <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)} />
-                  <select
-                    className="ipt"
-                    disabled={esYo || trabajando}
-                    value={u.rol === "sin perfil" ? "" : u.rol}
-                    onChange={(e) => cambiarPerfil(u, e.target.value, u.ejecutivo)}
+            {usuarios
+              .filter((u) => !busqueda.trim() || normalizarBusqueda(nombreDe(u) + " " + u.email).includes(normalizarBusqueda(busqueda)))
+              .map((u) => {
+                const esYo = u.userId === miUserId;
+                return (
+                  <button
+                    key={u.userId}
+                    onClick={() => setFichaDe(u.userId)}
+                    className="w-full grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_16px] gap-x-4 items-center text-left px-3 py-3 rounded-xl hover:bg-sky-50/60 transition-colors"
+                    title="Ver ficha"
                   >
-                    {u.rol === "sin perfil" && <option value="">Sin perfil</option>}
-                    {PERFILES.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                  <div className="min-w-0">
-                    {u.rol === "ejecutiva" ? (
-                      <>
-                        <select className="ipt" disabled={trabajando} value={u.ejecutivo || ""} onChange={(e) => cambiarPerfil(u, "ejecutiva", e.target.value)}>
-                          {!ejecutivos.includes(u.ejecutivo) && u.ejecutivo && <option value={u.ejecutivo}>{u.ejecutivo}</option>}
-                          {ejecutivos.map((n) => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                        {c && (c.clientes === 0
-                          ? <div className="text-[11px] text-rose-600 mt-1">Sin cruce: ningún cliente con ese nombre</div>
-                          : <div className="text-[11px] text-emerald-700 mt-1">{c.clientes} clientes · {c.cotizaciones} cotizaciones</div>)}
-                      </>
-                    ) : (
-                      <span className="text-stone-300">—</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-stone-600">
-                    <span className="font-medium">{nSi} de {MENUS.length}</span>
-                    {pers && <span className="ml-1 text-amber-600">· personalizado</span>}
-                  </div>
-                  <div className="flex items-center lg:justify-end gap-3 flex-wrap">
-                    <button onClick={() => setFichaDe(u.userId)} disabled={u.rol === "sin perfil"} className="px-3 py-1.5 text-xs rounded-lg border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white transition-colors disabled:opacity-40">Ficha</button>
-                    <button onClick={() => resetear(u)} className="text-xs text-[#1E5AA8] hover:underline">Cambiar clave</button>
-                    {!esYo ? (
-                      <button onClick={() => eliminar(u)} className="text-xs text-rose-600 hover:underline">Eliminar</button>
-                    ) : (
-                      <span className="w-[46px]" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                    <span className="flex items-center gap-3 min-w-0">
+                      <Avatar name={nombreDe(u)} />
+                      <span className="truncate font-medium text-stone-800">{nombreDe(u)} {esYo && <span className="text-xs font-normal text-stone-400">(tú)</span>}</span>
+                    </span>
+                    <EstadoConexion ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)} />
+                    <ChevronRight size={16} className="text-stone-300" />
+                  </button>
+                );
+              })}
           </div>
           {usuarios.length === 0 && <p className="text-stone-400 text-sm py-2">Sin usuarios.</p>}
         </div>
       </Panel>
       {fichaDe && (() => {
         const u = usuarios.find((x) => x.userId === fichaDe);
-        return u ? <FichaUsuario key={u.userId} usuario={u} onCerrar={() => setFichaDe(null)} onGuardar={guardarFicha} guardando={trabajando} error={error} /> : null;
+        if (!u) return null;
+        const esYo = u.userId === miUserId;
+        return (
+          <FichaUsuario
+            key={u.userId + u.rol}
+            usuario={u} esYo={esYo} ejecutivos={ejecutivos} cruce={cruce}
+            ultima={esYo ? new Date(ahora).toISOString() : u.ultimaConexion} ahora={ahora} enLinea={esYo || enLinea.has(u.userId)}
+            trabajando={trabajando} msg={msg} error={error}
+            onCerrar={() => setFichaDe(null)}
+            onGuardarMenus={guardarFicha}
+            onCambiarPerfil={cambiarPerfil}
+            onResetear={resetear}
+            onEliminar={async (x) => { if (await eliminar(x)) setFichaDe(null); }}
+          />
+        );
       })()}
     </div>
   );
