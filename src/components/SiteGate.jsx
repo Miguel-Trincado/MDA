@@ -95,7 +95,7 @@ export default function SiteGate() {
               className="w-4 h-4 rounded border-stone-300 text-[#0F3D66] focus:ring-[#1E5AA8]"
             />
             <span className="flex items-center gap-1.5">
-              Soy un humano y a veces un Bot <Bot size={16} className="text-[#0F3D66]" />
+              Soy humano y a veces un bot <Bot size={16} className="text-[#0F3D66]" />
             </span>
           </label>
 
