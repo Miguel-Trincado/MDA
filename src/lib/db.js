@@ -931,9 +931,16 @@ export async function desvincularEjecutivaRemote(userId) {
 
 // ---------- Gestión de usuarios — migración v121 ----------
 export async function crearUsuarioRemote({ email, password, rol, ejecutivo }) {
-  const { error } = await supabase.rpc("crear_usuario", {
+  const { data, error } = await supabase.rpc("crear_usuario", {
     p_email: email, p_password: password, p_rol: rol, p_ejecutivo: ejecutivo || null,
   });
+  if (error) throw error;
+  return data; // id del usuario creado
+}
+
+// Nombre y apellido que se muestran en Usuarios (migración v202).
+export async function establecerNombreUsuarioRemote(userId, nombre, apellido) {
+  const { error } = await supabase.rpc("establecer_nombre_usuario", { p_user_id: userId, p_nombre: nombre || null, p_apellido: apellido || null });
   if (error) throw error;
 }
 
