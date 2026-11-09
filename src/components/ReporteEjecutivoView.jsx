@@ -469,6 +469,10 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
   const desSel = desistimiento(desdeSel, hastaSel);
   const desPrev = hayUnMes ? desistimiento(prevClaveSel, prevClaveSel) : null;
   const desSub = `${pl(desSel.des, "promesa desistida", "promesas desistidas")} de ${pl(desSel.prom, "promesa", "promesas")}${desPrev && desPrev.pct !== null ? ` · mes anterior ${fmtPct(desPrev.pct)}` : ""}`;
+  // Acumulado de todo el histórico (por estado), siempre visible en la tarjeta sin importar el período elegido.
+  const univDes = baseKpi.filter(esPromUniv);
+  const desAcum = { prom: univDes.length, des: univDes.filter((x) => x.esD).length };
+  desAcum.pct = pctDe(desAcum.des, desAcum.prom);
   const serieDes = ultimos12.map((k) => ({ v: desistimiento(k, k).des }));
 
   // 3) Unidades del listado de precios (solo departamentos): disponibles, reservadas y vendidas.
@@ -727,7 +731,7 @@ export default function ReporteEjecutivoView({ db, onUpload }) {
       {/* Segunda fila: indicadores comerciales (conversión, desistimiento, unidades, gestión) */}
       <div className="grid-60 gap-4 mb-5">
         <KpiCard bid="kpi7" onClick={() => setDetalle(detConversion())} orden={6} tone="green" icon={TrendingUp} label="Conversión cotización → promesa" value={fmtPct(convSel.pct)} sub={convSub} deltaInfo={`Clientes con promesa ÷ clientes que cotizaron en ${textoRango}, contados por RUT único y sin pasar por la reserva. Incluye promesas escrituradas y desistidas.`} serie={serieConv} />
-        <KpiCard bid="kpi8" onClick={() => setDetalle(detDesistimiento())} orden={7} tone="rose" icon={UserX} label="Tasa de desistimiento" value={fmtPct(desSel.pct)} sub={desSub} deltaInfo={`Promesas desistidas ÷ promesas de ${textoRango}, contadas por unidad (cada Opp cuenta): un cliente con 3 unidades aporta 3 promesas.`} serie={serieDes} />
+        <KpiCard bid="kpi8" onClick={() => setDetalle(detDesistimiento())} orden={7} tone="rose" icon={UserX} label="Tasa de desistimiento" value={fmtPct(desSel.pct)} sub={<><span className="font-semibold text-rose-600">Acumulado {fmtPct(desAcum.pct)}</span> · {desAcum.des} de {desAcum.prom}<br />{desSub}</>} deltaInfo={`Promesas desistidas ÷ promesas de ${textoRango}, contadas por unidad (cada Opp cuenta): un cliente con 3 unidades aporta 3 promesas. El "Acumulado" abarca todo el histórico.`} serie={serieDes} />
         <KpiCard bid="kpi9" onClick={() => setDetalle(detUnidades())} orden={8} tone="blue" icon={Building2} label="Unidades disponibles" value={uTotal ? uDisp : "—"} sub={uTotal ? `${pl(uVend, "vendida", "vendidas")} · ${pl(uRes, "reservada", "reservadas")} · ${pctDe(uVend, uTotal) ?? 0}% vendido de ${uTotal}${stockUf ? ` · stock ${stockUf.toLocaleString("es-CL")} UF` : ""}` : "Carga el listado de precios"} />
         <KpiCard bid="kpi10" onClick={() => setDetalle(detSinGestion())} orden={9} tone="amber" icon={BellOff} label={`Cotizaciones sin gestión (+${DIAS_SIN_GESTION} días)`} value={sinGestion.length} sub={`de ${activos} clientes activos sin acción registrada en ${DIAS_SIN_GESTION} días`} />
       </div>
