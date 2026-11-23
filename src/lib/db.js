@@ -977,3 +977,29 @@ export async function registrarCargaRemote({ tipo, archivo, usuario, resumen }) 
   if (error) throw error;
   return rowToObj(data);
 }
+
+
+/* ---------------------------------------------------------------------
+ * Cumplimiento de metas (migración v204)
+ * ------------------------------------------------------------------- */
+export async function fetchMetasCumplimiento() {
+  const [a, c] = await Promise.all([supabase.from("metas_asignacion").select("*"), supabase.from("metas_config").select("*")]);
+  if (a.error) throw a.error;
+  if (c.error) throw c.error;
+  const config = {};
+  (c.data || []).forEach((r) => {
+    config[r.mes] = { jefe: r.jefe || "", bono100: Number(r.bono_100) || 0, escala: Array.isArray(r.escala) ? r.escala : [] };
+  });
+  const asignaciones = (a.data || []).map((r) => ({ mes: r.mes, proyecto: r.proyecto, tipo: r.tipo_unidad, unidades: Number(r.unidades) || 0, peso: Number(r.peso) || 0 }));
+  return { asignaciones, config };
+}
+
+// Reemplaza la asignación completa de un mes (solo administrador; lo exige la base).
+export async function guardarMetasMesRemote(mes, { asignaciones, config }) {
+  const { error } = await supabase.rpc("guardar_metas_mes", {
+    p_mes: mes,
+    p_asignaciones: asignaciones.map((x) => ({ proyecto: x.proyecto, tipo_unidad: x.tipo, unidades: x.unidades, peso: x.peso })),
+    p_config: { jefe: config.jefe || "", bono_100: config.bono100 || 0, escala: config.escala || [] },
+  });
+  if (error) throw error;
+}

@@ -9,6 +9,7 @@ export const MENUS = [
   { key: "cuotas", label: "Cuotas y Pagos" },
   { key: "comisiones", label: "Comisiones" },
   { key: "miscomisiones", label: "Mis comisiones" },
+  { key: "metas", label: "Metas" },
   { key: "carga", label: "Cargar archivo" },
   { key: "usuarios", label: "Usuarios" },
 ];
