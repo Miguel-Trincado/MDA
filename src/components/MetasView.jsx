@@ -305,17 +305,17 @@ export default function MetasView({ db, esAdmin }) {
   const g = r.general;
   return (
     <div className={PAGE_CLASS}>
-      <PageHeader title="Metas" subtitle="Primero asigna y envía las metas del mes; al cierre envía el cumplimiento">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center bg-white border border-[#EEF1F8] rounded-xl shadow-card">
-            <button onClick={() => { setMes(mesMas(mes, -1)); setEditando(false); }} className="p-2.5 text-stone-500 hover:text-[#13234A]" aria-label="Mes anterior"><ChevronLeft size={16} /></button>
-            <span className="px-2 text-sm font-medium text-[#13234A] min-w-[130px] text-center">{etiquetaMes(mes)}</span>
-            <button onClick={() => { setMes(mesMas(mes, 1)); setEditando(false); }} className="p-2.5 text-stone-500 hover:text-[#13234A]" aria-label="Mes siguiente"><ChevronRight size={16} /></button>
-          </div>
-          {esAdmin && asig && !editando && (
-            <button onClick={() => setEditando(true)} className="inline-flex items-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-3.5 py-2.5 text-sm rounded-xl transition-colors"><Pencil size={15} /> {r.hayMeta ? "Editar metas" : "Asignar metas"}</button>
+      <PageHeader title="Metas" subtitle="Asignación y cumplimiento de metas del Jefe de Ventas">
+        <div className="flex items-center gap-2 flex-nowrap shrink-0">
+          {esAdmin && (
+            <button onClick={() => setEditando(true)} tabIndex={asig && !editando ? 0 : -1} aria-hidden={!(asig && !editando)} className={`h-11 inline-flex items-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-4 text-sm rounded-xl transition-colors whitespace-nowrap ${asig && !editando ? "" : "invisible pointer-events-none"}`}><Pencil size={15} /> {r.hayMeta ? "Editar metas" : "Asignar metas"}</button>
           )}
-          <button onClick={() => setCorreo(true)} disabled={!r.hayMeta} title={r.hayMeta ? "" : "Asigna las metas del mes para poder enviarlas"} className="inline-flex items-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-40 text-white px-4 py-2.5 text-sm font-medium rounded-xl shadow-sm"><Mail size={15} /> Enviar por correo</button>
+          <div className="h-11 flex items-center bg-white border border-[#EEF1F8] rounded-xl shadow-card">
+            <button onClick={() => { setMes(mesMas(mes, -1)); setEditando(false); }} className="h-11 w-10 inline-flex items-center justify-center text-stone-500 hover:text-[#13234A]" aria-label="Mes anterior"><ChevronLeft size={16} /></button>
+            <span className="px-2 text-sm font-medium text-[#13234A] w-[140px] text-center whitespace-nowrap">{etiquetaMes(mes)}</span>
+            <button onClick={() => { setMes(mesMas(mes, 1)); setEditando(false); }} className="h-11 w-10 inline-flex items-center justify-center text-stone-500 hover:text-[#13234A]" aria-label="Mes siguiente"><ChevronRight size={16} /></button>
+          </div>
+          <button onClick={() => setCorreo(true)} disabled={!r.hayMeta} title={r.hayMeta ? "" : "Asigna las metas del mes para poder enviarlas"} className="h-11 inline-flex items-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-40 text-white px-4 text-sm font-medium rounded-xl shadow-sm whitespace-nowrap"><Mail size={15} /> Enviar por correo</button>
         </div>
       </PageHeader>
 
@@ -341,7 +341,7 @@ export default function MetasView({ db, esAdmin }) {
 
       <div className="inline-flex p-1 mb-5 rounded-xl bg-white border border-[#EEF1F8] shadow-card">
         {[["asignacion", "1 · Asignación de metas"], ["cumplimiento", "2 · Cumplimiento de metas"]].map(([k, l]) => (
-          <button key={k} onClick={() => { setModo(k); setEditando(false); }} className={`px-4 py-2 text-sm rounded-lg transition-colors ${modo === k ? "bg-[#0F3D66] text-white font-medium" : "text-stone-500 hover:text-[#13234A]"}`}>{l}</button>
+          <button key={k} onClick={() => { setModo(k); setEditando(false); }} className={`h-10 px-4 text-sm rounded-lg transition-colors ${modo === k ? "bg-[#0F3D66] text-white font-medium" : "text-stone-500 hover:text-[#13234A]"}`}>{l}</button>
         ))}
       </div>
 
@@ -356,8 +356,8 @@ export default function MetasView({ db, esAdmin }) {
         </Panel>
       ) : (
         <>
-          <div className="overflow-x-auto mb-5">
-            <div className="mx-auto w-[760px] max-w-none rounded-2xl overflow-hidden shadow-card border border-[#EEF1F8]" dangerouslySetInnerHTML={{ __html: informeHtml(r, [], modo) }} />
+          <div className="mb-5">
+            <div className="w-full rounded-2xl overflow-hidden shadow-card border border-[#EEF1F8]" dangerouslySetInnerHTML={{ __html: informeHtml(r, [], modo, true) }} />
           </div>
           {!r.pesoOk && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> Los pesos suman {pct1(g.peso)}; deberían sumar 100%.</p>}
           {!asig && r.sinTipo > 0 && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> {r.sinTipo} promesa(s) del mes no tienen tipo de unidad en el listado de precios y no se cuentan por tipo.</p>}

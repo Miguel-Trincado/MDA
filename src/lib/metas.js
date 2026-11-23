@@ -139,16 +139,16 @@ function anillo(valor, color, size = 150) {
   const r = 58, c = 2 * Math.PI * r, v = Math.min(Math.max(valor, 0), 100);
   return `<svg width="${size}" height="${size}" viewBox="0 0 140 140"><circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="12"/><circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * v) / 100} ${c}" transform="rotate(-90 70 70)"/></svg>`;
 }
-const tile = (v, l, c = "#0B1F4A") => `<div style="background:#fff;border:1px solid #E6ECF7;border-radius:14px;padding:14px 16px"><div style="font-size:22px;font-weight:700;color:${c};line-height:1;white-space:nowrap">${v}</div><div style="font-size:10.5px;letter-spacing:.06em;color:#6B7A99;margin-top:6px;font-weight:600;white-space:nowrap">${l}</div></div>`;
+const tile = (v, l, c = "#0B1F4A") => `<div style="height:96px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;background:#fff;border:1px solid #E6ECF7;border-radius:14px;padding:14px 16px"><div style="font-size:22px;font-weight:700;color:${c};line-height:1;white-space:nowrap">${v}</div><div style="font-size:10.5px;letter-spacing:.06em;color:#6B7A99;margin-top:6px;font-weight:600;white-space:nowrap">${l}</div></div>`;
 const seccion = (t) => `<div style="display:flex;align-items:center;gap:12px;margin:26px 0 12px"><div style="width:4px;height:18px;border-radius:2px;background:linear-gradient(#1E5AA8,#38BDF8)"></div><div style="font-size:13px;letter-spacing:.12em;font-weight:700;color:#0B1F4A">${t}</div></div>`;
 
-export function informeHtml(r, serie, modo = "cumplimiento") {
+export function informeHtml(r, serie, modo = "cumplimiento", fluido = false) {
   const asig = modo === "asignacion";
   const g = r.general;
   const c = col(g.cumpl);
   const hero = asig
-    ? `<div style="flex:0 0 190px;text-align:center"><div style="font-size:11px;letter-spacing:.14em;color:#7DD3FC;font-weight:700">META COMERCIAL</div><div style="font-size:72px;font-weight:800;color:#fff;line-height:1.05;margin-top:4px">${g.unidades}</div><div style="font-size:12px;color:rgba(255,255,255,.75)">unidades en el período</div></div>`
-    : `<div style="flex:0 0 150px;position:relative;height:150px;width:150px;margin:0 10px"><div style="position:absolute;inset:0">${anillo(g.cumpl, c)}</div><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:34px;font-weight:800;color:#fff;line-height:1">${pct1(g.cumpl)}</div><div style="font-size:9px;letter-spacing:.06em;color:rgba(255,255,255,.7);margin-top:5px">CUMPLIDO</div></div></div>`;
+    ? `<div style="flex:0 0 190px;height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"><div style="font-size:11px;letter-spacing:.14em;color:#7DD3FC;font-weight:700">META COMERCIAL</div><div style="font-size:72px;font-weight:800;color:#fff;line-height:1.05;margin-top:4px">${g.unidades}</div><div style="font-size:12px;color:rgba(255,255,255,.75)">unidades en el período</div></div>`
+    : `<div style="flex:0 0 190px;height:150px;display:flex;align-items:center;justify-content:center"><div style="position:relative;height:150px;width:150px"><div style="position:absolute;inset:0">${anillo(g.cumpl, c)}</div><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:34px;font-weight:800;color:#fff;line-height:1">${pct1(g.cumpl)}</div><div style="font-size:9px;letter-spacing:.06em;color:rgba(255,255,255,.7);margin-top:5px">CUMPLIDO</div></div></div></div>`;
   const stats = asig
     ? [[r.bloques.length, "PROYECTOS"], [r.principales, "UNID. PRINCIPALES"], [r.secundarias, "UNID. SECUNDARIAS"]]
     : [[g.vendidas, "VENDIDAS"], [g.unidades, "META (UNID.)"], [pesos(r.bonoEscala + r.bono100), "BONO GANADO"]];
@@ -180,7 +180,7 @@ export function informeHtml(r, serie, modo = "cumplimiento") {
   }).join("");
   const evol = (serie || []).filter((x) => x.hayMeta);
   const grafico = !asig && evol.length > 1 ? `${seccion("EVOLUCIÓN MES A MES")}<div style="background:#fff;border:1px solid #E6ECF7;border-radius:16px;padding:18px"><div style="display:flex;align-items:flex-end;gap:10px;height:120px;border-bottom:1px solid #E6ECF7">${evol.map((x) => `<div style="flex:1;text-align:center"><div style="font-size:11px;font-weight:700;color:${col(x.general.cumpl)};margin-bottom:4px">${pct1(x.general.cumpl)}</div><div style="margin:0 auto;width:70%;height:${Math.max(4, Math.min(x.general.cumpl, 120) * 0.8)}px;border-radius:8px 8px 0 0;background:${x.mes === r.mes ? "linear-gradient(#1E5AA8,#38BDF8)" : col(x.general.cumpl)};opacity:${x.mes === r.mes ? 1 : 0.55}"></div></div>`).join("")}</div><div style="display:flex;gap:10px;margin-top:6px">${evol.map((x) => `<div style="flex:1;text-align:center;font-size:11px;color:#6B7A99">${x.etiqueta}</div>`).join("")}</div></div>` : "";
-  return `<div style="${F}width:760px;background:#F6F8FD;color:#13234A">
+  return `<div style="${F}width:${fluido ? "100%" : "760px"};background:#F6F8FD;color:#13234A">
   <div style="background:linear-gradient(120deg,#0A1633 0%,#0B2A66 60%,#1E5AA8 100%);padding:22px 30px;display:flex;align-items:center;justify-content:space-between">
     <div><div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:.04em;line-height:1">MDA</div><div style="font-size:9.5px;letter-spacing:.42em;color:rgba(255,255,255,.7);margin-top:4px">INMOBILIARIA</div></div>
     <div style="font-size:12px;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:7px 16px;font-weight:600">${esc(etiquetaMes(r.mes))}</div>
@@ -190,9 +190,9 @@ export function informeHtml(r, serie, modo = "cumplimiento") {
     <div style="font-size:32px;font-weight:800;color:#0B1F4A;line-height:1.1;margin-top:6px">${asig ? "Asignación de metas" : "Cumplimiento de metas"}</div>
     <div style="font-size:13px;color:#5B6B8C;margin-top:8px">Período ${esc(periodoTexto(r.mes))}${r.jefe ? ` &nbsp;·&nbsp; Jefe de Ventas: <b style="color:#13234A">${esc(r.jefe)}</b>` : ""}</div>
 
-    <div style="display:flex;align-items:center;gap:22px;margin-top:22px;padding:24px 26px;border-radius:20px;background:linear-gradient(135deg,#0A1633,#0B2A66 70%,#143F8C)">
+    <div style="display:flex;align-items:center;gap:22px;margin-top:22px;height:198px;box-sizing:border-box;padding:24px 26px;border-radius:20px;background:linear-gradient(135deg,#0A1633,#0B2A66 70%,#143F8C)">
       ${hero}
-      <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${stats.map(([v, l]) => tile(v, l)).join("")}</div>
+      <div style="flex:1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:center">${stats.map(([v, l]) => tile(v, l)).join("")}</div>
     </div>
 
     ${seccion("METAS POR PROYECTO")}
