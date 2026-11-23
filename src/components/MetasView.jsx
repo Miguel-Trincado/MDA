@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from "recharts";
 import { Target, Building2, ParkingSquare, Warehouse, Store, BarChart3, ClipboardList, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Check, Gift, AlertTriangle } from "lucide-react";
 import { PageHeader, PAGE_CLASS, Panel, Field } from "./Shared";
@@ -19,12 +19,35 @@ function BarraCumpl({ valor }) {
 }
 
 /* ------------------------------ Correo ------------------------------ */
+const aHex = (c) => {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(c || "");
+  return m ? `#${[m[1], m[2], m[3]].map((n) => Number(n).toString(16).padStart(2, "0")).join("")}` : c;
+};
+// Los correos (Outlook/Gmail) ignoran parte del CSS al pegar: repite colores como atributos bgcolor y <font color>.
+function htmlCompatCorreo(html) {
+  const doc = new DOMParser().parseFromString(`<div id="r">${html}</div>`, "text/html");
+  doc.querySelectorAll("[style]").forEach((el) => {
+    const bg = el.style.backgroundColor || (/background:\s*(#[0-9a-f]{3,6})/i.exec(el.getAttribute("style")) || [])[1];
+    if (bg && !el.getAttribute("bgcolor") && !/gradient/.test(el.getAttribute("style"))) el.setAttribute("bgcolor", aHex(bg));
+    if (el.tagName === "TR" && bg) el.querySelectorAll(":scope > td").forEach((td) => { if (!td.getAttribute("bgcolor")) td.setAttribute("bgcolor", aHex(bg)); });
+    const col = el.style.color;
+    if (col && el.childNodes.length && !["TABLE", "TR", "TBODY"].includes(el.tagName)) {
+      const f = doc.createElement("font");
+      f.setAttribute("color", aHex(col));
+      while (el.firstChild) f.appendChild(el.firstChild);
+      el.appendChild(f);
+    }
+  });
+  return doc.getElementById("r").innerHTML;
+}
+
 function ModalCorreo({ r, serie, onCerrar }) {
   const guardado = (() => { try { return localStorage.getItem("metas_destinatarios") || ""; } catch { return ""; } })();
   const [para, setPara] = useState(guardado);
   const [asunto, setAsunto] = useState(`Asignación y cumplimiento de metas ${etiquetaMes(r.mes)} - MDA Inmobiliaria`);
   const [intro, setIntro] = useState("Hola, te comparto el cumplimiento de metas del período.");
   const [aviso, setAviso] = useState("");
+  const vistaRef = useRef(null);
   const html = useMemo(() => informeHtml(r, serie), [r, serie]);
   const texto = useMemo(() => informeTexto(r, serie), [r, serie]);
 
@@ -35,8 +58,15 @@ function ModalCorreo({ r, serie, onCerrar }) {
   }, [onCerrar]);
   const recordar = () => { try { localStorage.setItem("metas_destinatarios", para); } catch { /* sin almacenamiento */ } };
 
+  async function copiarImagen() {
+    const { default: html2canvas } = await import("html2canvas");
+    const canvas = await html2canvas(vistaRef.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    if (!blob || !window.ClipboardItem || !navigator.clipboard?.write) throw new Error("sin portapapeles de imágenes");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+  }
   async function copiarHtml() {
-    const completo = `<p style="font-family:Arial,sans-serif">${intro.replace(/</g, "&lt;")}</p>${html}`;
+    const completo = `<p style="font-family:Arial,sans-serif">${intro.replace(/</g, "&lt;")}</p>${htmlCompatCorreo(html)}`;
     if (window.ClipboardItem && navigator.clipboard?.write) {
       await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([completo], { type: "text/html" }), "text/plain": new Blob([`${intro}\n\n${texto}`], { type: "text/plain" }) })]);
       return true;
@@ -45,21 +75,22 @@ function ModalCorreo({ r, serie, onCerrar }) {
   }
   async function abrirCorreo() {
     recordar();
-    const dest = para.trim();
-    let copiado = false;
-    try { copiado = await copiarHtml(); } catch { copiado = false; }
-    // Con el informe ya copiado con formato, el correo se abre vacío para pegarlo (Ctrl+V) sin perder diseño.
-    const cuerpo = copiado ? "" : `${intro}\n\n${texto.split("\n").slice(0, 14).join("\n")}`;
-    setAviso(copiado ? "Informe copiado con formato. Se abrió tu correo: haz clic en el cuerpo del mensaje y pega con Ctrl+V." : "No se pudo copiar con formato; se abrió el correo con el resumen en texto.");
-    window.location.href = `mailto:${dest}?subject=${encodeURIComponent(asunto)}${cuerpo ? `&body=${encodeURIComponent(cuerpo)}` : ""}`;
+    setAviso("Preparando informe…");
+    let ok = false;
+    try { await copiarImagen(); ok = true; } catch { try { ok = await copiarHtml(); } catch { ok = false; } }
+    const cuerpo = ok ? intro : `${intro}\n\n${texto.split("\n").slice(0, 14).join("\n")}`;
+    setAviso(ok ? "Informe copiado como imagen con el diseño completo. En tu correo, haz clic en el mensaje y pega con Ctrl+V." : "No se pudo copiar; se abrió el correo con el resumen en texto.");
+    window.location.href = `mailto:${para.trim()}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   }
   async function copiar() {
     recordar();
-    try {
-      setAviso((await copiarHtml()) ? "Copiado. Pégalo en el cuerpo del correo (Ctrl+V): se mantiene el formato con las tablas." : "Tu navegador no permite copiar con formato; usa Imprimir / PDF.");
-    } catch {
-      setAviso("No se pudo copiar automáticamente. Selecciona la vista previa y cópiala con Ctrl+C.");
-    }
+    try { await copiarImagen(); setAviso("Copiado como imagen. Pégalo en el correo con Ctrl+V: queda idéntico al diseño."); }
+    catch { setAviso("No se pudo copiar la imagen en este navegador. Usa \"Copiar tablas\" o Imprimir / PDF."); }
+  }
+  async function copiarTablas() {
+    recordar();
+    try { setAviso((await copiarHtml()) ? "Tablas copiadas (editables). Algunos correos simplifican colores al pegar; para diseño exacto usa la imagen." : "Tu navegador no permite copiar con formato."); }
+    catch { setAviso("No se pudo copiar automáticamente."); }
   }
   function imprimir() {
     const w = window.open("", "_blank");
@@ -92,14 +123,15 @@ function ModalCorreo({ r, serie, onCerrar }) {
               <textarea className="ipt" rows={3} value={intro} onChange={(e) => setIntro(e.target.value)} />
             </Field>
             <button onClick={abrirCorreo} className="inline-flex items-center justify-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] text-white px-4 py-2.5 text-sm font-medium rounded-xl"><Mail size={16} /> Abrir en mi correo</button>
-            <button onClick={copiar} className="inline-flex items-center justify-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"><Copy size={16} /> Copiar con formato</button>
+            <button onClick={copiar} className="inline-flex items-center justify-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"><Copy size={16} /> Copiar como imagen</button>
+            <button onClick={copiarTablas} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Copy size={16} /> Copiar tablas (editable)</button>
             <button onClick={imprimir} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Printer size={16} /> Imprimir / guardar PDF</button>
             {aviso && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">{aviso}</p>}
-            <p className="text-[11px] text-stone-400">"Abrir en mi correo" copia el informe con formato y abre tu correo con destinatario y asunto: solo pega (Ctrl+V) en el mensaje.</p>
+            <p className="text-[11px] text-stone-400">"Abrir en mi correo" copia el informe como imagen con el diseño exacto y abre tu correo con destinatario y asunto: solo pega (Ctrl+V).</p>
           </div>
           <div className="p-6 bg-stone-50 overflow-x-auto">
             <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-2">Vista previa</div>
-            <div className="bg-white rounded-xl p-3 border border-stone-200" dangerouslySetInnerHTML={{ __html: html }} />
+            <div ref={vistaRef} className="bg-white rounded-xl p-3 border border-stone-200 w-[720px] max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
           </div>
         </div>
       </div>
