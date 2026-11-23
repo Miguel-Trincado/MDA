@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from "recharts";
-import { Target, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Check, Gift, Trophy, AlertTriangle } from "lucide-react";
+import { Target, Building2, ParkingSquare, Warehouse, Store, BarChart3, ClipboardList, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Check, Gift, AlertTriangle } from "lucide-react";
 import { PageHeader, PAGE_CLASS, Panel, Field } from "./Shared";
 import { fetchMetasCumplimiento, guardarMetasMesRemote } from "../lib/db";
 import {
@@ -9,16 +9,6 @@ import {
 } from "../lib/metas";
 
 const colorCumpl = (p) => (p >= 100 ? "#0f9d6b" : p >= 60 ? "#d98a00" : "#d6336c");
-
-function Chip({ icon: Icon, label, valor, sub, color = "#13234A" }) {
-  return (
-    <div className="bg-white border border-[#EEF1F8] rounded-2xl shadow-card p-4">
-      <div className="flex items-center gap-2 text-xs text-stone-500">{Icon && <Icon size={14} />} {label}</div>
-      <div className="font-display text-3xl mt-1" style={{ color }}>{valor}</div>
-      {sub && <div className="text-xs text-stone-500 mt-0.5">{sub}</div>}
-    </div>
-  );
-}
 
 function BarraCumpl({ valor }) {
   return (
@@ -32,7 +22,7 @@ function BarraCumpl({ valor }) {
 function ModalCorreo({ r, serie, onCerrar }) {
   const guardado = (() => { try { return localStorage.getItem("metas_destinatarios") || ""; } catch { return ""; } })();
   const [para, setPara] = useState(guardado);
-  const [asunto, setAsunto] = useState(`Cumplimiento de metas ${etiquetaMes(r.mes)} - MDA Inmobiliaria`);
+  const [asunto, setAsunto] = useState(`Asignación y cumplimiento de metas ${etiquetaMes(r.mes)} - MDA Inmobiliaria`);
   const [intro, setIntro] = useState("Hola, te comparto el cumplimiento de metas del período.");
   const [aviso, setAviso] = useState("");
   const html = useMemo(() => informeHtml(r, serie), [r, serie]);
@@ -45,23 +35,28 @@ function ModalCorreo({ r, serie, onCerrar }) {
   }, [onCerrar]);
   const recordar = () => { try { localStorage.setItem("metas_destinatarios", para); } catch { /* sin almacenamiento */ } };
 
-  function abrirCorreo() {
+  async function copiarHtml() {
+    const completo = `<p style="font-family:Arial,sans-serif">${intro.replace(/</g, "&lt;")}</p>${html}`;
+    if (window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([completo], { type: "text/html" }), "text/plain": new Blob([`${intro}\n\n${texto}`], { type: "text/plain" }) })]);
+      return true;
+    }
+    return false;
+  }
+  async function abrirCorreo() {
     recordar();
-    const cuerpo = `${intro}\n\n${texto}`;
-    const url = `mailto:${encodeURIComponent(para.trim()).replace(/%2C/gi, ",").replace(/%40/g, "@")}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
-    if (url.length > 1900) setAviso("El informe es largo para el correo directo: se abrió con el resumen. Para enviarlo con tablas, usa \"Copiar con formato\" y pégalo en el correo.");
-    window.location.href = url.length > 1900 ? `mailto:${para.trim()}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(`${intro}\n\n${texto.split("\n").slice(0, 12).join("\n")}`)}` : url;
+    const dest = para.trim();
+    let copiado = false;
+    try { copiado = await copiarHtml(); } catch { copiado = false; }
+    // Con el informe ya copiado con formato, el correo se abre vacío para pegarlo (Ctrl+V) sin perder diseño.
+    const cuerpo = copiado ? "" : `${intro}\n\n${texto.split("\n").slice(0, 14).join("\n")}`;
+    setAviso(copiado ? "Informe copiado con formato. Se abrió tu correo: haz clic en el cuerpo del mensaje y pega con Ctrl+V." : "No se pudo copiar con formato; se abrió el correo con el resumen en texto.");
+    window.location.href = `mailto:${dest}?subject=${encodeURIComponent(asunto)}${cuerpo ? `&body=${encodeURIComponent(cuerpo)}` : ""}`;
   }
   async function copiar() {
     recordar();
     try {
-      const completo = `<p style="font-family:Arial,sans-serif">${intro.replace(/</g, "&lt;")}</p>${html}`;
-      if (window.ClipboardItem && navigator.clipboard?.write) {
-        await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([completo], { type: "text/html" }), "text/plain": new Blob([`${intro}\n\n${texto}`], { type: "text/plain" }) })]);
-      } else {
-        await navigator.clipboard.writeText(`${intro}\n\n${texto}`);
-      }
-      setAviso("Copiado. Pégalo en el cuerpo del correo (Ctrl+V): se mantiene el formato con las tablas.");
+      setAviso((await copiarHtml()) ? "Copiado. Pégalo en el cuerpo del correo (Ctrl+V): se mantiene el formato con las tablas." : "Tu navegador no permite copiar con formato; usa Imprimir / PDF.");
     } catch {
       setAviso("No se pudo copiar automáticamente. Selecciona la vista previa y cópiala con Ctrl+C.");
     }
@@ -100,7 +95,7 @@ function ModalCorreo({ r, serie, onCerrar }) {
             <button onClick={copiar} className="inline-flex items-center justify-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"><Copy size={16} /> Copiar con formato</button>
             <button onClick={imprimir} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Printer size={16} /> Imprimir / guardar PDF</button>
             {aviso && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">{aviso}</p>}
-            <p className="text-[11px] text-stone-400">"Abrir en mi correo" arma el mensaje en texto. Para enviar las tablas con formato, copia el informe y pégalo en el correo, o adjunta el PDF.</p>
+            <p className="text-[11px] text-stone-400">"Abrir en mi correo" copia el informe con formato y abre tu correo con destinatario y asunto: solo pega (Ctrl+V) en el mensaje.</p>
           </div>
           <div className="p-6 bg-stone-50 overflow-x-auto">
             <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-2">Vista previa</div>
@@ -300,18 +295,31 @@ export default function MetasView({ db, esAdmin }) {
         />
       )}
 
-      {/* Encabezado tipo planilla */}
-      <div className="rounded-2xl overflow-hidden mb-5 text-white shadow-card" style={{ background: "linear-gradient(110deg,#141414 0%,#0B2547 55%,#0A3A78 100%)" }}>
-        <div className="flex items-center gap-4 flex-wrap px-5 py-4">
-          <img src="/logo-mda.jpg" alt="MDA Inmobiliaria" className="w-14 h-14 rounded-xl" />
-          <div className="flex-1 min-w-[200px]">
-            <div className="font-display text-2xl leading-tight">Asignación de metas</div>
-            <div className="text-sm text-white/80 mt-0.5">Período: {periodoTexto(mes)}</div>
+      {/* Reporte (diseño tipo informe) */}
+      <div className="rounded-2xl overflow-hidden mb-5 bg-white border border-[#EEF1F8] shadow-card">
+        <div className="relative px-6 py-5 text-white overflow-hidden" style={{ background: "linear-gradient(115deg,#16171B 0%,#16171B 38%,#0B2A66 38.2%,#0A3A8C 100%)" }}>
+          <div className="flex items-center gap-3">
+            <img src="/logo-mda.jpg" alt="MDA Inmobiliaria" className="w-14 h-14 rounded-xl" />
+            <div><div className="font-display text-xl tracking-wide">MDA</div><div className="text-[10px] tracking-[0.3em] text-white/70">INMOBILIARIA</div></div>
           </div>
-          <div className="flex items-center gap-5 text-center">
-            <div><div className="text-[11px] text-white/70">Unidades principales</div><div className="font-display text-2xl text-sky-300">{String(r.principales).padStart(2, "0")}</div></div>
-            <div><div className="text-[11px] text-white/70">Unidades secundarias</div><div className="font-display text-2xl text-sky-300">{String(r.secundarias).padStart(2, "0")}</div></div>
-            <div><div className="text-[11px] text-white/70">Total unidades</div><div className="font-display text-2xl text-sky-300">{String(g.unidades).padStart(2, "0")}</div></div>
+        </div>
+
+        <div className="p-5 sm:p-7">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-stretch">
+            <div>
+              <h2 className="font-display text-3xl sm:text-4xl text-[#0B1F4A] leading-tight uppercase">Asignación y cumplimiento de metas</h2>
+              <div className="text-sm font-semibold text-[#1E5AA8] mt-1 uppercase">Período: {periodoTexto(mes)}</div>
+              <div className="h-1 w-16 rounded bg-gradient-to-r from-[#0F3D66] to-sky-400 mt-3" />
+              {r.jefe && <p className="text-sm text-stone-600 mt-4">Jefe de Ventas: <b className="text-[#13234A]">{r.jefe}</b></p>}
+            </div>
+            <div className="rounded-2xl p-5 text-white flex items-center gap-4" style={{ background: "linear-gradient(135deg,#0B2A66,#06173F)" }}>
+              <span className="w-16 h-16 shrink-0 rounded-full border border-white/30 inline-flex items-center justify-center"><Target size={30} /></span>
+              <div>
+                <div className="text-xs font-semibold tracking-wide text-sky-300">CUMPLIMIENTO DEL JEFE DE VENTAS</div>
+                <div className="font-display text-5xl leading-none my-1" style={{ color: g.cumpl >= 100 ? "#7CE3B5" : g.cumpl >= 60 ? "#FFD27A" : "#FF9DB8" }}>{pct1(g.cumpl)}</div>
+                <div className="text-xs text-white/80">{g.vendidas} vendidas de {g.unidades} unidades de meta</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -327,58 +335,49 @@ export default function MetasView({ db, esAdmin }) {
         </Panel>
       ) : (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] gap-5 mb-5">
-            <Panel>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[460px]">
-                  <thead>
-                    <tr className="bg-[#0B2E3F] text-white text-xs">
-                      <th className="text-left font-semibold px-3 py-2 rounded-tl-lg">PROYECTOS</th><th className="font-semibold px-2">UNIDADES</th><th className="font-semibold px-2">PESO</th><th className="font-semibold px-2">VENDIDAS</th><th className="font-semibold px-2 rounded-tr-lg">CUMPLIMIENTO</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {r.bloques.map((b) => (
-                      <FragmentoTabla key={b.proyecto} b={b} />
-                    ))}
-                    <tr className="bg-[#0B2E3F] text-white font-semibold">
-                      <td className="px-3 py-2 rounded-bl-lg">TOTAL GENERAL</td>
-                      <td className="text-center">{g.unidades}</td><td className="text-center">{pct1(g.peso)}</td><td className="text-center">{g.vendidas}</td><td className="text-center rounded-br-lg">{pct1(g.cumpl)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              {!r.pesoOk && <p className="text-xs text-amber-700 mt-2"><AlertTriangle size={12} className="inline" /> Los pesos suman {pct1(g.peso)}; deberían sumar 100%.</p>}
-              {r.sinTipo > 0 && <p className="text-xs text-amber-700 mt-1"><AlertTriangle size={12} className="inline" /> {r.sinTipo} promesa(s) del mes no tienen tipo de unidad en el listado de precios y no se cuentan por tipo.</p>}
-            </Panel>
+          <Titulo>Resumen ejecutivo</Titulo>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+            <Resumen icon={Building2} valor={r.bloques.length} l1="PROYECTOS" l2="CONSIDERADOS" />
+            <Resumen icon={Building2} valor={r.principales} l1="UNIDADES" l2="PRINCIPALES" />
+            <Resumen icon={ParkingSquare} valor={r.secundarias} l1="UNIDADES" l2="SECUNDARIAS" claro />
+            <Resumen icon={BarChart3} valor={pct1(g.cumpl)} l1="CUMPLIMIENTO" l2="GLOBAL" color={colorCumpl(g.cumpl)} />
+          </div>
 
-            <div className="flex flex-col gap-4">
-              <Chip icon={Trophy} label={`Cumplimiento del Jefe de Ventas${r.jefe ? ` · ${r.jefe}` : ""}`} valor={pct1(g.cumpl)} color={colorCumpl(g.cumpl)} sub={`${g.vendidas} vendidas de ${g.unidades} unidades de meta`} />
-              <Panel title="Meta del mes">
-                {r.escala.length === 0 ? <p className="text-xs text-stone-500">Sin escala de bonos definida.</p> : (
-                  <div className="flex flex-col gap-1.5">
-                    {r.escala.map((e) => {
-                      const ok = r.vendidasPrincipales >= e.unidades;
-                      return (
-                        <div key={e.unidades} className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-sm ${ok ? "bg-emerald-50 text-emerald-800" : "bg-stone-50 text-stone-600"}`}>
-                          <span>{ok && <Check size={13} className="inline mr-1" />}{e.unidades} unidades</span><span className="font-semibold">{pesos(e.bono)}</span>
-                        </div>
-                      );
-                    })}
-                    <div className="text-xs text-stone-500 mt-1">Unidades principales vendidas: <b>{r.vendidasPrincipales}</b> · bono por escala: <b>{pesos(r.bonoEscala)}</b></div>
-                  </div>
-                )}
-              </Panel>
-              <Panel>
-                <div className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-xl bg-[#EAF1FF] text-[#2563EB] inline-flex items-center justify-center"><Gift size={19} /></span>
-                  <div className="flex-1">
-                    <div className="text-xs text-stone-500">Bono por el 100% del cumplimiento</div>
-                    <div className="font-display text-2xl text-[#1E5AA8]">{pesos(r.bono100Valor)}</div>
-                  </div>
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${r.logro100 ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{r.logro100 ? "Logrado" : "No alcanzado"}</span>
-                </div>
-              </Panel>
+          <Titulo>Metas por proyecto</Titulo>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+            {r.bloques.map((b, i) => <TarjetaProyecto key={b.proyecto} b={b} alt={i % 2 === 1} />)}
+          </div>
+          {!r.pesoOk && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> Los pesos suman {pct1(g.peso)}; deberían sumar 100%.</p>}
+          {r.sinTipo > 0 && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> {r.sinTipo} promesa(s) del mes no tienen tipo de unidad en el listado de precios y no se cuentan por tipo.</p>}
+
+          <div className="rounded-2xl overflow-hidden border border-[#EEF1F8] shadow-card bg-white grid grid-cols-1 md:grid-cols-[220px_1fr] mb-6">
+            <div className="bg-[#0B2547] text-white p-5 flex md:flex-col items-center md:items-start justify-center gap-3">
+              <span className="w-14 h-14 rounded-full border border-white/30 inline-flex items-center justify-center"><Gift size={26} /></span>
+              <div className="font-display text-xl leading-tight">BONO<br />DEL MES</div>
+              <div className="text-xs text-white/70 md:mt-1">Ganado: <b className="text-white">{pesos(r.bonoEscala + r.bono100)}</b></div>
             </div>
+            <div>
+              <div className="grid grid-cols-[1fr_130px] bg-[#0B2547] text-white text-xs font-semibold"><div className="px-4 py-2.5">CUMPLIMIENTO</div><div className="px-4 py-2.5 border-l border-white/10">BONO</div></div>
+              {r.escala.map((e) => {
+                const ok = r.vendidasPrincipales >= e.unidades;
+                return (
+                  <div key={e.unidades} className={`grid grid-cols-[1fr_130px] text-sm border-b border-stone-100 ${ok ? "bg-emerald-50/70" : ""}`}>
+                    <div className="px-4 py-2.5 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-sky-300"}`} />{e.unidades} unidades vendidas{ok && <Check size={14} className="text-emerald-600" />}</div>
+                    <div className="px-4 py-2.5 font-semibold text-[#1E5AA8]">{pesos(e.bono)}</div>
+                  </div>
+                );
+              })}
+              <div className={`grid grid-cols-[1fr_130px] text-sm ${r.logro100 ? "bg-emerald-50/70" : ""}`}>
+                <div className="px-4 py-2.5 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${r.logro100 ? "bg-emerald-500" : "bg-[#0B2547]"}`} />100% del cumplimiento de la meta{r.logro100 && <Check size={14} className="text-emerald-600" />}</div>
+                <div className="px-4 py-2.5 font-semibold text-emerald-700">{pesos(r.bono100Valor)}</div>
+              </div>
+              <div className="px-4 py-2 text-xs text-stone-500 border-t border-stone-100">Unidades principales vendidas: <b>{r.vendidasPrincipales}</b> · bono por escala: <b>{pesos(r.bonoEscala)}</b></div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[#DCE6F7] bg-[#F4F8FF] p-4 flex gap-3 items-start mb-6">
+            <span className="w-11 h-11 shrink-0 rounded-full border border-[#0B2547]/30 text-[#0B2547] inline-flex items-center justify-center"><ClipboardList size={20} /></span>
+            <div className="text-xs text-stone-600"><div className="text-sm font-semibold text-[#0B2547] mb-0.5">IMPORTANTE</div>El cumplimiento de metas será evaluado al cierre del período indicado. Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa). Para dudas o consultas, contactar a Gerencia Comercial.</div>
           </div>
         </>
       )}
@@ -426,23 +425,54 @@ export default function MetasView({ db, esAdmin }) {
   );
 }
 
-function FragmentoTabla({ b }) {
-  const filas = b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0);
+const ICONO_TIPO = { Departamentos: Building2, Estacionamientos: ParkingSquare, Bodega: Warehouse, "Local Comercial": Store };
+
+function Titulo({ children }) {
   return (
-    <>
-      <tr><td colSpan={5} className="pt-3 pb-1 px-3 text-[13px] font-semibold text-[#1E5AA8]">{b.proyecto}</td></tr>
-      {filas.map((f) => (
-        <tr key={f.tipo} className="border-b border-stone-50">
-          <td className="py-1.5 pl-6 text-stone-700">{f.tipo}</td>
-          <td className="text-center">{f.unidades}</td>
-          <td className="text-center">{pct1(f.peso)}</td>
-          <td className="text-center">{f.vendidas}</td>
-          <td className="px-2"><div className="flex items-center gap-2"><div className="flex-1"><BarraCumpl valor={f.unidades > 0 ? (f.vendidas / f.unidades) * 100 : 0} /></div><span className="w-12 text-right text-xs font-semibold" style={{ color: f.peso > 0 ? colorCumpl(f.unidades > 0 ? (f.vendidas / f.unidades) * 100 : 0) : "#a8a29e" }}>{pct1(f.cumpl)}</span></div></td>
-        </tr>
-      ))}
-      <tr className="bg-stone-50 font-semibold text-[#1E5AA8]">
-        <td className="py-1.5 pl-3">Total {b.proyecto}</td><td className="text-center text-[#13234A]">{b.total.unidades}</td><td className="text-center text-[#13234A]">{pct1(b.total.peso)}</td><td className="text-center text-[#13234A]">{b.total.vendidas}</td><td className="text-center text-[#13234A]">{pct1(b.total.cumpl)}</td>
-      </tr>
-    </>
+    <div className="flex items-center gap-4 mb-3">
+      <div className="h-px flex-1 bg-[#D6DEEE]" /><div className="font-display text-base tracking-wide text-[#0B1F4A] uppercase">{children}</div><div className="h-px flex-1 bg-[#D6DEEE]" />
+    </div>
+  );
+}
+
+function Resumen({ icon: Icon, valor, l1, l2, claro, color = "#0B2A66" }) {
+  return (
+    <div className="bg-white border border-[#E3E9F5] rounded-2xl p-4 flex items-center gap-3 shadow-card">
+      <span className={`w-12 h-12 shrink-0 rounded-full text-white inline-flex items-center justify-center ${claro ? "bg-[#6C8FCB]" : "bg-[#0B2A66]"}`}><Icon size={22} /></span>
+      <div className="font-display text-3xl leading-none" style={{ color }}>{valor}</div>
+      <div className="text-[10px] font-semibold text-stone-600 leading-tight">{l1}<br />{l2}</div>
+    </div>
+  );
+}
+
+function TarjetaProyecto({ b, alt }) {
+  const filas = b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0);
+  const ok = b.total.cumpl >= 99.995;
+  return (
+    <div className="rounded-2xl overflow-hidden border border-[#E3E9F5] bg-white shadow-card">
+      <div className={`flex items-center gap-3 px-4 py-3 text-white ${alt ? "bg-[#0A3A8C]" : "bg-[#0B2A66]"}`}>
+        <span className="w-9 h-9 rounded-full bg-white text-[#0B2A66] inline-flex items-center justify-center"><Building2 size={18} /></span>
+        <div className="font-display text-sm uppercase tracking-wide">{b.proyecto}</div>
+      </div>
+      <div className="grid grid-cols-[1fr_62px_62px_62px_92px] bg-[#0A3A8C] text-white text-[10px] font-semibold px-4 py-2 gap-1">
+        <div>PRODUCTO</div><div className="text-center">UNIDADES</div><div className="text-center">PONDER.</div><div className="text-center">VENDIDAS</div><div className="text-center">CUMPLIMIENTO</div>
+      </div>
+      {filas.map((f) => {
+        const Ic = ICONO_TIPO[f.tipo] || Building2;
+        const pc = f.unidades > 0 ? (f.vendidas / f.unidades) * 100 : 0;
+        return (
+          <div key={f.tipo} className="grid grid-cols-[1fr_62px_62px_62px_92px] items-center px-4 py-2 gap-1 text-sm border-b border-stone-100">
+            <div className="flex items-center gap-2 text-stone-700"><Ic size={16} className="text-[#0B2A66] shrink-0" />{f.tipo}</div>
+            <div className="text-center">{f.unidades}</div>
+            <div className={`text-center ${f.peso > 0 ? "font-semibold text-emerald-700" : "text-stone-400"}`}>{pct1(f.peso)}</div>
+            <div className="text-center">{f.vendidas}</div>
+            <div className="text-center"><div className="text-xs font-semibold" style={{ color: f.peso > 0 ? colorCumpl(pc) : "#a8a29e" }}>{pct1(f.cumpl)}</div><BarraCumpl valor={f.peso > 0 ? pc : 0} /></div>
+          </div>
+        );
+      })}
+      <div className={`grid grid-cols-[1fr_62px_62px_62px_92px] items-center px-4 py-3 gap-1 text-sm font-bold ${ok ? "bg-emerald-50 text-emerald-700" : "bg-[#EAF1FF] text-[#0A3A8C]"}`}>
+        <div className="text-xs uppercase">Total {b.proyecto}</div><div className="text-center">{b.total.unidades}</div><div className="text-center">{pct1(b.total.peso)}</div><div className="text-center">{b.total.vendidas}</div><div className="text-center">{pct1(b.total.cumpl)}</div>
+      </div>
+    </div>
   );
 }

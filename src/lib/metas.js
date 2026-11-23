@@ -132,57 +132,75 @@ export function serieMeses({ meses, asignaciones, config, promesas }) {
 }
 
 /* ---------------------------- Informe para correo ---------------------------- */
-const TD = "padding:6px 10px;border-bottom:1px solid #e6eaf2;font-size:13px;";
-const TH = "padding:7px 10px;background:#0B2E3F;color:#fff;font-size:12px;text-align:center;";
+const TD = "padding:7px 10px;border-bottom:1px solid #e6eaf2;font-size:13px;";
+const TH = "padding:8px 10px;background:#0A3A8C;color:#fff;font-size:11px;text-align:center;font-weight:bold;";
 
 export function informeHtml(r, serie) {
-  const bloque = (b) => `
-    <tr><td colspan="5" style="${TD}color:#1E5AA8;font-weight:bold;background:#f6f8fc">${esc(b.proyecto)}</td></tr>
-    ${b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0).map((f) => `
-      <tr><td style="${TD}">${esc(f.tipo)}</td><td style="${TD}text-align:center">${f.unidades}</td><td style="${TD}text-align:center">${pct1(f.peso)}</td><td style="${TD}text-align:center">${f.vendidas}</td><td style="${TD}text-align:center">${pct1(f.cumpl)}</td></tr>`).join("")}
-    <tr><td style="${TD}font-weight:bold;color:#1E5AA8">Total ${esc(b.proyecto)}</td><td style="${TD}text-align:center;font-weight:bold">${b.total.unidades}</td><td style="${TD}text-align:center;font-weight:bold">${pct1(b.total.peso)}</td><td style="${TD}text-align:center;font-weight:bold">${b.total.vendidas}</td><td style="${TD}text-align:center;font-weight:bold">${pct1(b.total.cumpl)}</td></tr>`;
-  const color = r.general.cumpl >= 100 ? "#0f9d6b" : r.general.cumpl >= 60 ? "#d98a00" : "#d6336c";
+  const color = r.general.cumpl >= 100 ? "#7CE3B5" : r.general.cumpl >= 60 ? "#FFD27A" : "#FF9DB8";
+  const bloque = (b, i) => {
+    const ok = b.total.cumpl >= 99.995;
+    return `
+    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;border:1px solid #E3E9F5">
+      <tr><td colspan="5" style="padding:10px 12px;background:${i % 2 ? "#0A3A8C" : "#0B2A66"};color:#fff;font-weight:bold;font-size:13px;text-transform:uppercase">${esc(b.proyecto)}</td></tr>
+      <tr><td style="${TH}text-align:left">PRODUCTO</td><td style="${TH}">UNIDADES</td><td style="${TH}">PONDER.</td><td style="${TH}">VENDIDAS</td><td style="${TH}">CUMPLIMIENTO</td></tr>
+      ${b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0).map((f) => `
+      <tr><td style="${TD}">${esc(f.tipo)}</td><td style="${TD}text-align:center">${f.unidades}</td><td style="${TD}text-align:center;${f.peso > 0 ? "color:#0f7a52;font-weight:bold" : "color:#9aa3b5"}">${pct1(f.peso)}</td><td style="${TD}text-align:center">${f.vendidas}</td><td style="${TD}text-align:center;font-weight:bold">${pct1(f.cumpl)}</td></tr>`).join("")}
+      <tr style="background:${ok ? "#E3F6EC" : "#EAF1FF"};color:${ok ? "#0f7a52" : "#0A3A8C"};font-weight:bold"><td style="padding:9px 10px;font-size:12px;text-transform:uppercase">Total ${esc(b.proyecto)}</td><td style="padding:9px 10px;text-align:center">${b.total.unidades}</td><td style="padding:9px 10px;text-align:center">${pct1(b.total.peso)}</td><td style="padding:9px 10px;text-align:center">${b.total.vendidas}</td><td style="padding:9px 10px;text-align:center">${pct1(b.total.cumpl)}</td></tr>
+    </table>`;
+  };
+  const kpi = (v, l) => `<td style="width:25%;padding:6px"><div style="border:1px solid #E3E9F5;border-radius:10px;padding:10px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#0B2A66">${v}</div><div style="font-size:10px;color:#5b6b8c;font-weight:bold">${l}</div></div></td>`;
+  const filaBono = (txt, val, ok) => `<tr style="background:${ok ? "#E3F6EC" : "#fff"}"><td style="${TD}">${ok ? "&#10003; " : ""}${txt}</td><td style="${TD}font-weight:bold;color:#1E5AA8;width:110px">${val}</td></tr>`;
   const evol = (serie || []).filter((x) => x.hayMeta || x.totalPromesas > 0);
   return `
-<div style="font-family:Arial,Helvetica,sans-serif;color:#13234A;max-width:680px">
-  <div style="background:#0B2547;color:#fff;padding:16px 18px;border-radius:10px 10px 0 0">
-    <div style="font-size:11px;letter-spacing:2px;opacity:.8">MDA INMOBILIARIA</div>
-    <div style="font-size:20px;font-weight:bold;margin-top:2px">Cumplimiento de metas — ${esc(etiquetaMes(r.mes))}</div>
-    <div style="font-size:12px;opacity:.85;margin-top:2px">Período: ${esc(periodoTexto(r.mes))}</div>
+<div style="font-family:Arial,Helvetica,sans-serif;color:#13234A;max-width:700px;border:1px solid #e6eaf2">
+  <div style="background:#16171B;color:#fff;padding:18px 22px;border-bottom:4px solid #0A3A8C">
+    <div style="font-size:24px;font-weight:bold;letter-spacing:1px">MDA</div>
+    <div style="font-size:10px;letter-spacing:4px;opacity:.75">INMOBILIARIA</div>
   </div>
-  <div style="border:1px solid #e6eaf2;border-top:0;padding:14px 18px;border-radius:0 0 10px 10px">
-    <table style="width:100%;border-collapse:collapse;margin-bottom:12px"><tr>
-      <td style="padding:10px 14px;background:#f6f8fc;border-radius:8px;width:50%">
-        <div style="font-size:12px;color:#5b6b8c">Cumplimiento${r.jefe ? ` del Jefe de Ventas (${esc(r.jefe)})` : " del Jefe de Ventas"}</div>
-        <div style="font-size:30px;font-weight:bold;color:${color}">${pct1(r.general.cumpl)}</div>
-        <div style="font-size:12px;color:#5b6b8c">${r.general.vendidas} vendidas de ${r.general.unidades} unidades de meta</div>
+  <div style="padding:20px 22px">
+    <table style="width:100%;border-collapse:collapse"><tr>
+      <td style="vertical-align:top">
+        <div style="font-size:24px;font-weight:bold;color:#0B1F4A;text-transform:uppercase;line-height:1.15">Asignación y cumplimiento de metas</div>
+        <div style="font-size:13px;font-weight:bold;color:#1E5AA8;margin-top:6px;text-transform:uppercase">Período: ${esc(periodoTexto(r.mes))}</div>
+        ${r.jefe ? `<div style="font-size:13px;margin-top:8px">Jefe de Ventas: <b>${esc(r.jefe)}</b></div>` : ""}
       </td>
-      <td style="width:12px"></td>
-      <td style="padding:10px 14px;background:#f6f8fc;border-radius:8px">
-        <div style="font-size:12px;color:#5b6b8c">Bono del mes</div>
-        <div style="font-size:24px;font-weight:bold">${pesos(r.bonoEscala + r.bono100)}</div>
-        <div style="font-size:12px;color:#5b6b8c">Escala: ${r.nivel ? `${r.nivel.unidades} unidades → ${pesos(r.nivel.bono)}` : "sin alcanzar"} · Bono 100%: ${r.logro100 ? `logrado (${pesos(r.bono100)})` : `no alcanzado (${pesos(r.bono100Valor)})`}</div>
-      </td></tr></table>
-    <table style="width:100%;border-collapse:collapse">
-      <tr><th style="${TH}text-align:left">Proyectos</th><th style="${TH}">Unidades</th><th style="${TH}">Peso</th><th style="${TH}">Vendidas</th><th style="${TH}">Cumplimiento</th></tr>
-      ${r.bloques.map(bloque).join("")}
-      <tr><td style="${TH}text-align:left">TOTAL GENERAL</td><td style="${TH}">${r.general.unidades}</td><td style="${TH}">${pct1(r.general.peso)}</td><td style="${TH}">${r.general.vendidas}</td><td style="${TH}">${pct1(r.general.cumpl)}</td></tr>
-    </table>
-    ${r.escala.length ? `<div style="font-size:12px;margin-top:10px;color:#5b6b8c"><b>Escala de bonos:</b> ${r.escala.map((e) => `${e.unidades} unidades ${pesos(e.bono)}${r.nivel && r.nivel.unidades === e.unidades ? " ✔" : ""}`).join(" · ")}</div>` : ""}
+      <td style="width:230px;vertical-align:top"><div style="background:#0B2A66;color:#fff;border-radius:12px;padding:14px 16px">
+        <div style="font-size:11px;font-weight:bold;color:#7DD3FC">CUMPLIMIENTO DEL JEFE DE VENTAS</div>
+        <div style="font-size:38px;font-weight:bold;color:${color};line-height:1.1">${pct1(r.general.cumpl)}</div>
+        <div style="font-size:11px;opacity:.85">${r.general.vendidas} vendidas de ${r.general.unidades} unidades de meta</div></div></td>
+    </tr></table>
+
+    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:20px 0 6px;text-transform:uppercase;color:#0B1F4A">Resumen ejecutivo</div>
+    <table style="width:100%;border-collapse:collapse"><tr>${kpi(r.bloques.length, "PROYECTOS CONSIDERADOS")}${kpi(r.principales, "UNIDADES PRINCIPALES")}${kpi(r.secundarias, "UNIDADES SECUNDARIAS")}${kpi(pct1(r.general.cumpl), "CUMPLIMIENTO GLOBAL")}</tr></table>
+
+    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:20px 0 10px;text-transform:uppercase;color:#0B1F4A">Metas por proyecto</div>
+    ${r.bloques.map(bloque).join("")}
+
+    <table style="width:100%;border-collapse:collapse;border:1px solid #E3E9F5;margin-top:6px"><tr>
+      <td style="width:150px;background:#0B2547;color:#fff;padding:14px;font-weight:bold;font-size:16px;vertical-align:middle">BONO<br>DEL MES<div style="font-size:11px;font-weight:normal;margin-top:6px;opacity:.85">Ganado: ${pesos(r.bonoEscala + r.bono100)}</div></td>
+      <td style="padding:0;vertical-align:top"><table style="width:100%;border-collapse:collapse">
+        <tr><td style="${TH}text-align:left;background:#0B2547">CUMPLIMIENTO</td><td style="${TH}background:#0B2547">BONO</td></tr>
+        ${r.escala.map((e) => filaBono(`${e.unidades} unidades vendidas`, pesos(e.bono), r.vendidasPrincipales >= e.unidades)).join("")}
+        ${filaBono("100% del cumplimiento de la meta", pesos(r.bono100Valor), r.logro100)}
+      </table></td></tr></table>
+    <div style="font-size:11px;color:#5b6b8c;margin-top:4px">Unidades principales vendidas: ${r.vendidasPrincipales} · Bono por escala: ${pesos(r.bonoEscala)}</div>
+
     ${evol.length > 1 ? `
-    <div style="font-size:13px;font-weight:bold;margin:16px 0 6px">Evolución mes a mes</div>
+    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:22px 0 8px;text-transform:uppercase;color:#0B1F4A">Cumplimiento mes a mes</div>
     <table style="width:100%;border-collapse:collapse">
-      <tr><th style="${TH}text-align:left">Mes</th><th style="${TH}">Meta (unid.)</th><th style="${TH}">Vendidas</th><th style="${TH}">Cumplimiento</th><th style="${TH}">Bono</th></tr>
-      ${evol.map((x) => `<tr><td style="${TD}">${esc(etiquetaMes(x.mes))}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.unidades : "—"}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.vendidas : x.totalPromesas}</td><td style="${TD}text-align:center">${x.hayMeta ? pct1(x.general.cumpl) : "sin meta"}</td><td style="${TD}text-align:center">${x.hayMeta ? pesos(x.bonoEscala + x.bono100) : "—"}</td></tr>`).join("")}
+      <tr><td style="${TH}text-align:left">MES</td><td style="${TH}">META (UNID.)</td><td style="${TH}">VENDIDAS</td><td style="${TH}">CUMPLIMIENTO</td><td style="${TH}">BONO</td></tr>
+      ${evol.map((x) => `<tr><td style="${TD}">${esc(etiquetaMes(x.mes))}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.unidades : "—"}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.vendidas : x.totalPromesas}</td><td style="${TD}text-align:center;font-weight:bold">${x.hayMeta ? pct1(x.general.cumpl) : "sin meta"}</td><td style="${TD}text-align:center">${x.hayMeta ? pesos(x.bonoEscala + x.bono100) : "—"}</td></tr>`).join("")}
     </table>` : ""}
-    <div style="font-size:11px;color:#8a96b0;margin-top:12px">Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa). Cumplimiento = vendidas ÷ unidades × peso, sumado por fila.</div>
+
+    <div style="background:#F4F8FF;border:1px solid #DCE6F7;border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12px;color:#44506b"><b style="color:#0B2547">IMPORTANTE</b><br>El cumplimiento de metas será evaluado al cierre del período indicado. Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa). Para dudas o consultas, contactar a Gerencia Comercial.</div>
   </div>
+  <div style="border-top:3px solid #0A3A8C;text-align:center;padding:12px;font-size:12px;color:#1E5AA8"><b>MDA INMOBILIARIA</b><br><span style="color:#6b7690">www.mdai.cl</span></div>
 </div>`;
 }
 
 export function informeTexto(r, serie) {
   const L = [];
-  L.push(`CUMPLIMIENTO DE METAS - ${etiquetaMes(r.mes).toUpperCase()}`);
+  L.push(`ASIGNACION Y CUMPLIMIENTO DE METAS - ${etiquetaMes(r.mes).toUpperCase()}`);
   L.push(`Periodo: ${periodoTexto(r.mes)}`);
   L.push("");
   L.push(`Cumplimiento del Jefe de Ventas${r.jefe ? ` (${r.jefe})` : ""}: ${pct1(r.general.cumpl)}`);
