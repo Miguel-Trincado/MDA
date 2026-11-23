@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from "recharts";
-import { Target, Building2, ParkingSquare, Warehouse, Store, BarChart3, ClipboardList, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Check, Gift, AlertTriangle } from "lucide-react";
+import { Target, Building2, ParkingSquare, Warehouse, Store, BarChart3, ClipboardList, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Download, Check, Gift, AlertTriangle } from "lucide-react";
 import { PageHeader, PAGE_CLASS, Panel, Field } from "./Shared";
 import { fetchMetasCumplimiento, guardarMetasMesRemote } from "../lib/db";
 import {
@@ -58,12 +58,28 @@ function ModalCorreo({ r, serie, onCerrar }) {
   }, [onCerrar]);
   const recordar = () => { try { localStorage.setItem("metas_destinatarios", para); } catch { /* sin almacenamiento */ } };
 
-  async function copiarImagen() {
+  async function generarPng() {
     const { default: html2canvas } = await import("html2canvas");
     const canvas = await html2canvas(vistaRef.current, { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false });
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
-    if (!blob || !window.ClipboardItem || !navigator.clipboard?.write) throw new Error("sin portapapeles de imágenes");
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+    if (!blob) throw new Error("no se pudo generar la imagen");
+    return blob;
+  }
+  // La promesa se pasa directo a ClipboardItem para conservar el permiso del clic mientras se genera la imagen.
+  async function copiarImagen() {
+    if (!window.ClipboardItem || !navigator.clipboard?.write) throw new Error("este navegador no permite copiar imágenes");
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": generarPng() })]);
+  }
+  async function descargarImagen() {
+    try {
+      const blob = await generarPng();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Metas ${r.mes}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      setAviso("Imagen descargada. Insértala o adjúntala en tu correo.");
+    } catch (e) { setAviso(`No se pudo generar la imagen: ${e.message}`); }
   }
   async function copiarHtml() {
     const completo = `<p style="font-family:Arial,sans-serif">${intro.replace(/</g, "&lt;")}</p>${htmlCompatCorreo(html)}`;
@@ -77,15 +93,16 @@ function ModalCorreo({ r, serie, onCerrar }) {
     recordar();
     setAviso("Preparando informe…");
     let ok = false;
-    try { await copiarImagen(); ok = true; } catch { try { ok = await copiarHtml(); } catch { ok = false; } }
+    let motivo = "";
+    try { await copiarImagen(); ok = true; } catch (e) { motivo = e?.message || "error desconocido"; }
     const cuerpo = ok ? intro : `${intro}\n\n${texto.split("\n").slice(0, 14).join("\n")}`;
-    setAviso(ok ? "Informe copiado como imagen con el diseño completo. En tu correo, haz clic en el mensaje y pega con Ctrl+V." : "No se pudo copiar; se abrió el correo con el resumen en texto.");
+    setAviso(ok ? "Informe copiado como imagen con el diseño completo. En tu correo, haz clic en el mensaje y pega con Ctrl+V." : `No se pudo copiar la imagen (${motivo}). Usa "Descargar imagen" y adjúntala al correo.`);
     window.location.href = `mailto:${para.trim()}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
   }
   async function copiar() {
     recordar();
     try { await copiarImagen(); setAviso("Copiado como imagen. Pégalo en el correo con Ctrl+V: queda idéntico al diseño."); }
-    catch { setAviso("No se pudo copiar la imagen en este navegador. Usa \"Copiar tablas\" o Imprimir / PDF."); }
+    catch (e) { setAviso(`No se pudo copiar la imagen (${e?.message || "error"}). Usa "Descargar imagen".`); }
   }
   async function copiarTablas() {
     recordar();
@@ -125,6 +142,7 @@ function ModalCorreo({ r, serie, onCerrar }) {
             <button onClick={abrirCorreo} className="inline-flex items-center justify-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] text-white px-4 py-2.5 text-sm font-medium rounded-xl"><Mail size={16} /> Abrir en mi correo</button>
             <button onClick={copiar} className="inline-flex items-center justify-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"><Copy size={16} /> Copiar como imagen</button>
             <button onClick={copiarTablas} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Copy size={16} /> Copiar tablas (editable)</button>
+            <button onClick={descargarImagen} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Download size={16} /> Descargar imagen</button>
             <button onClick={imprimir} className="inline-flex items-center justify-center gap-2 border border-stone-300 text-stone-600 hover:bg-stone-50 px-4 py-2.5 text-sm rounded-xl"><Printer size={16} /> Imprimir / guardar PDF</button>
             {aviso && <p className="text-xs text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">{aviso}</p>}
             <p className="text-[11px] text-stone-400">"Abrir en mi correo" copia el informe como imagen con el diseño exacto y abre tu correo con destinatario y asunto: solo pega (Ctrl+V).</p>
