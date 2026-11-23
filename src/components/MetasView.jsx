@@ -1,22 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, Cell } from "recharts";
-import { Target, Building2, ParkingSquare, Warehouse, Store, BarChart3, ClipboardList, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Download, Check, Gift, AlertTriangle } from "lucide-react";
+import { Target, ChevronLeft, ChevronRight, Mail, Pencil, X, Plus, Trash2, Copy, Printer, Download, Check, AlertTriangle } from "lucide-react";
 import { PageHeader, PAGE_CLASS, Panel, Field } from "./Shared";
 import { fetchMetasCumplimiento, guardarMetasMesRemote } from "../lib/db";
 import {
-  TIPOS_META, promesasPorMes, proyectosDelAval, calcularMes, serieMeses, mesActual, mesMas, etiquetaMes, periodoTexto,
+  TIPOS_META, promesasPorMes, proyectosDelAval, calcularMes, serieMeses, mesActual, mesMas, etiquetaMes, 
   pesos, pct1, informeHtml, informeTexto,
 } from "../lib/metas";
 
 const colorCumpl = (p) => (p >= 100 ? "#0f9d6b" : p >= 60 ? "#d98a00" : "#d6336c");
-
-function BarraCumpl({ valor }) {
-  return (
-    <div className="h-2 rounded-full bg-stone-100 overflow-hidden min-w-[60px]">
-      <div className="h-full rounded-full" style={{ width: `${Math.min(valor, 100)}%`, background: colorCumpl(valor) }} />
-    </div>
-  );
-}
 
 /* ------------------------------ Correo ------------------------------ */
 const aHex = (c) => {
@@ -41,15 +33,15 @@ function htmlCompatCorreo(html) {
   return doc.getElementById("r").innerHTML;
 }
 
-function ModalCorreo({ r, serie, onCerrar }) {
+function ModalCorreo({ r, serie, modo, onCerrar }) {
   const guardado = (() => { try { return localStorage.getItem("metas_destinatarios") || ""; } catch { return ""; } })();
   const [para, setPara] = useState(guardado);
-  const [asunto, setAsunto] = useState(`Asignación y cumplimiento de metas ${etiquetaMes(r.mes)} - MDA Inmobiliaria`);
-  const [intro, setIntro] = useState("Hola, te comparto el cumplimiento de metas del período.");
+  const [asunto, setAsunto] = useState(`${modo === "asignacion" ? "Asignación" : "Cumplimiento"} de metas ${etiquetaMes(r.mes)} - MDA Inmobiliaria`);
+  const [intro, setIntro] = useState(modo === "asignacion" ? "Hola, te comparto la asignación de metas del período." : "Hola, te comparto el cumplimiento de metas del período.");
   const [aviso, setAviso] = useState("");
   const vistaRef = useRef(null);
-  const html = useMemo(() => informeHtml(r, serie), [r, serie]);
-  const texto = useMemo(() => informeTexto(r, serie), [r, serie]);
+  const html = useMemo(() => informeHtml(r, serie, modo), [r, serie, modo]);
+  const texto = useMemo(() => informeTexto(r, serie, modo), [r, serie, modo]);
 
   useEffect(() => {
     const f = (e) => { if (e.key === "Escape") onCerrar(); };
@@ -149,7 +141,7 @@ function ModalCorreo({ r, serie, onCerrar }) {
           </div>
           <div className="p-6 bg-stone-50 overflow-x-auto">
             <div className="text-[11px] uppercase tracking-wide text-stone-400 mb-2">Vista previa</div>
-            <div ref={vistaRef} className="bg-white rounded-xl p-3 border border-stone-200 w-[720px] max-w-none" dangerouslySetInnerHTML={{ __html: html }} />
+            <div ref={vistaRef} className="bg-white w-[760px] max-w-none border border-stone-200" dangerouslySetInnerHTML={{ __html: html }} />
           </div>
         </div>
       </div>
@@ -265,6 +257,8 @@ export default function MetasView({ db, esAdmin }) {
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState("");
   const [correo, setCorreo] = useState(false);
+  const [modo, setModo] = useState("asignacion");
+  const asig = modo === "asignacion";
 
   async function cargar() {
     try {
@@ -311,14 +305,14 @@ export default function MetasView({ db, esAdmin }) {
   const g = r.general;
   return (
     <div className={PAGE_CLASS}>
-      <PageHeader title="Metas" subtitle="Cumplimiento de metas del Jefe de Ventas, mes a mes">
+      <PageHeader title="Metas" subtitle="Primero asigna y envía las metas del mes; al cierre envía el cumplimiento">
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center bg-white border border-[#EEF1F8] rounded-xl shadow-card">
             <button onClick={() => { setMes(mesMas(mes, -1)); setEditando(false); }} className="p-2.5 text-stone-500 hover:text-[#13234A]" aria-label="Mes anterior"><ChevronLeft size={16} /></button>
             <span className="px-2 text-sm font-medium text-[#13234A] min-w-[130px] text-center">{etiquetaMes(mes)}</span>
             <button onClick={() => { setMes(mesMas(mes, 1)); setEditando(false); }} className="p-2.5 text-stone-500 hover:text-[#13234A]" aria-label="Mes siguiente"><ChevronRight size={16} /></button>
           </div>
-          {esAdmin && !editando && (
+          {esAdmin && asig && !editando && (
             <button onClick={() => setEditando(true)} className="inline-flex items-center gap-2 border border-[#1E5AA8] text-[#1E5AA8] hover:bg-[#1E5AA8] hover:text-white px-3.5 py-2.5 text-sm rounded-xl transition-colors"><Pencil size={15} /> {r.hayMeta ? "Editar metas" : "Asignar metas"}</button>
           )}
           <button onClick={() => setCorreo(true)} disabled={!r.hayMeta} title={r.hayMeta ? "" : "Asigna las metas del mes para poder enviarlas"} className="inline-flex items-center gap-2 bg-[#0F3D66] hover:bg-[#1E5AA8] disabled:opacity-40 text-white px-4 py-2.5 text-sm font-medium rounded-xl shadow-sm"><Mail size={15} /> Enviar por correo</button>
@@ -331,7 +325,7 @@ export default function MetasView({ db, esAdmin }) {
         </p>
       )}
 
-      {editando && (
+      {editando && asig && (
         <EditorMetas
           key={mes}
           mes={mes}
@@ -345,33 +339,10 @@ export default function MetasView({ db, esAdmin }) {
         />
       )}
 
-      {/* Reporte (diseño tipo informe) */}
-      <div className="rounded-2xl overflow-hidden mb-5 bg-white border border-[#EEF1F8] shadow-card">
-        <div className="relative px-6 py-5 text-white overflow-hidden" style={{ background: "linear-gradient(115deg,#16171B 0%,#16171B 38%,#0B2A66 38.2%,#0A3A8C 100%)" }}>
-          <div className="flex items-center gap-3">
-            <img src="/logo-mda.jpg" alt="MDA Inmobiliaria" className="w-14 h-14 rounded-xl" />
-            <div><div className="font-display text-xl tracking-wide">MDA</div><div className="text-[10px] tracking-[0.3em] text-white/70">INMOBILIARIA</div></div>
-          </div>
-        </div>
-
-        <div className="p-5 sm:p-7">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6 items-stretch">
-            <div>
-              <h2 className="font-display text-3xl sm:text-4xl text-[#0B1F4A] leading-tight uppercase">Asignación y cumplimiento de metas</h2>
-              <div className="text-sm font-semibold text-[#1E5AA8] mt-1 uppercase">Período: {periodoTexto(mes)}</div>
-              <div className="h-1 w-16 rounded bg-gradient-to-r from-[#0F3D66] to-sky-400 mt-3" />
-              {r.jefe && <p className="text-sm text-stone-600 mt-4">Jefe de Ventas: <b className="text-[#13234A]">{r.jefe}</b></p>}
-            </div>
-            <div className="rounded-2xl p-5 text-white flex items-center gap-4" style={{ background: "linear-gradient(135deg,#0B2A66,#06173F)" }}>
-              <span className="w-16 h-16 shrink-0 rounded-full border border-white/30 inline-flex items-center justify-center"><Target size={30} /></span>
-              <div>
-                <div className="text-xs font-semibold tracking-wide text-sky-300">CUMPLIMIENTO DEL JEFE DE VENTAS</div>
-                <div className="font-display text-5xl leading-none my-1" style={{ color: g.cumpl >= 100 ? "#7CE3B5" : g.cumpl >= 60 ? "#FFD27A" : "#FF9DB8" }}>{pct1(g.cumpl)}</div>
-                <div className="text-xs text-white/80">{g.vendidas} vendidas de {g.unidades} unidades de meta</div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <div className="inline-flex p-1 mb-5 rounded-xl bg-white border border-[#EEF1F8] shadow-card">
+        {[["asignacion", "1 · Asignación de metas"], ["cumplimiento", "2 · Cumplimiento de metas"]].map(([k, l]) => (
+          <button key={k} onClick={() => { setModo(k); setEditando(false); }} className={`px-4 py-2 text-sm rounded-lg transition-colors ${modo === k ? "bg-[#0F3D66] text-white font-medium" : "text-stone-500 hover:text-[#13234A]"}`}>{l}</button>
+        ))}
       </div>
 
       {datos && !r.hayMeta ? (
@@ -385,55 +356,16 @@ export default function MetasView({ db, esAdmin }) {
         </Panel>
       ) : (
         <>
-          <Titulo>Resumen ejecutivo</Titulo>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <Resumen icon={Building2} valor={r.bloques.length} l1="PROYECTOS" l2="CONSIDERADOS" />
-            <Resumen icon={Building2} valor={r.principales} l1="UNIDADES" l2="PRINCIPALES" />
-            <Resumen icon={ParkingSquare} valor={r.secundarias} l1="UNIDADES" l2="SECUNDARIAS" claro />
-            <Resumen icon={BarChart3} valor={pct1(g.cumpl)} l1="CUMPLIMIENTO" l2="GLOBAL" color={colorCumpl(g.cumpl)} />
-          </div>
-
-          <Titulo>Metas por proyecto</Titulo>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
-            {r.bloques.map((b, i) => <TarjetaProyecto key={b.proyecto} b={b} alt={i % 2 === 1} />)}
+          <div className="overflow-x-auto mb-5">
+            <div className="mx-auto w-[760px] max-w-none rounded-2xl overflow-hidden shadow-card border border-[#EEF1F8]" dangerouslySetInnerHTML={{ __html: informeHtml(r, [], modo) }} />
           </div>
           {!r.pesoOk && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> Los pesos suman {pct1(g.peso)}; deberían sumar 100%.</p>}
-          {r.sinTipo > 0 && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> {r.sinTipo} promesa(s) del mes no tienen tipo de unidad en el listado de precios y no se cuentan por tipo.</p>}
-
-          <div className="rounded-2xl overflow-hidden border border-[#EEF1F8] shadow-card bg-white grid grid-cols-1 md:grid-cols-[220px_1fr] mb-6">
-            <div className="bg-[#0B2547] text-white p-5 flex md:flex-col items-center md:items-start justify-center gap-3">
-              <span className="w-14 h-14 rounded-full border border-white/30 inline-flex items-center justify-center"><Gift size={26} /></span>
-              <div className="font-display text-xl leading-tight">BONO<br />DEL MES</div>
-              <div className="text-xs text-white/70 md:mt-1">Ganado: <b className="text-white">{pesos(r.bonoEscala + r.bono100)}</b></div>
-            </div>
-            <div>
-              <div className="grid grid-cols-[1fr_130px] bg-[#0B2547] text-white text-xs font-semibold"><div className="px-4 py-2.5">CUMPLIMIENTO</div><div className="px-4 py-2.5 border-l border-white/10">BONO</div></div>
-              {r.escala.map((e) => {
-                const ok = r.vendidasPrincipales >= e.unidades;
-                return (
-                  <div key={e.unidades} className={`grid grid-cols-[1fr_130px] text-sm border-b border-stone-100 ${ok ? "bg-emerald-50/70" : ""}`}>
-                    <div className="px-4 py-2.5 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${ok ? "bg-emerald-500" : "bg-sky-300"}`} />{e.unidades} unidades vendidas{ok && <Check size={14} className="text-emerald-600" />}</div>
-                    <div className="px-4 py-2.5 font-semibold text-[#1E5AA8]">{pesos(e.bono)}</div>
-                  </div>
-                );
-              })}
-              <div className={`grid grid-cols-[1fr_130px] text-sm ${r.logro100 ? "bg-emerald-50/70" : ""}`}>
-                <div className="px-4 py-2.5 flex items-center gap-2"><span className={`w-2.5 h-2.5 rounded-full ${r.logro100 ? "bg-emerald-500" : "bg-[#0B2547]"}`} />100% del cumplimiento de la meta{r.logro100 && <Check size={14} className="text-emerald-600" />}</div>
-                <div className="px-4 py-2.5 font-semibold text-emerald-700">{pesos(r.bono100Valor)}</div>
-              </div>
-              <div className="px-4 py-2 text-xs text-stone-500 border-t border-stone-100">Unidades principales vendidas: <b>{r.vendidasPrincipales}</b> · bono por escala: <b>{pesos(r.bonoEscala)}</b></div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-[#DCE6F7] bg-[#F4F8FF] p-4 flex gap-3 items-start mb-6">
-            <span className="w-11 h-11 shrink-0 rounded-full border border-[#0B2547]/30 text-[#0B2547] inline-flex items-center justify-center"><ClipboardList size={20} /></span>
-            <div className="text-xs text-stone-600"><div className="text-sm font-semibold text-[#0B2547] mb-0.5">IMPORTANTE</div>El cumplimiento de metas será evaluado al cierre del período indicado. Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa). Para dudas o consultas, contactar a Gerencia Comercial.</div>
-          </div>
+          {!asig && r.sinTipo > 0 && <p className="text-xs text-amber-700 mb-3"><AlertTriangle size={12} className="inline" /> {r.sinTipo} promesa(s) del mes no tienen tipo de unidad en el listado de precios y no se cuentan por tipo.</p>}
         </>
       )}
 
       {/* Mes a mes */}
-      <Panel title="Cumplimiento mes a mes">
+      {!asig && <Panel title="Cumplimiento mes a mes">
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5 items-start">
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -468,61 +400,9 @@ export default function MetasView({ db, esAdmin }) {
             </table>
           </div>
         </div>
-      </Panel>
+      </Panel>}
 
-      {correo && <ModalCorreo r={r} serie={serie} onCerrar={() => setCorreo(false)} />}
-    </div>
-  );
-}
-
-const ICONO_TIPO = { Departamentos: Building2, Estacionamientos: ParkingSquare, Bodega: Warehouse, "Local Comercial": Store };
-
-function Titulo({ children }) {
-  return (
-    <div className="flex items-center gap-4 mb-3">
-      <div className="h-px flex-1 bg-[#D6DEEE]" /><div className="font-display text-base tracking-wide text-[#0B1F4A] uppercase">{children}</div><div className="h-px flex-1 bg-[#D6DEEE]" />
-    </div>
-  );
-}
-
-function Resumen({ icon: Icon, valor, l1, l2, claro, color = "#0B2A66" }) {
-  return (
-    <div className="bg-white border border-[#E3E9F5] rounded-2xl p-4 flex items-center gap-3 shadow-card">
-      <span className={`w-12 h-12 shrink-0 rounded-full text-white inline-flex items-center justify-center ${claro ? "bg-[#6C8FCB]" : "bg-[#0B2A66]"}`}><Icon size={22} /></span>
-      <div className="font-display text-3xl leading-none" style={{ color }}>{valor}</div>
-      <div className="text-[10px] font-semibold text-stone-600 leading-tight">{l1}<br />{l2}</div>
-    </div>
-  );
-}
-
-function TarjetaProyecto({ b, alt }) {
-  const filas = b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0);
-  const ok = b.total.cumpl >= 99.995;
-  return (
-    <div className="rounded-2xl overflow-hidden border border-[#E3E9F5] bg-white shadow-card">
-      <div className={`flex items-center gap-3 px-4 py-3 text-white ${alt ? "bg-[#0A3A8C]" : "bg-[#0B2A66]"}`}>
-        <span className="w-9 h-9 rounded-full bg-white text-[#0B2A66] inline-flex items-center justify-center"><Building2 size={18} /></span>
-        <div className="font-display text-sm uppercase tracking-wide">{b.proyecto}</div>
-      </div>
-      <div className="grid grid-cols-[1fr_62px_62px_62px_92px] bg-[#0A3A8C] text-white text-[10px] font-semibold px-4 py-2 gap-1">
-        <div>PRODUCTO</div><div className="text-center">UNIDADES</div><div className="text-center">PONDER.</div><div className="text-center">VENDIDAS</div><div className="text-center">CUMPLIMIENTO</div>
-      </div>
-      {filas.map((f) => {
-        const Ic = ICONO_TIPO[f.tipo] || Building2;
-        const pc = f.unidades > 0 ? (f.vendidas / f.unidades) * 100 : 0;
-        return (
-          <div key={f.tipo} className="grid grid-cols-[1fr_62px_62px_62px_92px] items-center px-4 py-2 gap-1 text-sm border-b border-stone-100">
-            <div className="flex items-center gap-2 text-stone-700"><Ic size={16} className="text-[#0B2A66] shrink-0" />{f.tipo}</div>
-            <div className="text-center">{f.unidades}</div>
-            <div className={`text-center ${f.peso > 0 ? "font-semibold text-emerald-700" : "text-stone-400"}`}>{pct1(f.peso)}</div>
-            <div className="text-center">{f.vendidas}</div>
-            <div className="text-center"><div className="text-xs font-semibold" style={{ color: f.peso > 0 ? colorCumpl(pc) : "#a8a29e" }}>{pct1(f.cumpl)}</div><BarraCumpl valor={f.peso > 0 ? pc : 0} /></div>
-          </div>
-        );
-      })}
-      <div className={`grid grid-cols-[1fr_62px_62px_62px_92px] items-center px-4 py-3 gap-1 text-sm font-bold ${ok ? "bg-emerald-50 text-emerald-700" : "bg-[#EAF1FF] text-[#0A3A8C]"}`}>
-        <div className="text-xs uppercase">Total {b.proyecto}</div><div className="text-center">{b.total.unidades}</div><div className="text-center">{pct1(b.total.peso)}</div><div className="text-center">{b.total.vendidas}</div><div className="text-center">{pct1(b.total.cumpl)}</div>
-      </div>
+      {correo && <ModalCorreo r={r} serie={serie} modo={modo} onCerrar={() => setCorreo(false)} />}
     </div>
   );
 }

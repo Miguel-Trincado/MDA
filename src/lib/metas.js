@@ -132,75 +132,97 @@ export function serieMeses({ meses, asignaciones, config, promesas }) {
 }
 
 /* ---------------------------- Informe para correo ---------------------------- */
-const TD = "padding:7px 10px;border-bottom:1px solid #e6eaf2;font-size:13px;";
-const TH = "padding:8px 10px;background:#0A3A8C;color:#fff;font-size:11px;text-align:center;font-weight:bold;";
+const F = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;";
+const col = (p) => (p >= 100 ? "#12B886" : p >= 60 ? "#F59F00" : "#E8590C");
 
-export function informeHtml(r, serie) {
-  const color = r.general.cumpl >= 100 ? "#7CE3B5" : r.general.cumpl >= 60 ? "#FFD27A" : "#FF9DB8";
-  const bloque = (b, i) => {
-    const ok = b.total.cumpl >= 99.995;
-    return `
-    <table style="width:100%;border-collapse:collapse;margin-bottom:14px;border:1px solid #E3E9F5">
-      <tr><td colspan="5" style="padding:10px 12px;background:${i % 2 ? "#0A3A8C" : "#0B2A66"};color:#fff;font-weight:bold;font-size:13px;text-transform:uppercase">${esc(b.proyecto)}</td></tr>
-      <tr><td style="${TH}text-align:left">PRODUCTO</td><td style="${TH}">UNIDADES</td><td style="${TH}">PONDER.</td><td style="${TH}">VENDIDAS</td><td style="${TH}">CUMPLIMIENTO</td></tr>
-      ${b.filas.filter((f) => f.unidades > 0 || f.vendidas > 0 || f.peso > 0).map((f) => `
-      <tr><td style="${TD}">${esc(f.tipo)}</td><td style="${TD}text-align:center">${f.unidades}</td><td style="${TD}text-align:center;${f.peso > 0 ? "color:#0f7a52;font-weight:bold" : "color:#9aa3b5"}">${pct1(f.peso)}</td><td style="${TD}text-align:center">${f.vendidas}</td><td style="${TD}text-align:center;font-weight:bold">${pct1(f.cumpl)}</td></tr>`).join("")}
-      <tr style="background:${ok ? "#E3F6EC" : "#EAF1FF"};color:${ok ? "#0f7a52" : "#0A3A8C"};font-weight:bold"><td style="padding:9px 10px;font-size:12px;text-transform:uppercase">Total ${esc(b.proyecto)}</td><td style="padding:9px 10px;text-align:center">${b.total.unidades}</td><td style="padding:9px 10px;text-align:center">${pct1(b.total.peso)}</td><td style="padding:9px 10px;text-align:center">${b.total.vendidas}</td><td style="padding:9px 10px;text-align:center">${pct1(b.total.cumpl)}</td></tr>
-    </table>`;
-  };
-  const kpi = (v, l) => `<td style="width:25%;padding:6px"><div style="border:1px solid #E3E9F5;border-radius:10px;padding:10px;text-align:center"><div style="font-size:24px;font-weight:bold;color:#0B2A66">${v}</div><div style="font-size:10px;color:#5b6b8c;font-weight:bold">${l}</div></div></td>`;
-  const filaBono = (txt, val, ok) => `<tr style="background:${ok ? "#E3F6EC" : "#fff"}"><td style="${TD}">${ok ? "&#10003; " : ""}${txt}</td><td style="${TD}font-weight:bold;color:#1E5AA8;width:110px">${val}</td></tr>`;
-  const evol = (serie || []).filter((x) => x.hayMeta || x.totalPromesas > 0);
-  return `
-<div style="font-family:Arial,Helvetica,sans-serif;color:#13234A;max-width:700px;border:1px solid #e6eaf2">
-  <div style="background:#16171B;color:#fff;padding:18px 22px;border-bottom:4px solid #0A3A8C">
-    <div style="font-size:24px;font-weight:bold;letter-spacing:1px">MDA</div>
-    <div style="font-size:10px;letter-spacing:4px;opacity:.75">INMOBILIARIA</div>
+function anillo(valor, color, size = 150) {
+  const r = 58, c = 2 * Math.PI * r, v = Math.min(Math.max(valor, 0), 100);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 140 140"><circle cx="70" cy="70" r="${r}" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="12"/><circle cx="70" cy="70" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * v) / 100} ${c}" transform="rotate(-90 70 70)"/></svg>`;
+}
+const tile = (v, l, c = "#0B1F4A") => `<div style="background:#fff;border:1px solid #E6ECF7;border-radius:14px;padding:14px 16px"><div style="font-size:22px;font-weight:700;color:${c};line-height:1;white-space:nowrap">${v}</div><div style="font-size:10.5px;letter-spacing:.06em;color:#6B7A99;margin-top:6px;font-weight:600;white-space:nowrap">${l}</div></div>`;
+const seccion = (t) => `<div style="display:flex;align-items:center;gap:12px;margin:26px 0 12px"><div style="width:4px;height:18px;border-radius:2px;background:linear-gradient(#1E5AA8,#38BDF8)"></div><div style="font-size:13px;letter-spacing:.12em;font-weight:700;color:#0B1F4A">${t}</div></div>`;
+
+export function informeHtml(r, serie, modo = "cumplimiento") {
+  const asig = modo === "asignacion";
+  const g = r.general;
+  const c = col(g.cumpl);
+  const hero = asig
+    ? `<div style="flex:0 0 190px;text-align:center"><div style="font-size:11px;letter-spacing:.14em;color:#7DD3FC;font-weight:700">META COMERCIAL</div><div style="font-size:72px;font-weight:800;color:#fff;line-height:1.05;margin-top:4px">${g.unidades}</div><div style="font-size:12px;color:rgba(255,255,255,.75)">unidades en el período</div></div>`
+    : `<div style="flex:0 0 150px;position:relative;height:150px;width:150px;margin:0 10px"><div style="position:absolute;inset:0">${anillo(g.cumpl, c)}</div><div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:34px;font-weight:800;color:#fff;line-height:1">${pct1(g.cumpl)}</div><div style="font-size:9px;letter-spacing:.06em;color:rgba(255,255,255,.7);margin-top:5px">CUMPLIDO</div></div></div>`;
+  const stats = asig
+    ? [[r.bloques.length, "PROYECTOS"], [r.principales, "UNID. PRINCIPALES"], [r.secundarias, "UNID. SECUNDARIAS"]]
+    : [[g.vendidas, "VENDIDAS"], [g.unidades, "META (UNID.)"], [pesos(r.bonoEscala + r.bono100), "BONO GANADO"]];
+  const proyectos = r.bloques.map((b, i) => {
+    const filas = b.filas.filter((f) => f.unidades > 0 || f.peso > 0 || (!asig && f.vendidas > 0));
+    const acc = ["#1E5AA8", "#0EA5A4", "#7C5CFC"][i % 3];
+    return `<div style="background:#fff;border:1px solid #E6ECF7;border-radius:16px;overflow:hidden;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:linear-gradient(90deg,#F4F7FE,#fff);border-bottom:1px solid #EEF2FA">
+        <div style="display:flex;align-items:center;gap:10px"><div style="width:10px;height:10px;border-radius:50%;background:${acc}"></div><div style="font-size:14px;font-weight:700;color:#0B1F4A;letter-spacing:.03em">${esc(b.proyecto)}</div></div>
+        <div style="font-size:12px;font-weight:700;color:${asig ? "#1E5AA8" : col(b.total.cumpl)};background:${asig ? "#E8F0FE" : "#F1F5FB"};border-radius:999px;padding:5px 12px">${asig ? `${b.total.unidades} unidades` : `${pct1(b.total.cumpl)} cumplido`}</div>
+      </div>
+      <div style="padding:6px 18px 10px">
+        ${filas.map((f) => {
+          const pc = f.unidades > 0 ? Math.min((f.vendidas / f.unidades) * 100, 100) : 0;
+          return `<div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid #F1F4FA">
+            <div style="flex:1.2;font-size:13.5px;color:#25324F;font-weight:600">${esc(f.tipo)}</div>
+            ${asig
+              ? `<div style="width:90px;text-align:center"><div style="font-size:18px;font-weight:700;color:#0B1F4A">${f.unidades}</div><div style="font-size:9.5px;letter-spacing:.08em;color:#8A97B2">UNIDADES</div></div>
+                 <div style="width:150px;text-align:right"><span style="white-space:nowrap;display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;${f.peso > 0 ? "background:#E3F7EE;color:#0B8F63" : "background:#F1F4FA;color:#8A97B2"}">${pct1(f.peso)} ponderación</span></div>`
+              : `<div style="flex:1.4"><div style="height:8px;border-radius:99px;background:#EDF1F9;overflow:hidden"><div style="height:8px;border-radius:99px;width:${pc}%;background:${f.peso > 0 ? col(pc) : "#B8C2D9"}"></div></div><div style="font-size:11px;color:#6B7A99;margin-top:5px">${f.vendidas} de ${f.unidades} vendidas · peso ${pct1(f.peso)}</div></div>
+                 <div style="width:70px;text-align:right;font-size:17px;font-weight:800;color:${f.peso > 0 ? col(pc) : "#9AA6BE"}">${pct1(f.cumpl)}</div>`}
+          </div>`;
+        }).join("")}
+      </div></div>`;
+  }).join("");
+  const tramos = r.escala.map((e) => {
+    const ok = !asig && r.vendidasPrincipales >= e.unidades;
+    return `<div style="flex:1;min-width:130px;border-radius:14px;padding:14px;text-align:center;${ok ? "background:#12B886;color:#fff" : "background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff"}"><div style="font-size:11px;letter-spacing:.08em;opacity:.85">${e.unidades} UNIDADES</div><div style="font-size:20px;font-weight:800;margin-top:4px">${pesos(e.bono)}</div>${ok ? '<div style="font-size:10px;margin-top:3px">✓ ALCANZADO</div>' : ""}</div>`;
+  }).join("");
+  const evol = (serie || []).filter((x) => x.hayMeta);
+  const grafico = !asig && evol.length > 1 ? `${seccion("EVOLUCIÓN MES A MES")}<div style="background:#fff;border:1px solid #E6ECF7;border-radius:16px;padding:18px"><div style="display:flex;align-items:flex-end;gap:10px;height:120px;border-bottom:1px solid #E6ECF7">${evol.map((x) => `<div style="flex:1;text-align:center"><div style="font-size:11px;font-weight:700;color:${col(x.general.cumpl)};margin-bottom:4px">${pct1(x.general.cumpl)}</div><div style="margin:0 auto;width:70%;height:${Math.max(4, Math.min(x.general.cumpl, 120) * 0.8)}px;border-radius:8px 8px 0 0;background:${x.mes === r.mes ? "linear-gradient(#1E5AA8,#38BDF8)" : col(x.general.cumpl)};opacity:${x.mes === r.mes ? 1 : 0.55}"></div></div>`).join("")}</div><div style="display:flex;gap:10px;margin-top:6px">${evol.map((x) => `<div style="flex:1;text-align:center;font-size:11px;color:#6B7A99">${x.etiqueta}</div>`).join("")}</div></div>` : "";
+  return `<div style="${F}width:760px;background:#F6F8FD;color:#13234A">
+  <div style="background:linear-gradient(120deg,#0A1633 0%,#0B2A66 60%,#1E5AA8 100%);padding:22px 30px;display:flex;align-items:center;justify-content:space-between">
+    <div><div style="font-size:26px;font-weight:800;color:#fff;letter-spacing:.04em;line-height:1">MDA</div><div style="font-size:9.5px;letter-spacing:.42em;color:rgba(255,255,255,.7);margin-top:4px">INMOBILIARIA</div></div>
+    <div style="font-size:12px;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:7px 16px;font-weight:600">${esc(etiquetaMes(r.mes))}</div>
   </div>
-  <div style="padding:20px 22px">
-    <table style="width:100%;border-collapse:collapse"><tr>
-      <td style="vertical-align:top">
-        <div style="font-size:24px;font-weight:bold;color:#0B1F4A;text-transform:uppercase;line-height:1.15">Asignación y cumplimiento de metas</div>
-        <div style="font-size:13px;font-weight:bold;color:#1E5AA8;margin-top:6px;text-transform:uppercase">Período: ${esc(periodoTexto(r.mes))}</div>
-        ${r.jefe ? `<div style="font-size:13px;margin-top:8px">Jefe de Ventas: <b>${esc(r.jefe)}</b></div>` : ""}
-      </td>
-      <td style="width:230px;vertical-align:top"><div style="background:#0B2A66;color:#fff;border-radius:12px;padding:14px 16px">
-        <div style="font-size:11px;font-weight:bold;color:#7DD3FC">CUMPLIMIENTO DEL JEFE DE VENTAS</div>
-        <div style="font-size:38px;font-weight:bold;color:${color};line-height:1.1">${pct1(r.general.cumpl)}</div>
-        <div style="font-size:11px;opacity:.85">${r.general.vendidas} vendidas de ${r.general.unidades} unidades de meta</div></div></td>
-    </tr></table>
+  <div style="padding:30px 30px 26px">
+    <div style="font-size:11px;letter-spacing:.2em;color:#1E5AA8;font-weight:700">REPORTE COMERCIAL</div>
+    <div style="font-size:32px;font-weight:800;color:#0B1F4A;line-height:1.1;margin-top:6px">${asig ? "Asignación de metas" : "Cumplimiento de metas"}</div>
+    <div style="font-size:13px;color:#5B6B8C;margin-top:8px">Período ${esc(periodoTexto(r.mes))}${r.jefe ? ` &nbsp;·&nbsp; Jefe de Ventas: <b style="color:#13234A">${esc(r.jefe)}</b>` : ""}</div>
 
-    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:20px 0 6px;text-transform:uppercase;color:#0B1F4A">Resumen ejecutivo</div>
-    <table style="width:100%;border-collapse:collapse"><tr>${kpi(r.bloques.length, "PROYECTOS CONSIDERADOS")}${kpi(r.principales, "UNIDADES PRINCIPALES")}${kpi(r.secundarias, "UNIDADES SECUNDARIAS")}${kpi(pct1(r.general.cumpl), "CUMPLIMIENTO GLOBAL")}</tr></table>
+    <div style="display:flex;align-items:center;gap:22px;margin-top:22px;padding:24px 26px;border-radius:20px;background:linear-gradient(135deg,#0A1633,#0B2A66 70%,#143F8C)">
+      ${hero}
+      <div style="flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:10px">${stats.map(([v, l]) => tile(v, l)).join("")}</div>
+    </div>
 
-    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:20px 0 10px;text-transform:uppercase;color:#0B1F4A">Metas por proyecto</div>
-    ${r.bloques.map(bloque).join("")}
+    ${seccion("METAS POR PROYECTO")}
+    ${proyectos}
 
-    <table style="width:100%;border-collapse:collapse;border:1px solid #E3E9F5;margin-top:6px"><tr>
-      <td style="width:150px;background:#0B2547;color:#fff;padding:14px;font-weight:bold;font-size:16px;vertical-align:middle">BONO<br>DEL MES<div style="font-size:11px;font-weight:normal;margin-top:6px;opacity:.85">Ganado: ${pesos(r.bonoEscala + r.bono100)}</div></td>
-      <td style="padding:0;vertical-align:top"><table style="width:100%;border-collapse:collapse">
-        <tr><td style="${TH}text-align:left;background:#0B2547">CUMPLIMIENTO</td><td style="${TH}background:#0B2547">BONO</td></tr>
-        ${r.escala.map((e) => filaBono(`${e.unidades} unidades vendidas`, pesos(e.bono), r.vendidasPrincipales >= e.unidades)).join("")}
-        ${filaBono("100% del cumplimiento de la meta", pesos(r.bono100Valor), r.logro100)}
-      </table></td></tr></table>
-    <div style="font-size:11px;color:#5b6b8c;margin-top:4px">Unidades principales vendidas: ${r.vendidasPrincipales} · Bono por escala: ${pesos(r.bonoEscala)}</div>
-
-    ${evol.length > 1 ? `
-    <div style="text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:22px 0 8px;text-transform:uppercase;color:#0B1F4A">Cumplimiento mes a mes</div>
-    <table style="width:100%;border-collapse:collapse">
-      <tr><td style="${TH}text-align:left">MES</td><td style="${TH}">META (UNID.)</td><td style="${TH}">VENDIDAS</td><td style="${TH}">CUMPLIMIENTO</td><td style="${TH}">BONO</td></tr>
-      ${evol.map((x) => `<tr><td style="${TD}">${esc(etiquetaMes(x.mes))}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.unidades : "—"}</td><td style="${TD}text-align:center">${x.hayMeta ? x.general.vendidas : x.totalPromesas}</td><td style="${TD}text-align:center;font-weight:bold">${x.hayMeta ? pct1(x.general.cumpl) : "sin meta"}</td><td style="${TD}text-align:center">${x.hayMeta ? pesos(x.bonoEscala + x.bono100) : "—"}</td></tr>`).join("")}
-    </table>` : ""}
-
-    <div style="background:#F4F8FF;border:1px solid #DCE6F7;border-radius:10px;padding:12px 14px;margin-top:18px;font-size:12px;color:#44506b"><b style="color:#0B2547">IMPORTANTE</b><br>El cumplimiento de metas será evaluado al cierre del período indicado. Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa). Para dudas o consultas, contactar a Gerencia Comercial.</div>
+    ${seccion("BONO DEL MES")}
+    <div style="border-radius:18px;padding:20px;background:linear-gradient(135deg,#0A1633,#0B2A66)">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${tramos}
+        <div style="flex:1;min-width:130px;border-radius:14px;padding:14px;text-align:center;${!asig && r.logro100 ? "background:#12B886" : "background:linear-gradient(135deg,#F59F00,#FFD43B)"};color:${!asig && r.logro100 ? "#fff" : "#3B2A00"}"><div style="font-size:11px;letter-spacing:.08em;font-weight:700">BONO 100%</div><div style="font-size:20px;font-weight:800;margin-top:4px">${pesos(r.bono100Valor)}</div>${!asig && r.logro100 ? '<div style="font-size:10px;margin-top:3px">✓ LOGRADO</div>' : ""}</div>
+      </div>
+      ${asig ? "" : `<div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:12px">Unidades principales vendidas: <b style="color:#fff">${r.vendidasPrincipales}</b> &nbsp;·&nbsp; Bono por escala: <b style="color:#fff">${pesos(r.bonoEscala)}</b></div>`}
+    </div>
+    ${grafico}
+    <div style="margin-top:22px;border-radius:14px;background:#EAF1FF;border:1px solid #D5E3FA;padding:14px 18px;font-size:12px;line-height:1.5;color:#44506B"><b style="color:#0B2A66">IMPORTANTE</b><br>${asig ? "Las metas y ponderaciones indicadas rigen para el período señalado. El cumplimiento se informará al cierre del período." : "Cumplimiento = vendidas ÷ unidades × ponderación. Vendidas = promesas del mes (estado Promesada o Escriturada, por fecha de promesa)."} Para dudas o consultas, contactar a Gerencia Comercial.</div>
   </div>
-  <div style="border-top:3px solid #0A3A8C;text-align:center;padding:12px;font-size:12px;color:#1E5AA8"><b>MDA INMOBILIARIA</b><br><span style="color:#6b7690">www.mdai.cl</span></div>
+  <div style="background:#0A1633;text-align:center;padding:14px;font-size:12px;color:rgba(255,255,255,.8)"><b style="color:#fff">MDA INMOBILIARIA</b> &nbsp;·&nbsp; www.mdai.cl</div>
 </div>`;
 }
 
-export function informeTexto(r, serie) {
+export function informeTexto(r, serie, modo = "cumplimiento") {
+  if (modo === "asignacion") {
+    const L = [`ASIGNACION DE METAS - ${etiquetaMes(r.mes).toUpperCase()}`, `Periodo: ${periodoTexto(r.mes)}`, ""];
+    if (r.jefe) L.push(`Jefe de Ventas: ${r.jefe}`);
+    r.bloques.forEach((b) => { L.push(b.proyecto); b.filas.filter((f) => f.unidades > 0 || f.peso > 0).forEach((f) => L.push(`  ${f.tipo}: ${f.unidades} unidades (ponderacion ${pct1(f.peso)})`)); L.push(`  Total: ${b.total.unidades} unidades`); });
+    if (r.escala.length) L.push("", "Escala de bonos: " + r.escala.map((e) => `${e.unidades} unidades ${pesos(e.bono)}`).join(" · "));
+    if (r.bono100Valor) L.push(`Bono por el 100% del cumplimiento: ${pesos(r.bono100Valor)}`);
+    return L.join("\n");
+  }
   const L = [];
-  L.push(`ASIGNACION Y CUMPLIMIENTO DE METAS - ${etiquetaMes(r.mes).toUpperCase()}`);
+  L.push(`CUMPLIMIENTO DE METAS - ${etiquetaMes(r.mes).toUpperCase()}`);
   L.push(`Periodo: ${periodoTexto(r.mes)}`);
   L.push("");
   L.push(`Cumplimiento del Jefe de Ventas${r.jefe ? ` (${r.jefe})` : ""}: ${pct1(r.general.cumpl)}`);
