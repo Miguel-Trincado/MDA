@@ -9,8 +9,10 @@ import { normalizarBusqueda, fmtDateTime } from "../lib/helpers";
 import { suscribirPresencia } from "../lib/presencia";
 import { Panel, Field, PageHeader, Avatar } from "./Shared";
 
+const esRolEjec = (r) => r === "ejecutiva" || r === "solo_ejecutivo";
 const PERFILES = [
   { value: "ejecutiva", label: "Ejecutivo" },
+  { value: "solo_ejecutivo", label: "Solo ejecutivo" },
   { value: "jefe", label: "Jefe de ventas" },
   { value: "admin", label: "Administrador" },
 ];
@@ -93,7 +95,7 @@ function FichaUsuario({ esAdmin, usuario, esYo, ejecutivos, cruce, ultima, ahora
   }, [onCerrar]);
   const personalizado = MENUS.some((m) => vals[m.key] !== def[m.key]);
   const nSi = MENUS.filter((m) => vals[m.key]).length;
-  const c = usuario.rol === "ejecutiva" && usuario.ejecutivo ? cruce(usuario.ejecutivo) : null;
+  const c = esRolEjec(usuario.rol) && usuario.ejecutivo ? cruce(usuario.ejecutivo) : null;
   const nombreCambiado = nombre.trim() !== (usuario.nombre || "") || apellido.trim() !== (usuario.apellido || "");
   return (
     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3" onClick={onCerrar}>
@@ -146,9 +148,9 @@ function FichaUsuario({ esAdmin, usuario, esYo, ejecutivos, cruce, ultima, ahora
                       ))}
                     </select>
                   </Field>
-                  {usuario.rol === "ejecutiva" && (
+                  {esRolEjec(usuario.rol) && (
                     <Field label="Ejecutivo vinculado">
-                      <select className="ipt" disabled={trabajando || cuentaProtegida} value={usuario.ejecutivo || ""} onChange={(e) => onCambiarPerfil(usuario, "ejecutiva", e.target.value)}>
+                      <select className="ipt" disabled={trabajando || cuentaProtegida} value={usuario.ejecutivo || ""} onChange={(e) => onCambiarPerfil(usuario, usuario.rol, e.target.value)}>
                         {!ejecutivos.includes(usuario.ejecutivo) && usuario.ejecutivo && <option value={usuario.ejecutivo}>{usuario.ejecutivo}</option>}
                         {ejecutivos.map((n) => (
                           <option key={n} value={n}>{n}</option>
@@ -295,8 +297,8 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db, esAdmin = fals
   }
 
   function cambiarPerfil(u, nuevoRol, nuevoEjecutivo) {
-    if (nuevoRol === "ejecutiva" && !nuevoEjecutivo) {
-      setError("Para el perfil Ejecutivo elige a qué ejecutiva corresponde.");
+    if (esRolEjec(nuevoRol) && !nuevoEjecutivo) {
+      setError("Para este perfil elige a qué ejecutiva corresponde.");
       return;
     }
     ejecutar(() => cambiarPerfilUsuarioRemote(u.userId, nuevoRol, nuevoEjecutivo), `Perfil de ${u.email} actualizado.`);
@@ -336,7 +338,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db, esAdmin = fals
         {[
           ["Usuarios", usuarios.length, "text-[#13234A]"],
           ["En línea ahora", usuarios.filter((u) => u.userId === miUserId || enLinea.has(u.userId)).length, "text-emerald-600"],
-          ["Ejecutivos", usuarios.filter((u) => u.rol === "ejecutiva").length, "text-[#13234A]"],
+          ["Ejecutivos", usuarios.filter((u) => esRolEjec(u.rol)).length, "text-[#13234A]"],
           ["Jefes y administradores", usuarios.filter((u) => u.rol === "jefe" || u.rol === "admin").length, "text-[#13234A]"],
         ].map(([l, v, c]) => (
           <div key={l} className="bg-white border border-[#EEF1F8] rounded-2xl shadow-card px-4 py-3">
@@ -372,7 +374,7 @@ export default function UsuariosPanel({ ejecutivos, miUserId, db, esAdmin = fals
                 ))}
               </select>
             </Field>
-            {rol === "ejecutiva" ? (
+            {esRolEjec(rol) ? (
               <Field label="Ejecutivo (nombre de la columna Ejecutivo)">
                 <select className="ipt" required value={ejecutivo} onChange={(e) => setEjecutivo(e.target.value)}>
                   <option value="">Selecciona…</option>

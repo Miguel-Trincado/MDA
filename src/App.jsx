@@ -12,6 +12,8 @@ const CargaPage = lazy(() => import("./components/CargaPage"));
 const Cotizador = lazy(() => import("./components/Cotizador"));
 const Comisiones = lazy(() => import("./components/Comisiones"));
 const MisComisiones = lazy(() => import("./components/MisComisiones"));
+const NominacionView = lazy(() => import("./components/NominacionView"));
+const EscrituracionView = lazy(() => import("./components/EscrituracionView"));
 const MetasView = lazy(() => import("./components/MetasView"));
 const UsuariosPanel = lazy(() => import("./components/UsuariosPanel"));
 const CuotasPagos = lazy(() => import("./components/CuotasPagos"));
@@ -34,7 +36,7 @@ import { parseListaPrecios } from "./lib/parseListaPrecios";
 
 // Pantallas del menú: la actual se guarda en la URL (#cuotas) y en el
 // navegador para que al recargar la página vuelva exactamente a la misma.
-const VISTAS = ["dashboard", "ejecutivo", "carga", "cotizador", "comisiones", "cuotas", "usuarios", "miscomisiones", "jefa", "metas"];
+const VISTAS = ["dashboard", "ejecutivo", "carga", "cotizador", "comisiones", "cuotas", "usuarios", "miscomisiones", "jefa", "metas", "nominacion", "escrituracion"];
 function vistaInicial() {
   try {
     const h = window.location.hash.replace(/^#\/?/, "");
@@ -44,7 +46,7 @@ function vistaInicial() {
   } catch { /* sin almacenamiento */ }
   return "dashboard";
 }
-const LABELS_VISTA = { dashboard: "Dashboard", ejecutivo: "Ejecutivo", carga: "Cargar archivo", cotizador: "Simulador", comisiones: "Comisiones", cuotas: "Cuotas y Pagos", usuarios: "Usuarios", miscomisiones: "Mis comisiones", jefa: "Jefa de Ventas", metas: "Metas" };
+const LABELS_VISTA = { dashboard: "Dashboard", ejecutivo: "Ejecutivo", carga: "Cargar archivo", cotizador: "Simulador", comisiones: "Comisiones", cuotas: "Cuotas y Pagos", usuarios: "Usuarios", miscomisiones: "Mis comisiones", jefa: "Jefa de Ventas", metas: "Metas", nominacion: "Nominación", escrituracion: "Escrituración" };
 
 function AppInner() {
   const [loading, setLoading] = useState(true);
@@ -74,7 +76,7 @@ function AppInner() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", latir); detener(); };
   }, [miUserIdLatido]);
   const esAdmin = rol === "admin";
-  const esEjecutiva = rol === "ejecutiva";
+  const esEjecutiva = rol === "ejecutiva" || rol === "solo_ejecutivo";
   const esJefe = rol === "jefe";
   // Comisiones (editar, aceptar/validar): solo administrador y jefe de ventas.
   // Menús: lo que dice la ficha del usuario (Usuarios → Ficha); sin ficha, lo del perfil.
@@ -85,10 +87,10 @@ function AppInner() {
   const verMisComisiones = ver("miscomisiones") && !!miEjecutivo;
   const menus = {
     dashboard: ver("dashboard"), ejecutivo: ver("ejecutivo"), cotizador: ver("cotizador"), jefa: ver("jefa"),
-    cuotas: puedeCuotas, comisiones: puedeComisiones, miscomisiones: verMisComisiones, carga: ver("carga"), usuarios: ver("usuarios"), metas: ver("metas"),
+    cuotas: puedeCuotas, comisiones: puedeComisiones, miscomisiones: verMisComisiones, carga: ver("carga"), usuarios: ver("usuarios"), metas: ver("metas"), nominacion: ver("nominacion"), escrituracion: ver("escrituracion"),
   };
   const vistaPermitida = (v) => (v === "miscomisiones" ? verMisComisiones : !!menus[v]);
-  const primeraVista = ["dashboard", "ejecutivo", "cotizador", "jefa", "cuotas", "comisiones", "miscomisiones", "metas", "carga"].find((v) => vistaPermitida(v)) || "dashboard";
+  const primeraVista = ["dashboard", "ejecutivo", "cotizador", "jefa", "cuotas", "comisiones", "miscomisiones", "metas", "nominacion", "escrituracion", "carga"].find((v) => vistaPermitida(v)) || "dashboard";
   // Con sesión iniciada pero sin ser admin: no carga archivos. Jefa de
   // Ventas la ven admin y jefe; la ejecutiva (y quien no tiene perfil) no.
   const logueadoSinAdmin = !!authSession && !cargandoPerfil && !esAdmin;
@@ -274,7 +276,7 @@ function AppInner() {
   // está en la pestaña privada, se vuelve al Dashboard en vez de dejar la
   // pantalla en blanco.
   useEffect(() => {
-    if (authSession === null && ["cuotas", "comisiones", "miscomisiones", "usuarios", "carga", "jefa", "metas"].includes(view)) setView("dashboard");
+    if (authSession === null && ["cuotas", "comisiones", "miscomisiones", "usuarios", "carga", "jefa", "metas", "nominacion", "escrituracion"].includes(view)) setView("dashboard");
   }, [view, authSession]);
 
   async function saveGestion(rut, updates) {
@@ -409,7 +411,7 @@ function AppInner() {
         menus={menus}
         esAdmin={esAdmin}
         email={authSession?.user?.email}
-        perfilLabel={esAdmin ? "Administrador" : esJefe ? "Jefe de ventas" : esEjecutiva ? `Ejecutivo${miEjecutivo ? " · " + miEjecutivo : ""}` : ""}
+        perfilLabel={esAdmin ? "Administrador" : esJefe ? "Jefe de ventas" : esEjecutiva ? `${rol === "solo_ejecutivo" ? "Solo ejecutivo" : "Ejecutivo"}${miEjecutivo ? " · " + miEjecutivo : ""}` : ""}
         onLogout={handleLogoutCompleto}
         cargas={db.cargas}
       />
@@ -438,6 +440,8 @@ function AppInner() {
         )}
         {view === "miscomisiones" && menus.miscomisiones && <MisComisiones ejecutivo={miEjecutivo} />}
         {view === "metas" && menus.metas && <MetasView db={db} esAdmin={esAdmin} />}
+        {view === "nominacion" && menus.nominacion && <NominacionView db={db} esAdmin={esAdmin} onIrEscrituracion={() => setView("escrituracion")} />}
+        {view === "escrituracion" && menus.escrituracion && <EscrituracionView db={db} esAdmin={esAdmin} />}
         {view === "jefa" && menus.jefa && (
           <JefaView
             db={db}

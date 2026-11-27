@@ -1003,3 +1003,52 @@ export async function guardarMetasMesRemote(mes, { asignaciones, config }) {
   });
   if (error) throw error;
 }
+
+
+/* ---------------------------------------------------------------------
+ * Escrituración y Nominación (migración v205)
+ * ------------------------------------------------------------------- */
+const BUCKET_DOCS = "escrituracion-docs";
+
+export async function fetchEscrituracion() {
+  const [c, k] = await Promise.all([
+    supabase.from("escrituracion_config").select("config").eq("id", 1).maybeSingle(),
+    supabase.from("escrituracion_casos").select("*"),
+  ]);
+  if (c.error) throw c.error;
+  if (k.error) throw k.error;
+  return { config: c.data?.config || {}, casos: (k.data || []).map(rowToObj) };
+}
+export async function guardarEscrituracionConfigRemote(config) {
+  const { error } = await supabase.rpc("guardar_escrituracion_config", { p_config: config });
+  if (error) throw error;
+}
+export async function guardarCasoEscrituracionRemote(c) {
+  const row = { clave: c.clave, proyecto: c.proyecto || null, rut: c.rut || null, cliente: c.cliente || null, unidad: c.unidad || null, ejecutivo: c.ejecutivo || null, banco: c.banco || null, datos: c.datos || {}, updated_at: new Date().toISOString() };
+  const { error } = await supabase.from("escrituracion_casos").upsert(row, { onConflict: "clave" });
+  if (error) throw error;
+}
+
+export async function fetchNominacion() {
+  const { data, error } = await supabase.from("nominacion_clientes").select("*").order("n", { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return (data || []).map(rowToObj);
+}
+// filas en camelCase; rut obligatorio (clave)
+export async function guardarNominacionRemote(filas) {
+  const rows = filas.map((f) => ({ ...objToRow(f), updated_at: new Date().toISOString() }));
+  for (let i = 0; i < rows.length; i += 100) {
+    const { error } = await supabase.from("nominacion_clientes").upsert(rows.slice(i, i + 100), { onConflict: "rut" });
+    if (error) throw error;
+  }
+}
+
+export async function subirDocumentoRemote(path, file) {
+  const { error } = await supabase.storage.from(BUCKET_DOCS).upload(path, file, { upsert: true, contentType: file.type || undefined });
+  if (error) throw error;
+}
+export async function descargarDocumentoRemote(path) {
+  const { data, error } = await supabase.storage.from(BUCKET_DOCS).download(path);
+  if (error) throw error;
+  return data;
+}

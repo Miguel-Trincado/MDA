@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   BarChart3, Users, Calculator, UserCog, Percent, BadgeDollarSign, Wallet,
-  ChevronsLeft, ChevronsRight, ChevronDown, Settings, X, FileUp, LogOut, LayoutDashboard, Database, Target,
+  ChevronsLeft, ChevronsRight, ChevronDown, Settings, X, FileUp, LogOut, LayoutDashboard, Database, Target, FolderOpen, FileSignature,
 } from "lucide-react";
 import { Avatar } from "./Shared";
 import { useLayout } from "../lib/layout";
@@ -15,6 +15,8 @@ const ICONS = {
   comisiones: Percent,
   miscomisiones: BadgeDollarSign,
   metas: Target,
+  nominacion: FolderOpen,
+  escrituracion: FileSignature,
 };
 
 const CARGAS = [["aval", "Aval"], ["aval_completo", "Aval Vivet"], ["lista_precios", "Precios"], ["cuotas_pago", "Cuotas"]];
@@ -51,6 +53,8 @@ export default function Sidebar({ movilAbierto, onCerrarMovil, active, onChange,
     { key: "comisiones", label: "Comisiones" },
     { key: "miscomisiones", label: "Mis comisiones" },
     { key: "metas", label: "Metas" },
+    { key: "nominacion", label: "Nominación" },
+    { key: "escrituracion", label: "Escrituración" },
   ].filter((t) => menus[t.key]);
   const datosCarga = cargas ? CARGAS.filter(([k]) => cargas[k]) : [];
 

@@ -10,6 +10,8 @@ export const MENUS = [
   { key: "comisiones", label: "Comisiones" },
   { key: "miscomisiones", label: "Mis comisiones" },
   { key: "metas", label: "Metas" },
+  { key: "nominacion", label: "Nominación" },
+  { key: "escrituracion", label: "Escrituración" },
   { key: "carga", label: "Cargar archivo" },
   { key: "usuarios", label: "Usuarios" },
 ];
@@ -20,6 +22,7 @@ export function permisosPorDefecto(rol) {
   const base = Object.fromEntries(MENUS.map((m) => [m.key, false]));
   if (rol === "admin") return Object.fromEntries(MENUS.map((m) => [m.key, true]));
   if (rol === "jefe") return { ...Object.fromEntries(MENUS.map((m) => [m.key, true])), miscomisiones: false, usuarios: false };
+  if (rol === "solo_ejecutivo") return base;
   if (rol === "ejecutiva") return { ...base, ...Object.fromEntries(BASICOS.map((k) => [k, true])), miscomisiones: true };
   return { ...base, ...Object.fromEntries(BASICOS.map((k) => [k, true])) };
 }
